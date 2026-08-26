@@ -1,18 +1,28 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Track } from "../../types/deck";
 import {
   YoutubeSearchHit,
   resolveYoutubeQuery,
+  searchYoutubeVideos,
   hitToTrack,
   formatDuration,
   ResolveKind,
 } from "../../lib/youtube/search";
+import { CatalogSong, catalogYoutubeQuery, searchCatalogSongs } from "../../lib/music/catalog";
+import { parseYoutubePlaylistId, parseYoutubeVideoId } from "../../lib/youtube/parseUrl";
 import { AlertCircle, Check, Loader2, Plus, Search } from "lucide-react";
 
 interface SongSearchProps {
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void;
   onAddTracks?: (tracks: Track[]) => void;
+}
+
+function looksLikeYoutubeInput(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/youtube\.com|youtu\.be/i.test(trimmed)) return true;
+  return Boolean(parseYoutubeVideoId(trimmed) || parseYoutubePlaylistId(trimmed));
 }
 
 export const SongSearch: React.FC<SongSearchProps> = ({
@@ -22,28 +32,70 @@ export const SongSearch: React.FC<SongSearchProps> = ({
 }) => {
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<ResolveKind | null>(null);
   const [hits, setHits] = useState<YoutubeSearchHit[]>([]);
   const [playlistName, setPlaylistName] = useState<string | undefined>();
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [suggestions, setSuggestions] = useState<CatalogSong[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedCatalog, setSelectedCatalog] = useState<CatalogSong | null>(null);
+  const blurTimer = useRef<number | null>(null);
 
   const alreadyInDeck = new Set(
     existingVideoIds.filter((id): id is string => Boolean(id))
   );
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
     const nextQuery = query.trim();
-    if (!nextQuery) return;
+    if (nextQuery.length < 2 || looksLikeYoutubeInput(nextQuery)) {
+      setSuggestions([]);
+      setIsCatalogLoading(false);
+      return;
+    }
 
+    const controller = new AbortController();
+    setIsCatalogLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const songs = await searchCatalogSongs(nextQuery, controller.signal);
+        if (!controller.signal.aborted) {
+          setSuggestions(songs);
+          setShowSuggestions(true);
+        }
+      } catch {
+        if (!controller.signal.aborted) setSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setIsCatalogLoading(false);
+      }
+    }, 280);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  const runYoutubeSearch = async (nextQuery: string, catalog?: CatalogSong | null) => {
     setIsSearching(true);
     setError(null);
     setHits([]);
     setKind(null);
     setPlaylistName(undefined);
+    setShowSuggestions(false);
 
     try {
+      if (catalog) {
+        const ytHits = await searchYoutubeVideos(catalogYoutubeQuery(catalog), 8);
+        setKind("search");
+        setHits(ytHits);
+        if (ytHits.length === 0) {
+          setError(`No YouTube clips found for ${catalog.artist} — ${catalog.title}. Try another match.`);
+        }
+        return;
+      }
+
       const result = await resolveYoutubeQuery(nextQuery);
       setKind(result.kind);
       setHits(result.hits);
@@ -58,8 +110,24 @@ export const SongSearch: React.FC<SongSearchProps> = ({
     }
   };
 
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nextQuery = query.trim();
+    if (!nextQuery) return;
+    setSelectedCatalog(null);
+    await runYoutubeSearch(nextQuery);
+  };
+
+  const handlePickCatalogSong = async (song: CatalogSong) => {
+    setQuery(`${song.artist} - ${song.title}`);
+    setSelectedCatalog(song);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    await runYoutubeSearch(catalogYoutubeQuery(song), song);
+  };
+
   const addHit = (hit: YoutubeSearchHit) => {
-    onAddTrack(hitToTrack(hit));
+    onAddTrack(hitToTrack(hit, selectedCatalog ?? undefined));
     setAddedIds((prev) => new Set(prev).add(hit.videoId));
   };
 
@@ -68,7 +136,7 @@ export const SongSearch: React.FC<SongSearchProps> = ({
       (hit) => !alreadyInDeck.has(hit.videoId) && !addedIds.has(hit.videoId)
     );
     if (fresh.length === 0) return;
-    const tracks = fresh.map(hitToTrack);
+    const tracks = fresh.map((hit) => hitToTrack(hit, selectedCatalog ?? undefined));
     if (onAddTracks) {
       onAddTracks(tracks);
     } else {
@@ -89,7 +157,9 @@ export const SongSearch: React.FC<SongSearchProps> = ({
       : kind === "video"
         ? "This video"
         : kind === "search"
-          ? "Best matches"
+          ? selectedCatalog
+            ? `YouTube clips for ${selectedCatalog.artist} — ${selectedCatalog.title}`
+            : "Best matches"
           : null;
 
   return (
@@ -102,12 +172,54 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
+              setSelectedCatalog(null);
               setError(null);
+              setShowSuggestions(true);
             }}
-            placeholder="Song name or YouTube link… e.g. Queen Bohemian Rhapsody"
+            onFocus={() => {
+              if (suggestions.length > 0) setShowSuggestions(true);
+            }}
+            onBlur={() => {
+              blurTimer.current = window.setTimeout(() => setShowSuggestions(false), 150);
+            }}
+            placeholder="Song or artist… or paste a YouTube link"
             disabled={isSearching}
+            autoComplete="off"
             className="w-full pl-11 pr-5 py-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-700/80 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-white placeholder-zinc-500 outline-none"
           />
+
+          {showSuggestions && (suggestions.length > 0 || isCatalogLoading) && (
+            <div className="absolute z-20 left-0 right-0 mt-2 rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden">
+              {isCatalogLoading && suggestions.length === 0 && (
+                <div className="px-4 py-3 text-xs text-zinc-400 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Looking up songs…
+                </div>
+              )}
+              {suggestions.map((song) => (
+                <button
+                  key={song.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handlePickCatalogSong(song)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-zinc-800/80 transition-colors"
+                >
+                  {song.artworkUrl ? (
+                    <img src={song.artworkUrl} alt="" className="w-10 h-10 rounded-lg object-cover bg-zinc-800 shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-zinc-800 shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white truncate">{song.title}</p>
+                    <p className="text-xs text-zinc-400 truncate">
+                      {song.artist}
+                      {song.album ? ` · ${song.album}` : ""}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <button
           type="submit"
@@ -122,14 +234,14 @@ export const SongSearch: React.FC<SongSearchProps> = ({
           ) : (
             <>
               <Search className="w-4 h-4" />
-              Search
+              Search YouTube
             </>
           )}
         </button>
       </form>
 
       <p className="text-xs text-zinc-500">
-        Paste a YouTube video, a playlist link, or type a song name. Pick the match you want.
+        Type a song or artist for autocomplete, then pick a YouTube clip. You can still paste a video or playlist link.
       </p>
 
       {error && (

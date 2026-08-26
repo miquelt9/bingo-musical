@@ -28,13 +28,17 @@ export function guessTitleArtist(videoTitle: string, author: string): { title: s
   };
 }
 
-export function hitToTrack(hit: YoutubeSearchHit): Track {
-  const { title, artist } = guessTitleArtist(hit.title, hit.author);
+export function hitToTrack(
+  hit: YoutubeSearchHit,
+  catalog?: { title: string; artist: string; album?: string; artworkUrl?: string; durationMs?: number }
+): Track {
+  const guessed = guessTitleArtist(hit.title, hit.author);
   return createTrack({
-    title,
-    artist,
-    albumArtUrl: hit.thumbnailUrl || getYoutubeThumbnailUrl(hit.videoId),
-    durationMs: (hit.lengthSeconds || 180) * 1000,
+    title: catalog?.title || guessed.title,
+    artist: catalog?.artist || guessed.artist,
+    album: catalog?.album || "",
+    albumArtUrl: catalog?.artworkUrl || hit.thumbnailUrl || getYoutubeThumbnailUrl(hit.videoId),
+    durationMs: catalog?.durationMs || (hit.lengthSeconds || 180) * 1000,
     youtubeVideoId: hit.videoId,
     youtubeTitle: hit.title,
     matchStatus: "matched",

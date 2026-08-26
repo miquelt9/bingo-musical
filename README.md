@@ -10,9 +10,9 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
 ## ✨ Features
 
 - 🎧 **Search or paste to build a deck:**
-  - Search a song name, paste a YouTube video, or paste a playlist URL.
-  - Pick the best match from the results before adding it.
-  - Optional bulk paste of `Artist - Title` lines still works.
+  - Search a song or artist with public catalog autocomplete (iTunes, then Deezer/MusicBrainz).
+  - Selecting a song searches YouTube with `Artist Title official audio`.
+  - Paste a YouTube video or playlist URL if you already have the clip.
 - 🔍 **Smart YouTube Matcher:**
   - Automated fallback search across public Invidious & Piped instances (no YouTube API token required).
   - Direct 1-click manual YouTube link or Video ID override with instant thumbnail validation.
@@ -45,7 +45,7 @@ npm install
 
 ### 2. Create a deck (no Spotify needed)
 
-1. Search a song name or paste a YouTube video/playlist URL, then pick the match, or
+1. Search a song or artist (autocomplete from iTunes/Deezer), pick the title, then choose the YouTube clip, or
 2. Paste a bulk song list (`Artist - Title`, one per line), or
 3. Import a previously exported JSON deck / use the sample deck.
 

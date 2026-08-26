@@ -15,9 +15,11 @@ export const PIPED_INSTANCES = [
   "https://api.piped.yt",
 ];
 
-export async function fetchWithTimeout(url: string, timeoutMs = 4500): Promise<Response> {
+export async function fetchWithTimeout(url: string, timeoutMs = 4500, externalSignal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  externalSignal?.addEventListener("abort", onAbort);
   try {
     return await fetch(url, {
       signal: controller.signal,
@@ -25,5 +27,6 @@ export async function fetchWithTimeout(url: string, timeoutMs = 4500): Promise<R
     });
   } finally {
     clearTimeout(id);
+    externalSignal?.removeEventListener("abort", onAbort);
   }
 }
