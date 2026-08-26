@@ -15,7 +15,7 @@ export interface Track {
 }
 
 export interface DeckSource {
-  type: "spotify-playlist" | "manual" | "sample";
+  type: "spotify-playlist" | "youtube-playlist" | "song-list" | "manual" | "sample";
   playlistId?: string;
   url?: string;
   name?: string;

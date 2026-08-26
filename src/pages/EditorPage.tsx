@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
+import { SongSearch } from "../components/tracks/SongSearch";
 import { batchMatchTracks, BatchMatchProgress } from "../lib/youtube/matcher";
 import {
   Edit3,
@@ -31,9 +32,6 @@ export const EditorPage: React.FC = () => {
 
   // Add track modal
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newArtist, setNewArtist] = useState("");
-  const [newAlbum, setNewAlbum] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -81,32 +79,27 @@ export const EditorPage: React.FC = () => {
     setIsEditingName(false);
   };
 
-  const handleAddTrack = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newArtist.trim()) return;
-
-    const newTrack: Track = {
-      id: `track-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      title: newTitle.trim(),
-      artist: newArtist.trim(),
-      album: newAlbum.trim() || undefined,
-      albumArtUrl: "",
-      durationMs: 180000,
-      youtubeVideoId: null,
-      startTime: 30,
-      endTime: 45,
-      matchStatus: "pending",
-    };
-
-    const newTracks = [newTrack, ...deck.tracks];
-    const newDeck = { ...deck, tracks: newTracks };
+  const handleAddTrack = (track: Track) => {
+    if (track.youtubeVideoId && deck.tracks.some((t) => t.youtubeVideoId === track.youtubeVideoId)) {
+      return;
+    }
+    const newDeck = { ...deck, tracks: [track, ...deck.tracks] };
     setDeck(newDeck);
     updateDeck(newDeck);
+  };
 
-    setNewTitle("");
-    setNewArtist("");
-    setNewAlbum("");
-    setShowAddTrackModal(false);
+  const handleAddTracks = (tracks: Track[]) => {
+    const seen = new Set(deck.tracks.map((t) => t.youtubeVideoId).filter(Boolean));
+    const fresh = tracks.filter((track) => {
+      if (!track.youtubeVideoId) return true;
+      if (seen.has(track.youtubeVideoId)) return false;
+      seen.add(track.youtubeVideoId);
+      return true;
+    });
+    if (fresh.length === 0) return;
+    const newDeck = { ...deck, tracks: [...fresh, ...deck.tracks] };
+    setDeck(newDeck);
+    updateDeck(newDeck);
   };
 
   const handleAutoMatchAll = async () => {
@@ -253,7 +246,7 @@ export const EditorPage: React.FC = () => {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Custom Song</span>
+              <span>Add song</span>
             </button>
           </div>
         </div>
@@ -285,71 +278,27 @@ export const EditorPage: React.FC = () => {
       {/* Add Custom Track Modal */}
       {showAddTrackModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-1">Add Custom Song</h3>
-            <p className="text-xs text-zinc-400 mb-6">
-              Enter track details. You can link a YouTube video immediately or search later.
-            </p>
-
-            <form onSubmit={handleAddTrack} className="space-y-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 mb-6">
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  Song Title *
-                </label>
-                <input
-                  type="text"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Bohemian Rhapsody"
-                  required
-                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-sm text-white focus:border-emerald-500 outline-none"
-                  autoFocus
-                />
+                <h3 className="text-xl font-bold text-white">Add a song</h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Search by name or paste a YouTube link, then pick the match.
+                </p>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  Artist Name *
-                </label>
-                <input
-                  type="text"
-                  value={newArtist}
-                  onChange={(e) => setNewArtist(e.target.value)}
-                  placeholder="e.g. Queen"
-                  required
-                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-sm text-white focus:border-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  Album Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={newAlbum}
-                  onChange={(e) => setNewAlbum(e.target.value)}
-                  placeholder="e.g. A Night at the Opera"
-                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-sm text-white focus:border-emerald-500 outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTrackModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs shadow-lg shadow-emerald-500/20"
-                >
-                  Add Track
-                </button>
-              </div>
-            </form>
+              <button
+                type="button"
+                onClick={() => setShowAddTrackModal(false)}
+                className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800"
+              >
+                ✕
+              </button>
+            </div>
+            <SongSearch
+              existingVideoIds={deck.tracks.map((t) => t.youtubeVideoId)}
+              onAddTrack={handleAddTrack}
+              onAddTracks={handleAddTracks}
+            />
           </div>
         </div>
       )}

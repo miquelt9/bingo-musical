@@ -86,11 +86,18 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-100 space-y-2">
+          <p className="font-semibold text-amber-300">Spotify is optional and blocked for most personal apps.</p>
+          <p className="text-amber-200/80">
+            Spotify requires a Premium developer account and limits new apps to 5 allowlisted users. Use a pasted song list or a YouTube playlist instead.
+          </p>
+        </div>
+
         {/* Setup Instructions */}
         <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 text-xs text-zinc-300 space-y-3">
           <div className="flex items-center gap-2 font-bold text-zinc-100">
             <Info className="w-4 h-4 text-emerald-400" />
-            <span>How to get your Spotify Client ID:</span>
+            <span>Optional Spotify Client ID (Premium required):</span>
           </div>
           <ol className="list-decimal list-inside space-y-1.5 text-zinc-400 pl-1">
             <li>

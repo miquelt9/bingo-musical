@@ -14,7 +14,6 @@ import {
   Pause,
   ChevronDown,
   ChevronUp,
-  LogIn,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
@@ -31,7 +30,7 @@ import {
 } from "../../lib/youtube/player";
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, login, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const { decks, activeDeck, loadDeck } = useDeck();
   const location = useLocation();
   const navigate = useNavigate();
@@ -171,8 +170,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               </div>
             )}
 
-            {/* Spotify Auth Status */}
-            {isAuthenticated ? (
+            {isAuthenticated && (
               <button
                 type="button"
                 onClick={logout}
@@ -182,15 +180,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="hidden sm:inline">Spotify Connected</span>
                 <LogOut className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => login().catch(() => navigate("/settings"))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Connect Spotify</span>
               </button>
             )}
 

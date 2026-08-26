@@ -1,21 +1,5 @@
 import { Track } from "../../types/deck";
-
-const INVIDIOUS_INSTANCES = [
-  "https://inv.tux.pizza",
-  "https://invidious.nerdvpn.de",
-  "https://invidious.private.coffee",
-  "https://vid.priv.au",
-  "https://invidious.fdn.fr",
-  "https://invidious.protokolla.fi",
-  "https://invidious.perennialte.ch",
-];
-
-const PIPED_INSTANCES = [
-  "https://pipedapi.kavin.rocks",
-  "https://api.piped.privacydev.net",
-  "https://piped-api.lunar.icu",
-  "https://api.piped.yt",
-];
+import { INVIDIOUS_INSTANCES, PIPED_INSTANCES, fetchWithTimeout } from "./instances";
 
 export interface MatchResult {
   videoId: string | null;
@@ -34,20 +18,6 @@ export function cleanSearchQuery(track: Pick<Track, "title" | "artist">): string
 
   const firstArtist = track.artist.split(/[,/&]/)[0].trim();
   return `${firstArtist} ${cleanTitle} official audio`;
-}
-
-async function fetchWithTimeout(url: string, timeoutMs = 4500): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    });
-    return res;
-  } finally {
-    clearTimeout(id);
-  }
 }
 
 async function tryInvidiousSearch(instance: string, query: string): Promise<MatchResult | null> {

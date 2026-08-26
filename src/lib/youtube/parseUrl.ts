@@ -56,6 +56,33 @@ export function getYoutubeThumbnailUrl(
   return `https://i.ytimg.com/vi/${videoId}/${quality}.jpg`;
 }
 
+export function parseYoutubePlaylistId(input: string): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+
+  if (/^(PL|OL|UU|RD|FL)[a-zA-Z0-9_-]{10,}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    const urlStr =
+      trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        ? trimmed
+        : `https://${trimmed}`;
+    const url = new URL(urlStr);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (host.includes("youtube.com") || host === "youtu.be") {
+      const list = url.searchParams.get("list");
+      if (list && list.length >= 10) return list;
+    }
+  } catch {
+    const match = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    if (match?.[1]) return match[1];
+  }
+
+  return null;
+}
+
 export function getYoutubeWatchUrl(videoId: string, startTime?: number): string {
   if (!videoId) return "";
   if (startTime && startTime > 0) {
