@@ -26,6 +26,8 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
 
   if (!isBlocked) return null;
 
+  const showCheckingOnly = isChecking && invalidTracks.length === 0;
+
   const title = context === "host" ? "Cannot Start Game" : "Cannot Print Cards";
   const subtitle =
     context === "host"
@@ -44,7 +46,7 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
         className="w-full max-w-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        {isChecking ? (
+        {showCheckingOnly ? (
           <div className="space-y-3 text-xs">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 animate-spin shrink-0" />
@@ -71,6 +73,15 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
           </div>
         ) : (
           <div className="space-y-4 text-xs">
+            {isChecking && (
+              <div className="flex items-center gap-2 p-2 pc-bevel-inset text-muted">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span>
+                  Still checking remaining songs
+                  {progress ? ` (${progress.completed} / ${progress.total})` : "..."}
+                </span>
+              </div>
+            )}
             <div className="flex items-start gap-3 p-3 pc-bevel-outset border-l-4 border-pc-warning bg-pc-warning">
               <AlertTriangle className="w-5 h-5 text-pc-warning shrink-0 mt-0.5" />
               <div>

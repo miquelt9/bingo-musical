@@ -6,6 +6,7 @@ import { useTheme } from "../state/ThemeContext";
 import { getRedirectUri } from "../lib/spotify/auth";
 import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
+import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
 import {
   Key,
   Copy,
@@ -20,9 +21,8 @@ import {
   Moon,
   Sun,
   Code,
+  AlertCircle,
 } from "lucide-react";
-
-const GITHUB_REPO_URL = "https://github.com/miquelt9/bingo-musical";
 
 export const SettingsPage: React.FC = () => {
   const { clientId, updateClientId, isAuthenticated, login, logout, error } = useAuth();
@@ -229,29 +229,22 @@ export const SettingsPage: React.FC = () => {
       <Window
         title={
           <span className="inline-flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4" />
-            Zero-Backend & Client-Side Privacy
-          </span>
-        }
-      >
-        <p className="text-xs leading-relaxed">
-          Musical Bingo Creator runs 100% locally in your web browser. Your Spotify tokens, custom decks,
-          and game progress never leave your device. YouTube video playback uses standard embed controls
-          with zero API secrets.
-        </p>
-      </Window>
-
-      <Window
-        title={
-          <span className="inline-flex items-center gap-2">
             <Code className="w-4 h-4" />
-            Open Source
+            About &amp; Open Source
           </span>
         }
       >
         <p className="text-xs leading-relaxed">
-          Musical Bingo Creator is free and open source. View the code, report issues, or contribute on
-          GitHub.
+          {APP_NAME} is a free personal hobby project, released under the{" "}
+          <a
+            href={`${GITHUB_REPO_URL}/blob/main/LICENSE`}
+            target="_blank"
+            rel="noreferrer"
+            className="pc-link"
+          >
+            MIT license
+          </a>
+          . View the source, report issues, or contribute on GitHub.
         </p>
         <a
           href={GITHUB_REPO_URL}
@@ -259,9 +252,103 @@ export const SettingsPage: React.FC = () => {
           rel="noreferrer"
           className="pc-link inline-flex items-center gap-1 mt-2 text-xs font-semibold"
         >
-          miquelt9/bingo-musical
+          {GITHUB_REPO_URL}
           <ExternalLink className="w-3 h-3" />
         </a>
+      </Window>
+
+      <Window
+        title={
+          <span className="inline-flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Disclaimer
+          </span>
+        }
+      >
+        <ul className="text-xs leading-relaxed space-y-2 list-disc list-inside">
+          <li>
+            Not affiliated with YouTube, Google, Spotify, Apple, Deezer, or MusicBrainz.
+          </li>
+          <li>
+            Playback uses the YouTube embedded player only. This app does not host, download, or
+            redistribute music.
+          </li>
+          <li>
+            Intended for private or social games at home with family and friends.
+          </li>
+          <li>
+            Bars, ticketed events, or commercial venues may require music performance licenses
+            (e.g. SGAE in Spain). That is the organizer&apos;s responsibility, not this app&apos;s.
+          </li>
+          <li>
+            Song titles on printed cards are factual. You choose which YouTube videos to link.
+          </li>
+        </ul>
+      </Window>
+
+      <Window
+        title={
+          <span className="inline-flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" />
+            Privacy
+          </span>
+        }
+      >
+        <div className="text-xs leading-relaxed space-y-3">
+          <p>
+            {APP_NAME} runs in your web browser with no backend of its own. Your decks, game
+            progress, embed cache, and preferences are stored in <strong>localStorage</strong> on
+            your device and are not sent to us. If you connect Spotify, your tokens stay in
+            localStorage too.
+          </p>
+          <p>
+            When you use certain features, your browser may contact third parties directly:
+          </p>
+          <ul className="list-disc list-inside space-y-1 pl-1">
+            <li>
+              <strong>YouTube</strong> — iframe playback (may set cookies when you play a video)
+            </li>
+            <li>
+              <strong>Invidious / Piped</strong> — public instances used for YouTube search and
+              metadata
+            </li>
+            <li>
+              <strong>iTunes, Deezer, MusicBrainz</strong> — song autocomplete
+            </li>
+            <li>
+              <strong>noembed.com</strong> — embed permission checks
+            </li>
+            <li>
+              <strong>Spotify</strong> — only if you choose to connect
+            </li>
+            <li>
+              <strong>GitHub Pages</strong> — hosting; see the{" "}
+              <a
+                href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement"
+                target="_blank"
+                rel="noreferrer"
+                className="pc-link inline-flex items-center gap-0.5"
+              >
+                GitHub Privacy Statement
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </li>
+          </ul>
+          <p>We do not run analytics or user accounts.</p>
+          <p>
+            Questions or privacy requests: open an issue on{" "}
+            <a
+              href={`${GITHUB_REPO_URL}/issues`}
+              target="_blank"
+              rel="noreferrer"
+              className="pc-link inline-flex items-center gap-0.5"
+            >
+              GitHub
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            .
+          </p>
+        </div>
       </Window>
     </div>
   );

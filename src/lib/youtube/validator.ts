@@ -313,9 +313,10 @@ export interface BatchValidationProgress {
  */
 export async function validateTracksEmbeddability(
   tracks: Track[],
-  concurrency = 3,
+  concurrency = 6,
   onProgress?: (progress: BatchValidationProgress, result: EmbedValidationResult, track: Track) => void,
-  shouldCancel?: () => boolean
+  shouldCancel?: () => boolean,
+  onInvalid?: (entry: { track: Track; validation: EmbedValidationResult }) => void
 ): Promise<{
   validTracks: Track[];
   invalidTracks: Array<{ track: Track; validation: EmbedValidationResult }>;
@@ -345,6 +346,7 @@ export async function validateTracksEmbeddability(
       } else {
         invalid++;
         invalidTracks.push({ track, validation: res });
+        onInvalid?.({ track, validation: res });
       }
 
       if (onProgress) {

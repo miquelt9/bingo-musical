@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Modal } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
+import { ClipTimestampModal } from "./ClipTimestampModal";
 import { ManualYoutubeModal } from "./ManualYoutubeModal";
 import {
   getYoutubeThumbnailUrl,
@@ -18,6 +19,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Edit2,
+  Timer,
   Trash2,
   Music2,
   ShieldCheck,
@@ -93,6 +95,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     initialStatusFilter
   );
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+  const [timestampEditingTrack, setTimestampEditingTrack] = useState<Track | null>(null);
   const [trackPendingDelete, setTrackPendingDelete] = useState<Track | null>(null);
   const [activeCoachmarkId, setActiveCoachmarkId] = useState<string | null>(null);
 
@@ -452,6 +455,19 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                         <span className="text-[10px] font-mono ml-1">
                           ({track.endTime - track.startTime}s)
                         </span>
+                        <button
+                          type="button"
+                          className="pc-button p-1 shrink-0"
+                          disabled={!track.youtubeVideoId}
+                          onClick={() => setTimestampEditingTrack(track)}
+                          title={
+                            track.youtubeVideoId
+                              ? "Edit clip timestamps with video"
+                              : "Link a YouTube video first"
+                          }
+                        >
+                          <Timer className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </td>
                     <td className="py-2 px-3 text-center">
@@ -497,6 +513,18 @@ export const TrackTable: React.FC<TrackTableProps> = ({
           onSave={(updated) => {
             onUpdateTrack(updated);
             setEditingTrack(null);
+          }}
+        />
+      )}
+
+      {timestampEditingTrack && (
+        <ClipTimestampModal
+          track={timestampEditingTrack}
+          isOpen
+          onClose={() => setTimestampEditingTrack(null)}
+          onSave={(updated) => {
+            onUpdateTrack(updated);
+            setTimestampEditingTrack(null);
           }}
         />
       )}

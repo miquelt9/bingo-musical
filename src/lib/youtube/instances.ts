@@ -91,7 +91,8 @@ export function rememberYoutubeBackend(kind: "invidious" | "piped", url: string)
 export async function fetchWithTimeout(
   url: string,
   timeoutMs = 4500,
-  externalSignal?: AbortSignal
+  externalSignal?: AbortSignal,
+  extraHeaders?: Record<string, string>
 ): Promise<Response> {
   if (externalSignal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
@@ -103,7 +104,7 @@ export async function fetchWithTimeout(
   try {
     return await fetch(url, {
       signal: controller.signal,
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...extraHeaders },
     });
   } finally {
     clearTimeout(id);

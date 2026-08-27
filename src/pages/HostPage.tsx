@@ -19,7 +19,12 @@ import {
   subscribeToPlayerState,
   setVolume,
   toggleMute,
+  preloadClip,
+  setCrossfadeConfig,
+  continueClipPlayback,
+  activatePreloadedClip,
   PlayerPlaybackState,
+  Clip,
 } from "../lib/youtube/player";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
 import { ArrowLeft, History, Search, Sparkles, Music2, RotateCcw } from "lucide-react";
@@ -32,6 +37,31 @@ export interface CalledEntry {
 }
 
 const REVEAL_BEFORE_CHAIN_MS = 3000;
+const DEFAULT_CROSSFADE_MS = 1500;
+const CROSSFADE_SESSION_KEY = "bingo.host.crossfadeOverlapMs";
+
+function trackToClip(track: Track): Clip {
+  return {
+    videoId: track.youtubeVideoId!,
+    startTime: track.startTime,
+    endTime: track.endTime,
+    trackId: track.id,
+    title: track.title,
+    artist: track.artist,
+  };
+}
+
+function readStoredCrossfadeMs(deckId: string): number {
+  try {
+    const raw = sessionStorage.getItem(`${CROSSFADE_SESSION_KEY}.${deckId}`);
+    if (raw == null) return DEFAULT_CROSSFADE_MS;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return DEFAULT_CROSSFADE_MS;
+    return Math.max(0, Math.min(3000, parsed));
+  } catch {
+    return DEFAULT_CROSSFADE_MS;
+  }
+}
 
 export const HostPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -53,7 +83,8 @@ export const HostPage: React.FC = () => {
   const [currentCall, setCurrentCall] = useState<CalledEntry | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(true);
-  const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(false);
+  const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
+  const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [historySearch, setHistorySearch] = useState<string>("");
   const [showResetModal, setShowResetModal] = useState(false);
@@ -62,6 +93,7 @@ export const HostPage: React.FC = () => {
   const uncalledIdsRef = useRef(uncalledIds);
   const autoCallNextOnEndRef = useRef(autoCallNextOnEnd);
   const autoRevealOnEndRef = useRef(autoRevealOnEnd);
+  const crossfadeOverlapMsRef = useRef(crossfadeOverlapMs);
   const handleCallNextRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -75,6 +107,40 @@ export const HostPage: React.FC = () => {
   useEffect(() => {
     autoRevealOnEndRef.current = autoRevealOnEnd;
   }, [autoRevealOnEnd]);
+
+  useEffect(() => {
+    crossfadeOverlapMsRef.current = crossfadeOverlapMs;
+    setCrossfadeConfig(crossfadeOverlapMs, autoCallNextOnEnd);
+  }, [crossfadeOverlapMs, autoCallNextOnEnd]);
+
+  useEffect(() => {
+    if (!deck) return;
+    setCrossfadeOverlapMs(readStoredCrossfadeMs(deck.id));
+  }, [deck?.id]);
+
+  const persistCrossfadeMs = useCallback(
+    (ms: number) => {
+      setCrossfadeOverlapMs(ms);
+      if (deck) {
+        try {
+          sessionStorage.setItem(`${CROSSFADE_SESSION_KEY}.${deck.id}`, String(ms));
+        } catch {
+          // ignore
+        }
+      }
+    },
+    [deck]
+  );
+
+  const preloadNextTrack = useCallback(
+    (remainingIds: string[]) => {
+      if (!deck || !autoCallNextOnEndRef.current || remainingIds.length === 0) return;
+      const nextTrack = deck.tracks.find((t) => t.id === remainingIds[0]);
+      if (!nextTrack?.youtubeVideoId) return;
+      preloadClip(trackToClip(nextTrack));
+    },
+    [deck]
+  );
 
   const handleTracksUpdated = useCallback(
     (updatedTracks: Track[]) => {
@@ -145,31 +211,33 @@ export const HostPage: React.FC = () => {
       calledAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
     };
 
+    const clip = trackToClip(track);
+
     setUncalledIds(remaining);
     setCurrentCall(newEntry);
     setCalledHistory((prev) => [newEntry, ...prev]);
-    setIsRevealed(false);
+    setIsRevealed(true);
 
     if (track.youtubeVideoId) {
-      playClip(
-        {
-          videoId: track.youtubeVideoId,
-          startTime: track.startTime,
-          endTime: track.endTime,
-          trackId: track.id,
-          title: track.title,
-          artist: track.artist,
-        },
-        onClipEnd
-      );
-    } else {
-      setIsRevealed(true);
+      if (!continueClipPlayback(clip, onClipEnd) && !activatePreloadedClip(clip, onClipEnd)) {
+        playClip(clip, onClipEnd);
+      }
+      preloadNextTrack(remaining);
+    } else if (autoCallNextOnEnd && remaining.length > 0) {
+      chainTimeoutRef.current = window.setTimeout(() => {
+        chainTimeoutRef.current = null;
+        if (uncalledIdsRef.current.length > 0) {
+          handleCallNextRef.current();
+        }
+      }, REVEAL_BEFORE_CHAIN_MS);
     }
-  }, [deck, isPlayable, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout]);
+  }, [deck, isPlayable, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout, autoCallNextOnEnd, preloadNextTrack]);
 
   useEffect(() => {
     handleCallNextRef.current = handleCallNext;
   }, [handleCallNext]);
+
+  const initializedDeckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!deck) {
@@ -181,7 +249,10 @@ export const HostPage: React.FC = () => {
       return;
     }
 
-    initGame();
+    if (initializedDeckIdRef.current !== deck.id) {
+      initializedDeckIdRef.current = deck.id;
+      initGame();
+    }
   }, [deck, decks, navigate, initGame]);
 
   useEffect(() => {
@@ -196,17 +267,10 @@ export const HostPage: React.FC = () => {
 
   const handleReplayCurrent = () => {
     if (!currentCall?.track?.youtubeVideoId) return;
-    playClip(
-      {
-        videoId: currentCall.track.youtubeVideoId,
-        startTime: currentCall.track.startTime,
-        endTime: currentCall.track.endTime,
-        trackId: currentCall.track.id,
-        title: currentCall.track.title,
-        artist: currentCall.track.artist,
-      },
-      onClipEnd
-    );
+    playClip(trackToClip(currentCall.track), onClipEnd);
+    if (uncalledIds.length > 0) {
+      preloadNextTrack(uncalledIds);
+    }
   };
 
   const handleTogglePlayPause = () => {
@@ -239,19 +303,13 @@ export const HostPage: React.FC = () => {
 
       if (e.code === "Space") {
         e.preventDefault();
-        if (!currentCall) {
-          handleCallNext();
-        } else if (!isRevealed) {
-          setIsRevealed(true);
-        } else {
-          handleCallNext();
-        }
+        handleCallNext();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentCall, isRevealed, handleCallNext, isPlayable]);
+  }, [currentCall, handleCallNext, isPlayable]);
 
   if (!deck) return null;
 
@@ -316,8 +374,6 @@ export const HostPage: React.FC = () => {
             errorMessage={currentErrorMessage}
           />
 
-          <div id="host-video-panel" className="host-video-panel" />
-
           <div className="host-controls">
             <CallNextControls
               onCallNext={handleCallNext}
@@ -330,13 +386,16 @@ export const HostPage: React.FC = () => {
               showVideo={showVideo}
               playerState={playerState}
               isPlaying={isPlaying}
-              hasCurrentTrack={Boolean(currentCall?.track?.youtubeVideoId)}
+              currentTrack={currentCall?.track ?? null}
               remainingCount={uncalledIds.length}
               totalCount={deck.tracks.length}
               autoRevealOnEnd={autoRevealOnEnd}
               onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
               autoCallNextOnEnd={autoCallNextOnEnd}
               onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
+              crossfadeOverlapMs={crossfadeOverlapMs}
+              onCrossfadeOverlapChange={persistCrossfadeMs}
+              gameStarted={calledHistory.length > 0}
               disabled={!isPlayable}
             />
           </div>

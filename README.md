@@ -75,3 +75,24 @@ npm run build
 - **PDF Generation:** jsPDF
 - **Audio/Video Playback:** YouTube IFrame Player API
 - **Persistence:** Browser `localStorage` + JSON Import/Export
+
+---
+
+## License
+
+This project is released under the [MIT License](LICENSE).
+
+## Disclaimer
+
+Musical Bingo Creator is a free personal hobby project. It is **not affiliated** with YouTube, Google, Spotify, Apple, Deezer, or MusicBrainz. Playback uses the YouTube embedded player only — the app does not host or download music. It is intended for private or social games at home; bars, ticketed events, or commercial venues may require music performance licenses in your country (e.g. SGAE in Spain), which is the organizer's responsibility.
+
+## Privacy
+
+Decks and preferences stay in your browser (`localStorage`). When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, Spotify (if connected), and GitHub Pages hosting. There is no analytics or user accounts on our side. See **Settings → Privacy** in the app for the full notice.
+
+## Third-party services
+
+- **YouTube** — embedded playback via the IFrame Player API
+- **Invidious / Piped** — public instances for YouTube search and metadata (no official YouTube API key)
+- **iTunes, Deezer, MusicBrainz** — song title autocomplete
+- **Spotify** (optional) — playlist metadata import only

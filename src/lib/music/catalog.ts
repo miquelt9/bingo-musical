@@ -1,4 +1,7 @@
 import { fetchWithTimeout } from "../youtube/instances";
+import { GITHUB_REPO_URL } from "../app/meta";
+
+const MUSICBRAINZ_USER_AGENT = `MusicalBingoCreator/1.0 (+${GITHUB_REPO_URL})`;
 
 export interface CatalogSong {
   id: string;
@@ -79,7 +82,9 @@ async function searchDeezer(query: string, signal?: AbortSignal): Promise<Catalo
 
 async function searchMusicBrainz(query: string, signal?: AbortSignal): Promise<CatalogSong[]> {
   const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&fmt=json&limit=8`;
-  const res = await fetchWithTimeout(url, 4000, signal);
+  const res = await fetchWithTimeout(url, 4000, signal, {
+    "User-Agent": MUSICBRAINZ_USER_AGENT,
+  });
   if (signal?.aborted) return [];
   if (!res.ok) return [];
   const data = await res.json();

@@ -63,10 +63,26 @@ export function getPlayabilityIssues(tracks: Track[]): InvalidTrackEntry[] {
   return issues;
 }
 
-export function markTracksAsFailed(tracks: Track[], failedTrackIds: Set<string>): Track[] {
-  return tracks.map((t) =>
-    failedTrackIds.has(t.id) ? { ...t, matchStatus: "failed" as const } : t
+/** Issues we can detect without network checks. */
+export function getKnownPlayabilityIssues(tracks: Track[]): InvalidTrackEntry[] {
+  return getPlayabilityIssues(tracks).filter(
+    (entry) => entry.reason !== "Audio compatibility not yet verified"
   );
+}
+
+export function applyFailedTracksIfChanged(
+  tracks: Track[],
+  failedTrackIds: Set<string>
+): Track[] | null {
+  let changed = false;
+  const next = tracks.map((track) => {
+    if (!failedTrackIds.has(track.id) || track.matchStatus === "failed") {
+      return track;
+    }
+    changed = true;
+    return { ...track, matchStatus: "failed" as const };
+  });
+  return changed ? next : null;
 }
 
 /**
@@ -78,11 +94,12 @@ export async function ensureDeckPlayable(
     forceRecheck?: boolean;
     concurrency?: number;
     onProgress?: (progress: BatchValidationProgress) => void;
+    onIssueFound?: (issue: InvalidTrackEntry) => void;
     shouldCancel?: () => boolean;
   }
 ): Promise<DeckPlayabilityResult> {
   const validatedAt = Date.now();
-  const concurrency = options?.concurrency ?? 3;
+  const concurrency = options?.concurrency ?? 6;
 
   const tracksNeedingCheck = tracks.filter((t) => {
     if (!t.youtubeVideoId) return false;
@@ -109,7 +126,13 @@ export async function ensureDeckPlayable(
           if (res.embeddable) valid++;
           else {
             invalid++;
+            const issue: InvalidTrackEntry = {
+              track,
+              reason: res.reason || "Embedding blocked by video owner",
+              validation: res,
+            };
             validationInvalid.push({ track, validation: res });
+            options?.onIssueFound?.(issue);
           }
           options?.onProgress?.({
             total: tracks.length,
@@ -139,7 +162,16 @@ export async function ensureDeckPlayable(
             currentTrackTitle: track.title,
           });
         },
-        options?.shouldCancel
+        options?.shouldCancel,
+        ({ track, validation }) => {
+          const issue: InvalidTrackEntry = {
+            track,
+            reason: validation.reason || "Embedding blocked by video owner",
+            validation,
+          };
+          validationInvalid.push({ track, validation });
+          options?.onIssueFound?.(issue);
+        }
       );
 
       for (const track of tracksNeedingCheck) {

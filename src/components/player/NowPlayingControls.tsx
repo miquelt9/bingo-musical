@@ -40,7 +40,7 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
               ) : (
                 <>
                   {playerState?.currentClip?.artist || "Audio snippet"} •{" "}
-                  {playerState?.remainingTime.toFixed(1)}s remaining
+                  {(playerState?.remainingTime ?? 0).toFixed(1)}s remaining
                 </>
               )}
             </p>
@@ -72,9 +72,9 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           type="range"
           min="0"
           max="100"
-          value={playerState?.isMuted ? 0 : playerState?.volume ?? 100}
+          value={playerState?.volume ?? 100}
           onChange={(e) => onVolumeChange(Number(e.target.value))}
-          className="w-20 cursor-pointer hidden sm:block"
+          className={`w-20 cursor-pointer hidden sm:block ${playerState?.isMuted ? "opacity-40" : ""}`}
           aria-label="Volume"
         />
         <button

@@ -1,4 +1,5 @@
 import { Deck } from "../../types/deck";
+import { GITHUB_REPO_URL } from "../app/meta";
 
 export const SAMPLE_POP_HITS_DECK: Deck = {
   schemaVersion: 1,
@@ -9,7 +10,7 @@ export const SAMPLE_POP_HITS_DECK: Deck = {
   source: {
     type: "sample",
     name: "Sample 80s, 90s & 2000s Hits",
-    url: "https://github.com/miquel/bingo-musical",
+    url: GITHUB_REPO_URL,
   },
   tracks: [
     {

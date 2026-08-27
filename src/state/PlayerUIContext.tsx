@@ -1,44 +1,35 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { getDefaultVideoWindowBounds, VideoWindowBounds } from "../lib/videoWindow";
 
-export type VideoSize = "normal" | "large" | "fullscreen";
+export type { VideoWindowBounds };
 
 interface PlayerUIContextValue {
   showVideo: boolean;
   setShowVideo: (show: boolean) => void;
   toggleVideo: () => void;
-  videoSize: VideoSize;
-  setVideoSize: (size: VideoSize) => void;
-  cycleVideoSizeUp: () => void;
-  cycleVideoSizeDown: () => void;
+  videoWindowBounds: VideoWindowBounds;
+  setVideoWindowBounds: (bounds: VideoWindowBounds) => void;
 }
 
 const PlayerUIContext = createContext<PlayerUIContextValue | null>(null);
 
 export const PlayerUIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showVideo, setShowVideo] = useState(false);
-  const [videoSize, setVideoSize] = useState<VideoSize>("normal");
+  const [videoWindowBounds, setVideoWindowBounds] = useState<VideoWindowBounds>(
+    getDefaultVideoWindowBounds
+  );
 
   const toggleVideo = useCallback(() => setShowVideo((v) => !v), []);
-
-  const cycleVideoSizeUp = useCallback(() => {
-    setVideoSize((s) => (s === "normal" ? "large" : s === "large" ? "fullscreen" : "fullscreen"));
-  }, []);
-
-  const cycleVideoSizeDown = useCallback(() => {
-    setVideoSize((s) => (s === "fullscreen" ? "large" : s === "large" ? "normal" : "normal"));
-  }, []);
 
   const value = useMemo(
     () => ({
       showVideo,
       setShowVideo,
       toggleVideo,
-      videoSize,
-      setVideoSize,
-      cycleVideoSizeUp,
-      cycleVideoSizeDown,
+      videoWindowBounds,
+      setVideoWindowBounds,
     }),
-    [showVideo, toggleVideo, videoSize, cycleVideoSizeUp, cycleVideoSizeDown]
+    [showVideo, toggleVideo, videoWindowBounds]
   );
 
   return <PlayerUIContext.Provider value={value}>{children}</PlayerUIContext.Provider>;
