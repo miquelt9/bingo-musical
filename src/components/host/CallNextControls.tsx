@@ -1,18 +1,27 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, RotateCcw, Play, Pause, SlidersHorizontal } from "lucide-react";
+import { Shuffle, SlidersHorizontal } from "lucide-react";
+import { NowPlayingControls } from "../player/NowPlayingControls";
+import { PlayerPlaybackState } from "../../lib/youtube/player";
 
 interface CallNextControlsProps {
   onCallNext: () => void;
   onReplayCurrent: () => void;
   onTogglePlayPause: () => void;
-  onResetGame: () => void;
+  onStop: () => void;
+  onToggleMute: () => void;
+  onVolumeChange: (volume: number) => void;
+  onToggleVideo: () => void;
+  showVideo: boolean;
+  playerState: PlayerPlaybackState | null;
   isPlaying: boolean;
   hasCurrentTrack: boolean;
   remainingCount: number;
   totalCount: number;
   autoRevealOnEnd: boolean;
   onToggleAutoReveal: () => void;
+  autoCallNextOnEnd: boolean;
+  onToggleAutoCallNext: () => void;
   disabled?: boolean;
 }
 
@@ -20,18 +29,37 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   onCallNext,
   onReplayCurrent,
   onTogglePlayPause,
-  onResetGame,
+  onStop,
+  onToggleMute,
+  onVolumeChange,
+  onToggleVideo,
+  showVideo,
+  playerState,
   isPlaying,
   hasCurrentTrack,
   remainingCount,
   totalCount,
   autoRevealOnEnd,
   onToggleAutoReveal,
+  autoCallNextOnEnd,
+  onToggleAutoCallNext,
   disabled = false,
 }) => {
   const isDeckFinished = remainingCount === 0 && totalCount > 0;
   const calledCount = totalCount - remainingCount;
   const progressPercent = totalCount > 0 ? (calledCount / totalCount) * 100 : 0;
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      onTogglePlayPause();
+    } else if (hasCurrentTrack) {
+      if (playerState?.state === "paused" && playerState?.currentClip) {
+        onTogglePlayPause();
+      } else {
+        onReplayCurrent();
+      }
+    }
+  };
 
   return (
     <Window title="Host Controls">
@@ -55,13 +83,13 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <Button
           type="button"
           variant="primary"
           onClick={onCallNext}
           disabled={disabled || isDeckFinished}
-          className="sm:col-span-2 py-3"
+          className="py-3"
         >
           <Shuffle className="w-5 h-5" />
           {isDeckFinished
@@ -73,37 +101,46 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
             Space
           </kbd>
         </Button>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            className="flex-1"
-            onClick={isPlaying ? onTogglePlayPause : onReplayCurrent}
-            disabled={!hasCurrentTrack || disabled}
-            title={isPlaying ? "Pause snippet" : "Replay current snippet"}
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-5 h-5" />
-                Pause
-              </>
-            ) : (
-              <>
-                <Play className="w-5 h-5" />
-                Replay
-              </>
-            )}
-          </Button>
-          <Button type="button" onClick={onResetGame} title="Reset game and reshuffle bag">
-            <RotateCcw className="w-5 h-5" />
-          </Button>
-        </div>
       </div>
 
-      <div className="mt-4 pt-3 flex flex-wrap items-center justify-between gap-4 text-xs">
+      {hasCurrentTrack && playerState?.currentClip && (
+        <div className="mt-4 pt-3 border-t border-[var(--pc-border)]">
+          <p className="text-xs font-semibold mb-2">Now Playing</p>
+          <NowPlayingControls
+            playerState={playerState}
+            onPlayPause={handlePlayPause}
+            onStop={onStop}
+            onToggleMute={onToggleMute}
+            onVolumeChange={onVolumeChange}
+            onToggleVideo={onToggleVideo}
+            showVideo={showVideo}
+          />
+        </div>
+      )}
+
+      <div className="mt-4 pt-3 flex flex-col gap-3 text-xs">
         <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
-          <input type="checkbox" checked={autoRevealOnEnd} onChange={onToggleAutoReveal} />
-          <span className="font-medium">Auto-reveal answer when snippet finishes playing</span>
+          <input
+            type="checkbox"
+            checked={autoCallNextOnEnd}
+            onChange={onToggleAutoCallNext}
+            disabled={disabled}
+          />
+          <span className="font-medium">
+            Auto-play next song when snippet ends
+            <span className="block text-[10px] font-normal opacity-80 mt-0.5">
+              Reveals the just-played call, then continues to the next song
+            </span>
+          </span>
         </label>
+
+        {!autoCallNextOnEnd && (
+          <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+            <input type="checkbox" checked={autoRevealOnEnd} onChange={onToggleAutoReveal} />
+            <span className="font-medium">Auto-reveal answer when snippet finishes playing</span>
+          </label>
+        )}
+
         <div className="inline-flex items-center gap-2">
           <SlidersHorizontal className="w-3.5 h-3.5" />
           <span>Non-repeating randomized shuffle bag</span>
