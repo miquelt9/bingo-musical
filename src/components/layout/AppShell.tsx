@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
+import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDeckOnLeave";
 import {
   mountPlayer,
   subscribeToPlayerState,
@@ -41,6 +42,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+
+  useAutoDeleteEmptyDeckOnLeave();
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [showVideoWindow, setShowVideoWindow] = useState(false);
