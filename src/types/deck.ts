@@ -32,20 +32,22 @@ export interface Deck {
 }
 
 export interface BingoCardCell {
-  isFreeSpace: boolean;
+  isBlank: boolean;
   track: Track | null;
 }
 
 export interface BingoCard {
   id: string;
   cardNumber: number;
-  grid: BingoCardCell[]; // exactly 25 items for 5x5
+  gridSize: number;
+  grid: BingoCardCell[]; // gridSize × gridSize cells
 }
 
 export interface BingoCardOptions {
   deckName: string;
   customTitle?: string;
   cardCount: number;
-  includeFreeSpace: boolean;
-  freeSpaceText: string;
+  gridSize: number;
+  /** Percent of the deck sampled onto each card (1–100). Remaining squares become blank tiles. */
+  bingoPercent: number;
 }

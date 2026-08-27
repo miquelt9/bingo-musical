@@ -1,10 +1,20 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
-import { generateBingoCards } from "../lib/bingo/generateCards";
+import { Track } from "../types/deck";
+import {
+  generateBingoCards,
+  GRID_SIZES,
+  cellCount,
+  uniqueSongCount,
+} from "../lib/bingo/generateCards";
 import { downloadBingoPdf } from "../lib/bingo/pdf";
+import { downloadBingoCardsJson } from "../lib/bingo/exportCards";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
+import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
+import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import {
   Printer,
   Download,
@@ -14,87 +24,118 @@ import {
   ArrowLeft,
   Settings2,
   FileText,
-  AlertTriangle,
+  FileJson,
   Loader2,
 } from "lucide-react";
 
 export const CardsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { decks, loadDeck } = useDeck();
+  const { decks, loadDeck, updateDeck } = useDeck();
 
-  const deck = useMemo(() => (id ? loadDeck(id) : null), [id, loadDeck]);
+  const deck = useMemo(() => (id ? decks.find((d) => d.id === id) ?? null : null), [id, decks]);
 
-  // Card generation parameters
   const [customTitle, setCustomTitle] = useState("");
   const [cardCount, setCardCount] = useState<number>(10);
-  const [includeFreeSpace, setIncludeFreeSpace] = useState<boolean>(true);
-  const [freeSpaceText, setFreeSpaceText] = useState<string>("FREE SPACE");
+  const [gridSize, setGridSize] = useState<number>(5);
+  const [bingoPercent, setBingoPercent] = useState<number>(100);
 
-  // Generated cards
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
 
-  useEffect(() => {
-    if (!deck) {
-      if (decks.length > 0) {
-        navigate(`/deck/${decks[0].id}/cards`, { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
-      return;
-    }
+  const handleTracksUpdated = useCallback(
+    (updatedTracks: Track[]) => {
+      if (!deck) return;
+      updateDeck({ ...deck, tracks: updatedTracks });
+    },
+    [deck, updateDeck]
+  );
 
-    if (!customTitle) {
-      setCustomTitle(deck.name);
-    }
+  const {
+    isPlayable,
+    isChecking,
+    invalidTracks,
+    progress: gateProgress,
+    runCheck,
+  } = usePlayabilityGate(deck?.tracks ?? [], {
+    autoRun: Boolean(deck),
+    onTracksUpdated: handleTracksUpdated,
+  });
 
-    // Generate initial card set
-    const initial = generateBingoCards(deck.tracks, {
+  const slots = cellCount(gridSize);
+  const uniqueOnCard = deck ? uniqueSongCount(deck.tracks.length, slots, bingoPercent) : 0;
+  const blankOnCard = Math.max(0, slots - uniqueOnCard);
+
+  const cardOptions = useMemo(() => {
+    if (!deck) return null;
+    return {
       deckName: deck.name,
       customTitle: customTitle || deck.name,
       cardCount,
-      includeFreeSpace,
-      freeSpaceText,
-    });
-    setCards(initial);
-    setActivePreviewIndex(0);
+      gridSize,
+      bingoPercent,
+    };
+  }, [deck, customTitle, cardCount, gridSize, bingoPercent]);
+
+  useEffect(() => {
+    if (id) loadDeck(id);
+  }, [id, loadDeck]);
+
+  useEffect(() => {
+    if (deck) return;
+    if (decks.length > 0) {
+      navigate(`/deck/${decks[0].id}/cards`, { replace: true });
+    } else {
+      navigate("/", { replace: true });
+    }
   }, [deck, decks, navigate]);
 
-  const handleRegenerate = () => {
+  useEffect(() => {
     if (!deck) return;
-    const generated = generateBingoCards(deck.tracks, {
-      deckName: deck.name,
-      customTitle,
-      cardCount,
-      includeFreeSpace,
-      freeSpaceText,
-    });
+    setCustomTitle(deck.name);
+  }, [deck?.id, deck?.name]);
+
+  useEffect(() => {
+    if (!deck || !isPlayable) {
+      setCards([]);
+      setActivePreviewIndex(0);
+      return;
+    }
+    if (deck.tracks.length === 0) {
+      setCards([]);
+      setActivePreviewIndex(0);
+      return;
+    }
+    setCards(
+      generateBingoCards(deck.tracks, {
+        deckName: deck.name,
+        customTitle: deck.name,
+        cardCount,
+        gridSize,
+        bingoPercent,
+      })
+    );
+    setActivePreviewIndex(0);
+  }, [deck?.id, deck?.updatedAt, cardCount, gridSize, bingoPercent, isPlayable]);
+
+  const handleRegenerate = () => {
+    if (!deck || !cardOptions || deck.tracks.length === 0 || !isPlayable) return;
+    const generated = generateBingoCards(deck.tracks, cardOptions);
     setCards(generated);
     setActivePreviewIndex(0);
   };
 
   const handleDownloadPdf = async () => {
-    if (!deck || cards.length === 0) return;
+    if (!deck || !cardOptions || cards.length === 0 || !isPlayable) return;
     setIsExportingPdf(true);
     setPdfProgress({ current: 0, total: cards.length });
 
     try {
-      await downloadBingoPdf(
-        cards,
-        {
-          deckName: deck.name,
-          customTitle,
-          cardCount,
-          includeFreeSpace,
-          freeSpaceText,
-        },
-        (current, total) => {
-          setPdfProgress({ current, total });
-        }
-      );
+      await downloadBingoPdf(cards, cardOptions, (current, total) => {
+        setPdfProgress({ current, total });
+      });
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF: " + (err as Error).message);
@@ -104,233 +145,235 @@ export const CardsPage: React.FC = () => {
     }
   };
 
+  const handleDownloadJson = () => {
+    if (!deck || !cardOptions || cards.length === 0 || !isPlayable) return;
+    downloadBingoCardsJson(cards, cardOptions);
+  };
+
   const handleBrowserPrint = () => {
+    if (!isPlayable) return;
     window.print();
   };
 
   if (!deck) return null;
 
-  const hasEnoughTracks = deck.tracks.length >= 24;
   const currentCard = cards[activePreviewIndex] || cards[0];
+  const canGenerate = deck.tracks.length > 0 && isPlayable;
+  const exportsDisabled = !isPlayable || cards.length === 0;
 
   return (
-    <div className="space-y-8">
-      {/* Top Header & Breadcrumb */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
-        <Link
-          to={`/deck/${deck.id}`}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
-        >
+    <div className="space-y-4">
+      <PlayabilityGateOverlay
+        deckId={deck.id}
+        context="cards"
+        isChecking={isChecking}
+        progress={gateProgress}
+        invalidTracks={invalidTracks}
+        onRetry={() => void runCheck(true)}
+      />
+
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
+        <Link to={`/deck/${deck.id}`} className="pc-button">
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Deck Editor</span>
+          Back to Deck Editor
         </Link>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleBrowserPrint}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold border border-zinc-700 transition-colors active:scale-95"
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
             <Printer className="w-4 h-4" />
-            <span>Print in Browser</span>
-          </button>
-
-          <button
+            Print in Browser
+          </Button>
+          <Button type="button" onClick={handleDownloadJson} disabled={exportsDisabled}>
+            <FileJson className="w-4 h-4" />
+            Download JSON
+          </Button>
+          <Button
             type="button"
+            variant="primary"
             onClick={handleDownloadPdf}
-            disabled={isExportingPdf}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold shadow-lg shadow-emerald-500/20 transition-all active:scale-95 disabled:opacity-50"
+            disabled={isExportingPdf || exportsDisabled}
           >
             {isExportingPdf ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>
-                  Generating PDF ({pdfProgress?.current}/{pdfProgress?.total})...
-                </span>
+                Generating PDF ({pdfProgress?.current}/{pdfProgress?.total})...
               </>
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                <span>Download {cards.length} Cards (Vector PDF)</span>
+                Download {cards.length} Cards (Vector PDF)
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Main Content Layout: Configuration + Live Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
-        {/* Left Settings Sidebar */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-5">
-            <div className="flex items-center gap-2 pb-4 border-b border-zinc-800">
-              <Settings2 className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-lg font-bold text-white">Card Generator Settings</h2>
-            </div>
-
-            {/* Custom Header Title */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 print:hidden">
+        <div className="lg:col-span-5 space-y-4">
+          <Window
+            title={
+              <span className="inline-flex items-center gap-2">
+                <Settings2 className="w-4 h-4" />
+                Card Generator Settings
+              </span>
+            }
+          >
+            <div className="space-y-4">
+              <label className="block text-xs font-bold">
                 Game / Event Title
-              </label>
-              <input
-                type="text"
-                value={customTitle}
-                onChange={(e) => setCustomTitle(e.target.value)}
-                placeholder="e.g. Friday Night 80s Bingo"
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-emerald-500 text-sm text-white outline-none"
-              />
-            </div>
-
-            {/* Card Count Selector */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                Number of Cards ({cardCount})
-              </label>
-              <div className="flex items-center gap-2">
-                {[5, 10, 20, 50, 100].map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setCardCount(num)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                      cardCount === num
-                        ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
-                        : "bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800"
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Free Space Options */}
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeFreeSpace}
-                  onChange={(e) => setIncludeFreeSpace(e.target.checked)}
-                  className="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-emerald-500 accent-emerald-500"
+                <Input
+                  type="text"
+                  className="w-full mt-1"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="e.g. Friday Night 80s Bingo"
                 />
-                <span className="text-xs font-semibold text-zinc-200">
-                  Include Center "FREE SPACE" Wildcard
-                </span>
               </label>
 
-              {includeFreeSpace && (
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1">
-                    Free Space Text
-                  </label>
-                  <input
-                    type="text"
-                    value={freeSpaceText}
-                    onChange={(e) => setFreeSpaceText(e.target.value)}
-                    placeholder="FREE SPACE"
-                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-emerald-500 text-xs text-white outline-none"
-                  />
+              <div>
+                <p className="text-xs font-bold mb-1.5">Grid size ({gridSize}×{gridSize})</p>
+                <div className="flex items-center gap-2">
+                  {GRID_SIZES.map((size) => (
+                    <Button
+                      key={size}
+                      type="button"
+                      active={gridSize === size}
+                      onClick={() => setGridSize(size)}
+                      className="flex-1"
+                    >
+                      {size}×{size}
+                    </Button>
+                  ))}
                 </div>
-              )}
-            </div>
-
-            {/* Reshuffle / Regenerate */}
-            <div className="pt-4 border-t border-zinc-800">
-              <button
-                type="button"
-                onClick={handleRegenerate}
-                className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 flex items-center justify-center gap-2 transition-colors active:scale-95"
-              >
-                <Shuffle className="w-4 h-4 text-emerald-400" />
-                <span>Reshuffle & Generate {cardCount} Cards</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Track Pool Info Box */}
-          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-5 text-xs text-zinc-400 space-y-2">
-            <div className="flex items-center justify-between text-zinc-200 font-semibold">
-              <span>Deck Song Pool</span>
-              <span className="text-emerald-400">{deck.tracks.length} songs</span>
-            </div>
-            <p className="text-zinc-500">
-              Each generated card randomly selects 24 unique songs from this pool using the Fisher-Yates unbiased shuffle algorithm.
-            </p>
-            {!hasEnoughTracks && (
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start gap-2 mt-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Deck has fewer than 24 songs ({deck.tracks.length}). Cards will repeat some songs.
-                </span>
               </div>
+
+              <div>
+                <p className="text-xs font-bold mb-1.5">Number of Cards ({cardCount})</p>
+                <div className="flex items-center gap-2">
+                  {[5, 10, 20, 50, 100].map((num) => (
+                    <Button
+                      key={num}
+                      type="button"
+                      active={cardCount === num}
+                      onClick={() => setCardCount(num)}
+                      className="flex-1"
+                    >
+                      {num}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold mb-1.5">
+                  Songs expected for a bingo ({bingoPercent}% · {uniqueOnCard} of {deck.tracks.length || 0})
+                </p>
+                <input
+                  type="range"
+                  min={10}
+                  max={100}
+                  step={5}
+                  value={bingoPercent}
+                  onChange={(e) => setBingoPercent(Number(e.target.value))}
+                  disabled={!canGenerate}
+                  className="w-full"
+                  aria-label="Percent of the deck used on each card"
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  {[25, 50, 75, 100].map((pct) => (
+                    <Button
+                      key={pct}
+                      type="button"
+                      active={bingoPercent === pct}
+                      onClick={() => setBingoPercent(pct)}
+                      className="flex-1"
+                    >
+                      {pct}%
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs mt-2">
+                  Each card places a random {bingoPercent}% of this deck
+                  {canGenerate ? ` (${uniqueOnCard} song${uniqueOnCard === 1 ? "" : "s"})` : ""} onto the{" "}
+                  {gridSize}×{gridSize} grid. Leftover squares become dark blocked tiles, so you never need
+                  a full {slots}-song deck. Lower % means fewer songs per card and more blank tiles.
+                </p>
+              </div>
+
+              <Button type="button" className="w-full" onClick={handleRegenerate} disabled={!canGenerate}>
+                <Shuffle className="w-4 h-4" />
+                Reshuffle & Generate {cardCount} Cards
+              </Button>
+            </div>
+          </Window>
+
+          <Window title="Deck Song Pool">
+            <p className="text-xs mb-2">{deck.tracks.length} songs</p>
+            {canGenerate ? (
+              <p className="text-xs">
+                Each card randomly samples {uniqueOnCard} song{uniqueOnCard === 1 ? "" : "s"} from this
+                pool onto a {gridSize}×{gridSize} grid
+                {blankOnCard > 0
+                  ? ` · ${blankOnCard} dark tile${blankOnCard === 1 ? "" : "s"} fill the rest`
+                  : ""}
+                .
+              </p>
+            ) : !isPlayable && !isChecking ? (
+              <p className="text-xs">
+                Fix unplayable songs in the Deck Editor before generating bingo cards.
+              </p>
+            ) : (
+              <p className="text-xs">Add songs to this deck to generate bingo cards.</p>
             )}
-          </div>
+          </Window>
         </div>
 
-        {/* Right Preview Area */}
-        <div className="lg:col-span-7 space-y-4">
-          {/* Card Carousel Controls */}
-          {cards.length > 0 && (
-            <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-2xl px-5 py-3 shadow-lg">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-bold text-white">
+        <div className="lg:col-span-7 space-y-3">
+          {cards.length > 0 && currentCard && (
+            <Window
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
                   Previewing Card #{currentCard.cardNumber} of {cards.length}
                 </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
+              }
+            >
+              <div className="flex items-center justify-end gap-2 mb-3">
+                <Button
                   type="button"
-                  onClick={() =>
-                    setActivePreviewIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1))
-                  }
-                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                  onClick={() => setActivePreviewIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1))}
                   title="Previous card"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-xs font-mono text-zinc-400 px-1">
+                </Button>
+                <span className="text-xs font-mono px-1">
                   {activePreviewIndex + 1} / {cards.length}
                 </span>
-                <button
+                <Button
                   type="button"
                   onClick={() =>
                     setActivePreviewIndex((prev) => (prev < cards.length - 1 ? prev + 1 : 0))
                   }
-                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
                   title="Next card"
                 >
                   <ChevronRight className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
-            </div>
-          )}
-
-          {/* Interactive Card Preview */}
-          {currentCard && (
-            <div className="bg-zinc-950/60 p-4 sm:p-8 rounded-3xl border border-zinc-800 shadow-inner">
               <CardPreview
                 card={currentCard}
                 eventTitle={customTitle || deck.name}
-                freeSpaceText={freeSpaceText}
                 interactiveMarks={true}
               />
-            </div>
+            </Window>
           )}
         </div>
       </div>
 
-      {/* Hidden printable layout for @media print (renders every generated card cleanly on its own page) */}
       <div className="hidden print:block space-y-8">
         {cards.map((c) => (
           <div key={c.id} className="page-break-after-always">
             <CardPreview
               card={c}
               eventTitle={customTitle || deck.name}
-              freeSpaceText={freeSpaceText}
               interactiveMarks={false}
             />
           </div>

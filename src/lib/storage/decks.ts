@@ -1,5 +1,8 @@
 import { Deck, Track, MatchStatus } from "../../types/deck";
 import { SAMPLE_POP_HITS_DECK } from "./mockDeck";
+import { parseYoutubeVideoId, getYoutubeWatchUrl } from "../youtube/parseUrl";
+import { createTrack } from "../tracks";
+import { downloadJson, slugifyFilename } from "./download";
 
 const DECKS_STORAGE_KEY = "bingo-musical:decks";
 
@@ -76,33 +79,74 @@ export function duplicateDeck(id: string): Deck | null {
 }
 
 export function exportDeckToJson(deck: Deck): void {
-  const exportData = {
-    ...deck,
+  const songs = deck.tracks.map((track) => {
+    const song: Record<string, unknown> = {
+      title: track.title,
+      artist: track.artist,
+    };
+    if (track.album) song.album = track.album;
+    if (track.youtubeVideoId) {
+      song.youtube = getYoutubeWatchUrl(track.youtubeVideoId, track.startTime);
+    }
+    song.start = track.startTime;
+    song.end = track.endTime;
+    return song;
+  });
+
+  downloadJson(`${slugifyFilename(deck.name)}-deck.json`, {
+    format: "bingo-musical-deck",
+    schemaVersion: 1,
+    name: deck.name,
     exportedAt: new Date().toISOString(),
-  };
-
-  const jsonStr = JSON.stringify(exportData, null, 2);
-  const blob = new Blob([jsonStr], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-
-  const cleanName = deck.name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${cleanName || "musical-bingo"}-deck.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+    songs,
+  });
 }
 
 export interface SchemaValidationResult {
   isValid: boolean;
   error?: string;
   deck?: Deck;
+}
+
+function parseExportedSong(raw: unknown, index: number): { track: Track } | { error: string } {
+  if (!raw || typeof raw !== "object") {
+    return { error: `Song at index ${index} is invalid.` };
+  }
+  const s = raw as Record<string, unknown>;
+  if (typeof s.title !== "string" || !s.title.trim()) {
+    return { error: `Song at index ${index} is missing a title.` };
+  }
+  if (typeof s.artist !== "string" || !s.artist.trim()) {
+    return { error: `Song '${s.title}' is missing an artist.` };
+  }
+
+  const youtubeRaw = [s.youtube, s.youtubeVideoId, s.url].find((v) => typeof v === "string" && v.trim()) as
+    | string
+    | undefined;
+  const youtubeVideoId = youtubeRaw ? parseYoutubeVideoId(youtubeRaw) : null;
+  const startTime =
+    typeof s.start === "number" && s.start >= 0
+      ? s.start
+      : typeof s.startTime === "number" && s.startTime >= 0
+        ? s.startTime
+        : 30;
+  const endCandidate =
+    typeof s.end === "number"
+      ? s.end
+      : typeof s.endTime === "number"
+        ? s.endTime
+        : startTime + 15;
+
+  const track = createTrack({
+    title: s.title,
+    artist: s.artist,
+    album: typeof s.album === "string" ? s.album : "",
+    youtubeVideoId,
+    matchStatus: youtubeVideoId ? "matched" : "pending",
+  });
+  track.startTime = startTime;
+  track.endTime = Math.max(startTime + 1, endCandidate);
+  return { track };
 }
 
 export function validateDeckSchema(data: unknown): SchemaValidationResult {
@@ -112,7 +156,7 @@ export function validateDeckSchema(data: unknown): SchemaValidationResult {
 
   const obj = data as Record<string, unknown>;
 
-  if (obj.schemaVersion !== 1 && typeof obj.schemaVersion !== "number") {
+  if (typeof obj.schemaVersion === "number" && obj.schemaVersion !== 1) {
     return { isValid: false, error: "Missing or unsupported schemaVersion (expected 1)." };
   }
 
@@ -120,50 +164,64 @@ export function validateDeckSchema(data: unknown): SchemaValidationResult {
     return { isValid: false, error: "Deck must have a non-empty 'name' field." };
   }
 
-  if (!Array.isArray(obj.tracks) || obj.tracks.length === 0) {
-    return { isValid: false, error: "Deck must include a non-empty 'tracks' list." };
+  const songList = Array.isArray(obj.songs) ? obj.songs : null;
+  const trackList = Array.isArray(obj.tracks) ? obj.tracks : null;
+  const useSongs = Boolean(songList && (obj.format === "bingo-musical-deck" || !trackList));
+
+  if ((!trackList || trackList.length === 0) && (!songList || songList.length === 0)) {
+    return { isValid: false, error: "Deck must include a non-empty 'songs' or 'tracks' list." };
   }
 
   const sanitizedTracks: Track[] = [];
 
-  for (let i = 0; i < obj.tracks.length; i++) {
-    const t = obj.tracks[i] as Record<string, unknown>;
-    if (!t || typeof t !== "object") {
-      return { isValid: false, error: `Track at index ${i} is invalid.` };
+  if (useSongs && songList) {
+    for (let i = 0; i < songList.length; i++) {
+      const parsed = parseExportedSong(songList[i], i);
+      if ("error" in parsed) {
+        return { isValid: false, error: parsed.error };
+      }
+      sanitizedTracks.push(parsed.track);
     }
+  } else {
+    for (let i = 0; i < (trackList as unknown[]).length; i++) {
+      const t = (trackList as unknown[])[i] as Record<string, unknown>;
+      if (!t || typeof t !== "object") {
+        return { isValid: false, error: `Track at index ${i} is invalid.` };
+      }
 
-    if (typeof t.title !== "string" || !t.title.trim()) {
-      return { isValid: false, error: `Track at index ${i} is missing a title.` };
+      if (typeof t.title !== "string" || !t.title.trim()) {
+        return { isValid: false, error: `Track at index ${i} is missing a title.` };
+      }
+
+      if (typeof t.artist !== "string" || !t.artist.trim()) {
+        return { isValid: false, error: `Track '${t.title}' is missing an artist.` };
+      }
+
+      const startTime = typeof t.startTime === "number" && !isNaN(t.startTime) && t.startTime >= 0 ? t.startTime : 30;
+      const endTime = typeof t.endTime === "number" && !isNaN(t.endTime) && t.endTime > startTime ? t.endTime : startTime + 15;
+      const youtubeVideoId = typeof t.youtubeVideoId === "string" && t.youtubeVideoId.trim() ? t.youtubeVideoId.trim() : null;
+
+      let matchStatus: MatchStatus = "pending";
+      if (typeof t.matchStatus === "string" && ["pending", "matched", "failed", "manual"].includes(t.matchStatus)) {
+        matchStatus = t.matchStatus as MatchStatus;
+      } else if (youtubeVideoId) {
+        matchStatus = "matched";
+      }
+
+      sanitizedTracks.push({
+        id: typeof t.id === "string" && t.id.trim() ? t.id.trim() : `t-${i}-${Math.random().toString(36).substring(2, 7)}`,
+        title: t.title.trim(),
+        artist: t.artist.trim(),
+        album: typeof t.album === "string" ? t.album.trim() : "",
+        albumArtUrl: typeof t.albumArtUrl === "string" ? t.albumArtUrl.trim() : "",
+        durationMs: typeof t.durationMs === "number" ? t.durationMs : 180000,
+        youtubeVideoId,
+        youtubeTitle: typeof t.youtubeTitle === "string" ? t.youtubeTitle : undefined,
+        startTime,
+        endTime,
+        matchStatus,
+      });
     }
-
-    if (typeof t.artist !== "string" || !t.artist.trim()) {
-      return { isValid: false, error: `Track '${t.title}' is missing an artist.` };
-    }
-
-    const startTime = typeof t.startTime === "number" && !isNaN(t.startTime) && t.startTime >= 0 ? t.startTime : 30;
-    const endTime = typeof t.endTime === "number" && !isNaN(t.endTime) && t.endTime > startTime ? t.endTime : startTime + 15;
-    const youtubeVideoId = typeof t.youtubeVideoId === "string" && t.youtubeVideoId.trim() ? t.youtubeVideoId.trim() : null;
-    
-    let matchStatus: MatchStatus = "pending";
-    if (typeof t.matchStatus === "string" && ["pending", "matched", "failed", "manual"].includes(t.matchStatus)) {
-      matchStatus = t.matchStatus as MatchStatus;
-    } else if (youtubeVideoId) {
-      matchStatus = "matched";
-    }
-
-    sanitizedTracks.push({
-      id: typeof t.id === "string" && t.id.trim() ? t.id.trim() : `t-${i}-${Math.random().toString(36).substring(2, 7)}`,
-      title: t.title.trim(),
-      artist: t.artist.trim(),
-      album: typeof t.album === "string" ? t.album.trim() : "",
-      albumArtUrl: typeof t.albumArtUrl === "string" ? t.albumArtUrl.trim() : "",
-      durationMs: typeof t.durationMs === "number" ? t.durationMs : 180000,
-      youtubeVideoId,
-      youtubeTitle: typeof t.youtubeTitle === "string" ? t.youtubeTitle : undefined,
-      startTime,
-      endTime,
-      matchStatus,
-    });
   }
 
   const now = new Date().toISOString();

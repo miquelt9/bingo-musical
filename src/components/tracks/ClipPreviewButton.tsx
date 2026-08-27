@@ -81,15 +81,9 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
           ? "Stop snippet preview"
           : `Play ${durationSec}s snippet (${track.startTime}s - ${track.endTime}s)`
       }
-      className={`relative inline-flex items-center justify-center font-medium rounded-lg transition-all select-none overflow-hidden ${
+      className={`relative inline-flex items-center justify-center font-medium pc-button select-none overflow-hidden ${
         sizeClasses[size]
-      } ${
-        !hasVideo
-          ? "bg-zinc-800/50 text-zinc-500 cursor-not-allowed border border-zinc-700/30"
-          : isPlaying
-          ? "bg-emerald-500 text-zinc-950 font-semibold shadow-lg shadow-emerald-500/20 hover:bg-emerald-400"
-          : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700 hover:text-white border border-zinc-700 active:scale-95"
-      } ${className}`}
+      } ${!hasVideo ? "opacity-50" : ""} ${isPlaying ? "active" : ""} ${className}`}
     >
       {/* Background progress fill when playing */}
       {isPlaying && (
@@ -101,9 +95,9 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
 
       <span className="relative z-10 inline-flex items-center gap-1.5">
         {isBuffering ? (
-          <Loader2 className={`${iconSizes[size]} animate-spin text-emerald-400`} />
+          <Loader2 className={`${iconSizes[size]} animate-spin`} />
         ) : hasError ? (
-          <AlertCircle className={`${iconSizes[size]} text-amber-400`} />
+          <AlertCircle className={iconSizes[size]} />
         ) : isPlaying ? (
           <Square className={`${iconSizes[size]} fill-current`} />
         ) : (

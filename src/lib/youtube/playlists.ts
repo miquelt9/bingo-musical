@@ -1,6 +1,11 @@
 import { Deck, Track } from "../../types/deck";
 import { createTrack } from "../tracks";
-import { INVIDIOUS_INSTANCES, PIPED_INSTANCES, fetchWithTimeout } from "./instances";
+import {
+  fetchWithTimeout,
+  getYoutubeBackends,
+  raceFirstSuccess,
+  rememberYoutubeBackend,
+} from "./instances";
 import { parseYoutubePlaylistId, parseYoutubeVideoId } from "./parseUrl";
 
 export interface YoutubePlaylistImport {
@@ -28,9 +33,17 @@ function guessTitleArtist(videoTitle: string, author: string): { title: string; 
   };
 }
 
-async function tryInvidiousPlaylist(instance: string, playlistId: string): Promise<YoutubePlaylistImport | null> {
+async function tryInvidiousPlaylist(
+  instance: string,
+  playlistId: string,
+  signal?: AbortSignal
+): Promise<YoutubePlaylistImport | null> {
   try {
-    const res = await fetchWithTimeout(`${instance}/api/v1/playlists/${encodeURIComponent(playlistId)}`, 6000);
+    const res = await fetchWithTimeout(
+      `${instance}/api/v1/playlists/${encodeURIComponent(playlistId)}`,
+      6000,
+      signal
+    );
     if (!res.ok) return null;
     const data = await res.json();
     const videos = Array.isArray(data.videos) ? data.videos : [];
@@ -65,6 +78,7 @@ async function tryInvidiousPlaylist(instance: string, playlistId: string): Promi
     }
 
     if (tracks.length === 0) return null;
+    rememberYoutubeBackend("invidious", instance);
     return {
       playlistId,
       name: data.title || "YouTube Playlist",
@@ -75,9 +89,17 @@ async function tryInvidiousPlaylist(instance: string, playlistId: string): Promi
   }
 }
 
-async function tryPipedPlaylist(instance: string, playlistId: string): Promise<YoutubePlaylistImport | null> {
+async function tryPipedPlaylist(
+  instance: string,
+  playlistId: string,
+  signal?: AbortSignal
+): Promise<YoutubePlaylistImport | null> {
   try {
-    const res = await fetchWithTimeout(`${instance}/playlists/${encodeURIComponent(playlistId)}`, 6000);
+    const res = await fetchWithTimeout(
+      `${instance}/playlists/${encodeURIComponent(playlistId)}`,
+      6000,
+      signal
+    );
     if (!res.ok) return null;
     const data = await res.json();
     const videos = Array.isArray(data.relatedStreams) ? data.relatedStreams : [];
@@ -108,6 +130,7 @@ async function tryPipedPlaylist(instance: string, playlistId: string): Promise<Y
     }
 
     if (tracks.length === 0) return null;
+    rememberYoutubeBackend("piped", instance);
     return {
       playlistId,
       name: data.name || "YouTube Playlist",
@@ -124,15 +147,20 @@ export async function fetchYoutubePlaylist(input: string): Promise<YoutubePlayli
     throw new Error("Paste a YouTube playlist URL (youtube.com/playlist?list=...).");
   }
 
-  for (const instance of INVIDIOUS_INSTANCES) {
-    const result = await tryInvidiousPlaylist(instance, playlistId);
-    if (result) return result;
-  }
+  const backends = getYoutubeBackends();
+  const result = await raceFirstSuccess(
+    [
+      ...backends.piped.map(
+        (instance) => (signal: AbortSignal) => tryPipedPlaylist(instance, playlistId, signal)
+      ),
+      ...backends.invidious.map(
+        (instance) => (signal: AbortSignal) => tryInvidiousPlaylist(instance, playlistId, signal)
+      ),
+    ],
+    { concurrency: 6 }
+  );
 
-  for (const instance of PIPED_INSTANCES) {
-    const result = await tryPipedPlaylist(instance, playlistId);
-    if (result) return result;
-  }
+  if (result) return result;
 
   throw new Error(
     "Could not load that YouTube playlist from public search instances. Paste a song list instead, or try again later."

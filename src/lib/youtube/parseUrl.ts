@@ -7,6 +7,10 @@ export function parseYoutubeVideoId(input: string): string | null {
     return trimmed;
   }
 
+  // Piped/Invidious relative watch paths: /watch?v=xxxxxxxxxxx
+  const fromQuery = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  if (fromQuery) return fromQuery[1];
+
   // Handle various URL patterns
   try {
     // Check if it looks like a URL or starts with domain

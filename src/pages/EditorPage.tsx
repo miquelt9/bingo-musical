@@ -1,37 +1,66 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
+import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
 import { SongSearch } from "../components/tracks/SongSearch";
 import { batchMatchTracks, BatchMatchProgress } from "../lib/youtube/matcher";
 import {
+  validateTracksEmbeddability,
+  BatchValidationProgress,
+  getCachedEmbedStatus,
+  getUnplayableTracks,
+} from "../lib/youtube/validator";
+import {
+  canStartGame,
+  ensureDeckPlayable,
+  InvalidTrackEntry,
+} from "../lib/youtube/playabilityGate";
+import { PcModal } from "../components/ui/PcModal";
+import { useToast } from "../state/ToastContext";
+import {
   Edit3,
   Printer,
   Radio,
   Download,
   Plus,
-  AlertTriangle,
   ArrowLeft,
   Check,
+  AlertTriangle,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 
 export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { decks, loadDeck, updateDeck, exportDeck } = useDeck();
+  const statusFilterParam = searchParams.get("filter");
+  const initialStatusFilter =
+    statusFilterParam === "blocked" ? "blocked" : "all";
 
   const [deck, setDeck] = useState<Deck | null>(null);
   const [deckName, setDeckName] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
 
-  // Matcher states
   const [isMatching, setIsMatching] = useState(false);
   const [matchProgress, setMatchProgress] = useState<BatchMatchProgress | null>(null);
   const cancelMatchingRef = useRef(false);
 
-  // Add track modal
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationProgress, setValidationProgress] = useState<BatchValidationProgress | null>(null);
+  const cancelValidationRef = useRef(false);
+
+  const { showToast } = useToast();
+
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
+  const [hostGateOpen, setHostGateOpen] = useState(false);
+  const [hostGateChecking, setHostGateChecking] = useState(false);
+  const [hostGateProgress, setHostGateProgress] = useState<BatchValidationProgress | null>(null);
+  const [hostGateInvalid, setHostGateInvalid] = useState<InvalidTrackEntry[]>([]);
+  const backgroundVerifyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -39,21 +68,54 @@ export const EditorPage: React.FC = () => {
     if (found) {
       setDeck(found);
       setDeckName(found.name);
+    } else if (decks.length > 0) {
+      navigate(`/deck/${decks[0].id}`, { replace: true });
     } else {
-      // If deck not found, fallback to first available or home
-      if (decks.length > 0) {
-        navigate(`/deck/${decks[0].id}`, { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      navigate("/", { replace: true });
     }
   }, [id, loadDeck, decks, navigate]);
 
+  // Silently verify uncached YouTube links when a deck is opened
+  useEffect(() => {
+    if (!deck || isValidating || isMatching) return;
+    if (backgroundVerifyRef.current === deck.id) return;
+
+    const uncached = deck.tracks.filter(
+      (t) => t.youtubeVideoId && !getCachedEmbedStatus(t.youtubeVideoId)
+    );
+    if (uncached.length === 0) {
+      backgroundVerifyRef.current = deck.id;
+      return;
+    }
+
+    let cancelled = false;
+    backgroundVerifyRef.current = deck.id;
+
+    void validateTracksEmbeddability(uncached, 3).then(({ invalidTracks }) => {
+      if (cancelled || invalidTracks.length === 0) return;
+
+      setDeck((current) => {
+        if (!current) return null;
+        const invalidIds = new Set(invalidTracks.map((entry) => entry.track.id));
+        const nextTracks = current.tracks.map((track) =>
+          invalidIds.has(track.id) ? { ...track, matchStatus: "failed" as const } : track
+        );
+        const nextDeck = { ...current, tracks: nextTracks };
+        updateDeck(nextDeck);
+        return nextDeck;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck?.id, deck?.tracks.length, isValidating, isMatching, updateDeck]);
+
   if (!deck) {
     return (
-      <div className="py-24 text-center text-zinc-400">
+      <Window title="Deck Editor">
         <p>Loading deck...</p>
-      </div>
+      </Window>
     );
   }
 
@@ -112,7 +174,6 @@ export const EditorPage: React.FC = () => {
         2,
         (progress, updatedTrack) => {
           setMatchProgress(progress);
-          // Progressively update local state
           setDeck((current) => {
             if (!current) return null;
             const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
@@ -135,137 +196,302 @@ export const EditorPage: React.FC = () => {
     }
   };
 
-  const matchedCount = deck.tracks.filter(
-    (t) => t.matchStatus === "matched" || t.matchStatus === "manual"
-  ).length;
-  const hasEnoughTracks = deck.tracks.length >= 24;
+  const handleVerifyAllAudio = async () => {
+    setIsValidating(true);
+    cancelValidationRef.current = false;
+
+    try {
+      const { invalidTracks } = await validateTracksEmbeddability(
+        deck.tracks,
+        3,
+        (prog) => setValidationProgress(prog),
+        () => cancelValidationRef.current
+      );
+
+      if (invalidTracks.length > 0) {
+        const invalidMap = new Map(invalidTracks.map((i) => [i.track.id, i.validation]));
+        const updatedTracks = deck.tracks.map((track) => {
+          if (invalidMap.has(track.id)) {
+            return {
+              ...track,
+              matchStatus: "failed" as const,
+            };
+          }
+          return track;
+        });
+        const updatedDeck = { ...deck, tracks: updatedTracks };
+        setDeck(updatedDeck);
+        updateDeck(updatedDeck);
+        showToast({
+          title: "Audio Check",
+          icon: <AlertTriangle className="w-3.5 h-3.5" />,
+          message: `Checked ${deck.tracks.length} songs. Found ${invalidTracks.length} song${
+            invalidTracks.length > 1 ? "s" : ""
+          } with playback restrictions.`,
+          duration: 12000,
+          actions: [
+            {
+              id: "auto-fix",
+              label: "Auto-Fix",
+              variant: "primary",
+              onClick: () => handleAutoFixBlocked(),
+            },
+          ],
+        });
+      } else {
+        showToast({
+          title: "Audio Check",
+          icon: <ShieldCheck className="w-3.5 h-3.5" />,
+          message: `All ${deck.tracks.length} songs verified! Audio is ready for all tracks.`,
+          duration: 8000,
+        });
+      }
+    } catch (err) {
+      console.error("Audio verification error:", err);
+    } finally {
+      setIsValidating(false);
+      setValidationProgress(null);
+    }
+  };
+
+  const handleAutoFixBlocked = async () => {
+    const blockedTrackIds = new Set(
+      getUnplayableTracks(deck.tracks).map((t) => t.id)
+    );
+
+    if (blockedTrackIds.size === 0) return;
+
+    // Reset blocked tracks to pending so batchMatchTracks re-evaluates them with fallback
+    const preparedTracks = deck.tracks.map((t) => {
+      if (blockedTrackIds.has(t.id)) {
+        return {
+          ...t,
+          youtubeVideoId: null,
+          matchStatus: "pending" as const,
+        };
+      }
+      return t;
+    });
+
+    setIsMatching(true);
+    cancelMatchingRef.current = false;
+
+    try {
+      const updatedTracks = await batchMatchTracks(
+        preparedTracks,
+        2,
+        (progress, updatedTrack) => {
+          setMatchProgress(progress);
+          setDeck((current) => {
+            if (!current) return null;
+            const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
+            const nextDeck = { ...current, tracks: nextTracks };
+            updateDeck(nextDeck);
+            return nextDeck;
+          });
+        },
+        () => cancelMatchingRef.current
+      );
+
+      const finalDeck = { ...deck, tracks: updatedTracks };
+      setDeck(finalDeck);
+      updateDeck(finalDeck);
+
+      const recheck = await ensureDeckPlayable(updatedTracks, {
+        onProgress: setValidationProgress,
+      });
+      if (recheck.invalidTracks.length > 0) {
+        const invalidIds = new Set(recheck.invalidTracks.map((i) => i.track.id));
+        const markedTracks = updatedTracks.map((track) =>
+          invalidIds.has(track.id) ? { ...track, matchStatus: "failed" as const } : track
+        );
+        const markedDeck = { ...finalDeck, tracks: markedTracks };
+        setDeck(markedDeck);
+        updateDeck(markedDeck);
+      }
+      if (recheck.playable) {
+        showToast({
+          title: "Auto-Fix Complete",
+          icon: <ShieldCheck className="w-3.5 h-3.5" />,
+          message: "All songs verified! Replaced restricted tracks with playable alternatives.",
+          duration: 8000,
+        });
+      } else {
+        showToast({
+          title: "Auto-Fix Complete",
+          icon: <AlertTriangle className="w-3.5 h-3.5" />,
+          message: `Auto-fix complete, but ${recheck.invalidTracks.length} song${
+            recheck.invalidTracks.length > 1 ? "s" : ""
+          } still need attention.`,
+          duration: 12000,
+          actions: [
+            {
+              id: "view-problems",
+              label: "View Problems",
+              variant: "primary",
+              onClick: () => navigate(`/deck/${deck.id}?filter=blocked`),
+            },
+          ],
+        });
+      }
+    } catch (err) {
+      console.error("Auto-fix error:", err);
+    } finally {
+      setIsMatching(false);
+      setMatchProgress(null);
+      setValidationProgress(null);
+    }
+  };
+
+  const handleHostLiveGame = async () => {
+    if (!deck) return;
+
+    if (canStartGame(deck.tracks)) {
+      navigate(`/deck/${deck.id}/play`);
+      return;
+    }
+
+    setHostGateOpen(true);
+    setHostGateChecking(true);
+    setHostGateInvalid([]);
+    setHostGateProgress(null);
+
+    try {
+      const result = await ensureDeckPlayable(deck.tracks, {
+        onProgress: setHostGateProgress,
+      });
+
+      if (result.invalidTracks.length > 0) {
+        const invalidIds = new Set(result.invalidTracks.map((i) => i.track.id));
+        const updatedTracks = deck.tracks.map((track) =>
+          invalidIds.has(track.id) ? { ...track, matchStatus: "failed" as const } : track
+        );
+        const updatedDeck = { ...deck, tracks: updatedTracks };
+        setDeck(updatedDeck);
+        updateDeck(updatedDeck);
+        setHostGateInvalid(result.invalidTracks);
+      } else {
+        navigate(`/deck/${deck.id}/play`);
+        setHostGateOpen(false);
+      }
+    } catch (err) {
+      console.error("Host gate verification error:", err);
+    } finally {
+      setHostGateChecking(false);
+      setHostGateProgress(null);
+    }
+  };
+
+  const blockedCount = getUnplayableTracks(deck.tracks).length;
+  const playableCount = deck.tracks.length - blockedCount;
 
   return (
-    <div className="space-y-8">
-      {/* Navigation Breadcrumb & Actions */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
-        >
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
+        <Link to="/" className="pc-button">
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to All Decks</span>
+          Back to All Decks
         </Link>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => exportDeck(deck)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-colors"
-          >
+        <div className="flex items-center gap-2">
+          <Button type="button" onClick={() => exportDeck(deck)}>
             <Download className="w-3.5 h-3.5" />
-            <span>Export JSON</span>
-          </button>
-
-          <Link
-            to={`/deck/${deck.id}/cards`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold border border-zinc-700 transition-colors"
-          >
-            <Printer className="w-4 h-4 text-emerald-400" />
-            <span>Bingo Cards</span>
+            Export JSON
+          </Button>
+          <Link to={`/deck/${deck.id}/cards`} className="pc-button">
+            <Printer className="w-4 h-4" />
+            Bingo Cards
           </Link>
-
-          <Link
-            to={`/deck/${deck.id}/play`}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+          <Button
+            type="button"
+            variant="primary"
+            onClick={handleHostLiveGame}
+            disabled={isMatching || isValidating || hostGateChecking}
           >
             <Radio className="w-4 h-4" />
-            <span>Host Live Game</span>
-          </Link>
+            {hostGateChecking ? "Verifying..." : "Host Live Game"}
+          </Button>
         </div>
       </div>
 
-      {/* Deck Header & Title Editor */}
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-xl">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <Window title="Deck Properties">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             {isEditingName ? (
               <div className="flex items-center gap-2 max-w-xl">
-                <input
+                <Input
                   type="text"
+                  className="w-full"
                   value={deckName}
                   onChange={(e) => setDeckName(e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-emerald-500 text-xl font-bold text-white outline-none"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSaveDeckName();
                     if (e.key === "Escape") setIsEditingName(false);
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={handleSaveDeckName}
-                  className="p-2.5 rounded-xl bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
-                >
-                  <Check className="w-5 h-5 stroke-[3]" />
-                </button>
+                <Button type="button" variant="primary" onClick={handleSaveDeckName}>
+                  <Check className="w-5 h-5" />
+                </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-3 group">
-                <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight truncate">
-                  {deck.name}
-                </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl font-bold truncate">{deck.name}</h1>
                 <button
                   type="button"
+                  className="pc-button"
                   onClick={() => setIsEditingName(true)}
-                  className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
                   title="Rename deck"
                 >
                   <Edit3 className="w-4 h-4" />
                 </button>
               </div>
             )}
-
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-              <span className="font-semibold text-zinc-200">
-                {deck.tracks.length} Total Tracks
+            <p className="mt-2 text-xs flex flex-wrap items-center gap-2">
+              <span>{deck.tracks.length} Total Tracks</span>
+              <span>·</span>
+              <span className={blockedCount > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-green-600 dark:text-green-400 font-semibold"}>
+                {playableCount} Ready / {blockedCount} Need Attention
               </span>
-              <span>•</span>
-              <span className="font-semibold text-emerald-400">
-                {matchedCount} Matched on YouTube
-              </span>
-              {deck.source?.type === "spotify-playlist" && (
-                <>
-                  <span>•</span>
-                  <span className="text-zinc-400">Imported from Spotify</span>
-                </>
-              )}
-            </div>
+              {deck.source?.type === "spotify-playlist" ? <span>· Imported from Spotify</span> : ""}
+            </p>
           </div>
-
-          {/* Add Track Button */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowAddTrackModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-colors"
-            >
+          <div className="flex items-center gap-2">
+            <Button type="button" onClick={() => setShowAddTrackModal(true)}>
               <Plus className="w-4 h-4" />
-              <span>Add song</span>
-            </button>
+              Add song
+            </Button>
           </div>
         </div>
+      </Window>
 
-        {/* Warning Banner if < 24 tracks */}
-        {!hasEnoughTracks && (
-          <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-200">
-              <p className="font-bold">Minimum 24 unique songs required for 5x5 Bingo Cards.</p>
-              <p className="mt-0.5 text-amber-300/80">
-                You currently have {deck.tracks.length} tracks. Please import more tracks or add songs manually so cards can be uniquely sampled without repeating items.
+      {/* Blocked Songs Warning Banner */}
+      {blockedCount > 0 && (
+        <div className="p-3 pc-bevel-outset border-l-4 border-amber-500 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <p className="font-bold text-amber-900 dark:text-amber-300">
+                {blockedCount} song{blockedCount > 1 ? "s" : ""} cannot play audio in the game
+              </p>
+              <p className="text-amber-800 dark:text-amber-400 mt-0.5">
+                Some videos have playback restrictions outside YouTube. Use Auto-Fix to automatically find and replace them with working versions.
               </p>
             </div>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleAutoFixBlocked}
+              disabled={isMatching || isValidating}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isMatching ? "Auto-fixing..." : "Auto-Fix Songs"}</span>
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {/* Track List Table */}
       <TrackTable
         tracks={deck.tracks}
         onUpdateTrack={handleUpdateTrack}
@@ -273,34 +499,80 @@ export const EditorPage: React.FC = () => {
         onAutoMatchAll={handleAutoMatchAll}
         isMatching={isMatching}
         matchProgress={matchProgress}
+        onVerifyAllEmbeds={handleVerifyAllAudio}
+        isValidating={isValidating}
+        validationProgress={validationProgress}
+        initialStatusFilter={initialStatusFilter}
       />
 
-      {/* Add Custom Track Modal */}
-      {showAddTrackModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-white">Add a song</h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Search by name or paste a YouTube link, then pick the match.
+      {hostGateOpen && (hostGateChecking || hostGateInvalid.length > 0) && (
+        <PcModal
+          title="Cannot Start Game"
+          onClose={() => {
+            if (!hostGateChecking) setHostGateOpen(false);
+          }}
+          className="max-w-lg"
+        >
+          {hostGateChecking ? (
+            <div className="space-y-3 text-xs">
+              <p className="font-bold">Checking audio compatibility...</p>
+              {hostGateProgress ? (
+                <p>
+                  {hostGateProgress.completed} / {hostGateProgress.total} songs checked
+                  {hostGateProgress.currentTrackTitle ? ` · ${hostGateProgress.currentTrackTitle}` : ""}
                 </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddTrackModal(false)}
-                className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800"
-              >
-                ✕
-              </button>
+              ) : (
+                <p>Verifying YouTube embed permissions...</p>
+              )}
             </div>
-            <SongSearch
-              existingVideoIds={deck.tracks.map((t) => t.youtubeVideoId)}
-              onAddTrack={handleAddTrack}
-              onAddTracks={handleAddTracks}
-            />
-          </div>
-        </div>
+          ) : (
+            <div className="space-y-4 text-xs">
+              <p className="font-bold">
+                All songs must be playable before starting the game.
+              </p>
+              <p>
+                {hostGateInvalid.length} song{hostGateInvalid.length > 1 ? "s" : ""} cannot be played.
+                Use Auto-Fix or fix them manually, then try again.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleAutoFixBlocked}
+                  disabled={isMatching || isValidating}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Auto-Fix Songs
+                </Button>
+                <Link
+                  to={`/deck/${deck.id}?filter=blocked`}
+                  className="pc-button"
+                  onClick={() => setHostGateOpen(false)}
+                >
+                  View Problem Songs
+                </Link>
+                <Button type="button" onClick={() => setHostGateOpen(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </PcModal>
+      )}
+
+      {showAddTrackModal && (
+        <PcModal
+          title="Add a song"
+          onClose={() => setShowAddTrackModal(false)}
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <p className="text-xs mb-3">Search by name or paste a YouTube link, then pick the match.</p>
+          <SongSearch
+            existingVideoIds={deck.tracks.map((t) => t.youtubeVideoId)}
+            onAddTrack={handleAddTrack}
+            onAddTracks={handleAddTracks}
+          />
+        </PcModal>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
   Music,
   FolderOpen,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
+import { useTheme } from "../../state/ThemeContext";
 import {
   mountPlayer,
   subscribeToPlayerState,
@@ -29,16 +31,22 @@ import {
   toggleMute,
 } from "../../lib/youtube/player";
 
+function formatClock(date: Date) {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, logout } = useAuth();
   const { decks, activeDeck, loadDeck } = useDeck();
+  const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
-  const [showVideoWindow, setShowVideoWindow] = useState<boolean>(false);
+  const [showVideoWindow, setShowVideoWindow] = useState(false);
+  const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
+  const [clock, setClock] = useState(() => formatClock(new Date()));
 
-  // Mount singleton player once
   useEffect(() => {
     mountPlayer("youtube-player-singleton").catch((err) => {
       console.warn("YouTube player init:", err);
@@ -53,246 +61,238 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(formatClock(new Date())), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const isPlaying = playerState?.state === "playing";
   const hasActiveClip = Boolean(playerState?.currentClip);
-
-  // Determine active deck ID from route or context
   const currentDeckId = activeDeck?.id || decks[0]?.id;
+  const path = location.pathname.replace(/\/+$/, "") || "/";
+  const activeTab =
+    path === "/settings"
+      ? "settings"
+      : /\/cards$/.test(path)
+        ? "cards"
+        : /\/play$/.test(path)
+          ? "host"
+          : /^\/deck\/[^/]+$/.test(path)
+            ? "editor"
+            : path === "/"
+              ? "decks"
+              : null;
+
+  const taskbarItemClass = (tab: string) =>
+    `pc-button pc-taskbar-item ${activeTab === tab ? "active" : ""}`;
+
+  const scrollPaddingClass = hasActiveClip
+    ? isPlayerMinimized
+      ? "pc-workspace-scroll--player-minimized"
+      : "pc-workspace-scroll--has-player"
+    : "";
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 px-4 sm:px-8 py-3.5 print:hidden">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 group shrink-0">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-emerald-400 flex items-center justify-center text-zinc-950 font-black shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-              <Music className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <span className="font-extrabold text-lg tracking-tight text-white block leading-tight">
-                Musical Bingo
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider block">
-                Creator & Host
-              </span>
-            </div>
-          </Link>
+    <Desktop tiled theme={theme}>
+      <Workspace>
+        <div className={`pc-workspace-scroll print:p-0 ${scrollPaddingClass}`}>{children}</div>
+      </Workspace>
 
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-2xl bg-zinc-900/90 border border-zinc-800/80 text-sm">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all ${
-                  isActive
-                    ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
-                }`
-              }
-            >
-              <FolderOpen className="w-4 h-4" />
-              <span>Decks</span>
-            </NavLink>
-
-            <NavLink
-              to={currentDeckId ? `/deck/${currentDeckId}` : "/"}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all ${
-                  isActive
-                    ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
-                }`
-              }
-            >
-              <Edit3 className="w-4 h-4" />
-              <span>Editor</span>
-            </NavLink>
-
-            <NavLink
-              to={currentDeckId ? `/deck/${currentDeckId}/cards` : "/"}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all ${
-                  isActive
-                    ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
-                }`
-              }
-            >
-              <Printer className="w-4 h-4" />
-              <span>Bingo Cards</span>
-            </NavLink>
-
-            <NavLink
-              to={currentDeckId ? `/deck/${currentDeckId}/play` : "/"}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all ${
-                  isActive
-                    ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800/60"
-                }`
-              }
-            >
-              <Radio className="w-4 h-4" />
-              <span>Host Game</span>
-            </NavLink>
-          </nav>
-
-          {/* Right Actions: Deck Selector + Spotify + Settings */}
-          <div className="flex items-center gap-3">
-            {/* Active Deck Selector */}
-            {decks.length > 0 && (
-              <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-zinc-800">
-                <span className="text-xs text-zinc-400 font-medium">Deck:</span>
-                <select
-                  value={activeDeck?.id || ""}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    loadDeck(id);
-                    if (location.pathname.startsWith("/deck/")) {
-                      const suffix = location.pathname.includes("/cards")
-                        ? "/cards"
-                        : location.pathname.includes("/play")
-                        ? "/play"
-                        : "";
-                      navigate(`/deck/${id}${suffix}`);
-                    }
-                  }}
-                  className="bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-1.5 text-xs font-semibold text-zinc-200 outline-none focus:border-emerald-500 max-w-[180px] truncate cursor-pointer"
-                >
-                  {decks.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} ({d.tracks.length})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {isAuthenticated && (
-              <button
-                type="button"
-                onClick={logout}
-                title="Disconnect Spotify account"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-emerald-400 text-xs font-semibold border border-emerald-500/30 transition-colors"
-              >
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="hidden sm:inline">Spotify Connected</span>
-                <LogOut className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
-              </button>
-            )}
-
-            {/* Settings Link */}
-            <NavLink
-              to="/settings"
-              title="Settings & Spotify Client ID"
-              className={({ isActive }) =>
-                `p-2 rounded-xl transition-colors ${
-                  isActive
-                    ? "bg-zinc-800 text-white"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-                }`
-              }
-            >
-              <Settings className="w-5 h-5" />
-            </NavLink>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 pb-32 print:p-0 print:m-0 print:max-w-none">
-        {children}
-      </main>
-
-      {/* Persistent Floating Mini-Player / Status Bar */}
       {hasActiveClip && (
-        <div className="fixed bottom-4 left-4 right-4 sm:left-8 sm:right-8 z-40 max-w-4xl mx-auto print:hidden animate-in slide-in-from-bottom-5 duration-200">
-          <div className="bg-zinc-900/95 border border-zinc-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Track Info */}
-            <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                <Music className={`w-5 h-5 ${isPlaying ? "animate-bounce" : ""}`} />
-              </div>
-              <div className="min-w-0">
-                <p className="font-bold text-sm text-white truncate max-w-xs sm:max-w-md">
-                  {playerState?.currentClip?.title || "Playing YouTube Snippet"}
-                </p>
-                <p className="text-xs text-zinc-400 truncate max-w-xs sm:max-w-md">
-                  {playerState?.currentClip?.artist || "Audio snippet"} •{" "}
-                  <span className="text-emerald-400 font-mono font-medium">
-                    {playerState?.remainingTime.toFixed(1)}s remaining
+        <div className="fixed bottom-12 left-3 right-3 z-40 max-w-3xl mx-auto print:hidden shadow-lg">
+          <Window
+            title={
+              isPlayerMinimized ? (
+                <span className="inline-flex items-center gap-2 truncate text-xs font-normal">
+                  <Music className={`w-3.5 h-3.5 shrink-0 ${isPlaying ? "animate-bounce" : ""}`} />
+                  <strong className="font-bold">Now Playing:</strong>
+                  <span className="truncate">
+                    {playerState?.currentClip?.artist ? `${playerState.currentClip.artist} — ` : ""}
+                    {playerState?.currentClip?.title || "Audio clip"}
                   </span>
-                </p>
+                  {playerState && playerState.remainingTime > 0 && (
+                    <span className="font-mono text-[11px] opacity-80 shrink-0">
+                      ({playerState.remainingTime.toFixed(1)}s)
+                    </span>
+                  )}
+                </span>
+              ) : (
+                "Now Playing"
+              )
+            }
+            className="w-full"
+            onClose={stopPlayback}
+            onMinimize={() => setIsPlayerMinimized(!isPlayerMinimized)}
+            onMaximize={isPlayerMinimized ? () => setIsPlayerMinimized(false) : undefined}
+          >
+            {!isPlayerMinimized && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
+                  <Music className={`w-5 h-5 shrink-0 ${isPlaying ? "animate-bounce" : ""}`} />
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm truncate max-w-xs sm:max-w-md">
+                      {playerState?.currentClip?.title || "Playing YouTube Snippet"}
+                    </p>
+                    <p className="text-xs truncate max-w-xs sm:max-w-md">
+                      {playerState?.errorMessage ? (
+                        <span className="text-red-500 font-semibold">{playerState.errorMessage}</span>
+                      ) : (
+                        <>
+                          {playerState?.currentClip?.artist || "Audio snippet"} •{" "}
+                          {playerState?.remainingTime.toFixed(1)}s remaining
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="pc-button"
+                    onClick={isPlaying ? pausePlayback : resumePlayback}
+                    title={isPlaying ? "Pause" : "Play / Replay"}
+                  >
+                    {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
+                  </button>
+                  <button type="button" className="pc-button" onClick={stopPlayback} title="Stop playback">
+                    <Square className="w-4 h-4 fill-current" />
+                  </button>
+                  <button
+                    type="button"
+                    className="pc-button"
+                    onClick={toggleMute}
+                    title={playerState?.isMuted ? "Unmute" : "Mute"}
+                  >
+                    {playerState?.isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={playerState?.isMuted ? 0 : playerState?.volume ?? 100}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    className="w-20 cursor-pointer hidden sm:block"
+                    aria-label="Volume"
+                  />
+                  <button
+                    type="button"
+                    className="pc-button"
+                    onClick={() => setShowVideoWindow(!showVideoWindow)}
+                    title="Toggle visual video preview"
+                  >
+                    <span>Video</span>
+                    {showVideoWindow ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-3 shrink-0">
-              {/* Play / Pause */}
-              <button
-                type="button"
-                onClick={isPlaying ? pausePlayback : resumePlayback}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white transition-colors"
-                title={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-              </button>
-
-              {/* Stop */}
-              <button
-                type="button"
-                onClick={stopPlayback}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-red-400 transition-colors"
-                title="Stop playback"
-              >
-                <Square className="w-4 h-4 fill-current" />
-              </button>
-
-              {/* Volume & Mute */}
-              <button
-                type="button"
-                onClick={toggleMute}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-              >
-                {playerState?.isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={playerState?.isMuted ? 0 : playerState?.volume ?? 100}
-                onChange={(e) => setVolume(Number(e.target.value))}
-                className="w-20 accent-emerald-500 cursor-pointer hidden sm:block"
-              />
-
-              {/* Toggle Video Preview Window */}
-              <button
-                type="button"
-                onClick={() => setShowVideoWindow(!showVideoWindow)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 transition-colors border border-zinc-700"
-                title="Toggle visual video preview"
-              >
-                <span>Video</span>
-                {showVideoWindow ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
+            )}
+          </Window>
         </div>
       )}
 
-      {/* Singleton YouTube IFrame Container (Strictly complies with YouTube ToS) */}
       <div
-        className={`fixed z-50 transition-all duration-300 print:hidden ${
+        className={`fixed print:hidden ${
           showVideoWindow
-            ? "bottom-24 right-4 sm:right-8 w-72 sm:w-80 aspect-video rounded-2xl overflow-hidden shadow-2xl border-2 border-emerald-500/50 bg-black"
-            : "bottom-0 right-0 w-1 h-1 opacity-0 pointer-events-none"
+            ? "z-50 pc-window bottom-32 right-4 sm:right-8 w-72 sm:w-80"
+            : "-left-[9999px] top-0 w-80 h-52 opacity-0 pointer-events-none -z-50"
         }`}
       >
-        <div id="youtube-player-singleton" className="w-full h-full" />
+        {showVideoWindow && (
+          <div className="pc-titlebar">
+            <div className="pc-titlebar-title">YouTube</div>
+            <div className="pc-titlebar-controls">
+              <button
+                type="button"
+                className="pc-titlebar-btn"
+                onClick={() => setShowVideoWindow(false)}
+                aria-label="Close"
+              >
+                X
+              </button>
+            </div>
+          </div>
+        )}
+        <div className={showVideoWindow ? "aspect-video bg-black" : "w-80 h-52 bg-black"}>
+          <div id="youtube-player-singleton" className="w-full h-full" />
+        </div>
       </div>
-    </div>
+
+      <Taskbar className="print:hidden">
+        <Link to="/" className="pc-button pc-start-btn">
+          Start
+        </Link>
+        <NavLink to="/" end className={() => taskbarItemClass("decks")}>
+          <FolderOpen className="w-3.5 h-3.5" />
+          Decks
+        </NavLink>
+        <NavLink
+          to={currentDeckId ? `/deck/${currentDeckId}` : "/"}
+          end
+          className={() => taskbarItemClass("editor")}
+        >
+          <Edit3 className="w-3.5 h-3.5" />
+          Editor
+        </NavLink>
+        <NavLink
+          to={currentDeckId ? `/deck/${currentDeckId}/cards` : "/"}
+          className={() => taskbarItemClass("cards")}
+        >
+          <Printer className="w-3.5 h-3.5" />
+          Cards
+        </NavLink>
+        <NavLink
+          to={currentDeckId ? `/deck/${currentDeckId}/play` : "/"}
+          className={() => taskbarItemClass("host")}
+        >
+          <Radio className="w-3.5 h-3.5" />
+          Host
+        </NavLink>
+        <NavLink to="/settings" className={() => taskbarItemClass("settings")}>
+          <Settings className="w-3.5 h-3.5" />
+          Settings
+        </NavLink>
+
+        {decks.length > 0 && (
+          <select
+            value={activeDeck?.id || ""}
+            onChange={(e) => {
+              const id = e.target.value;
+              loadDeck(id);
+              if (location.pathname.startsWith("/deck/")) {
+                const suffix = location.pathname.includes("/cards")
+                  ? "/cards"
+                  : location.pathname.includes("/play")
+                    ? "/play"
+                    : "";
+                navigate(`/deck/${id}${suffix}`);
+              }
+            }}
+            className="pc-select max-w-[160px] hidden lg:inline"
+            title="Active deck"
+          >
+            {decks.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} ({d.tracks.length})
+              </option>
+            ))}
+          </select>
+        )}
+
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={logout}
+            title="Disconnect Spotify account"
+            className="pc-button hidden sm:inline-flex"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Spotify
+          </button>
+        )}
+
+        <div className="pc-taskbar-clock">{clock}</div>
+      </Taskbar>
+    </Desktop>
   );
 };

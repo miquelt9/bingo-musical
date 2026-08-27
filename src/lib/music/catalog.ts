@@ -108,15 +108,32 @@ async function searchMusicBrainz(query: string, signal?: AbortSignal): Promise<C
 
 export function catalogYoutubeQuery(song: Pick<CatalogSong, "artist" | "title">): string {
   const firstArtist = song.artist.split(/[,/&]/)[0].trim();
-  return `${firstArtist} ${song.title} official audio`;
+  return `${firstArtist} ${song.title}`.trim();
+}
+
+function catalogMatchesQuery(song: CatalogSong, query: string): boolean {
+  const hay = `${song.title} ${song.artist} ${song.album || ""}`.toLowerCase();
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length >= 2);
+  if (tokens.length === 0) return true;
+  return tokens.every((token) => hay.includes(token));
+}
+
+export function filterCatalogSongs(songs: CatalogSong[], query: string): CatalogSong[] {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  return songs.filter((song) => catalogMatchesQuery(song, q));
 }
 
 export async function searchCatalogSongs(query: string, signal?: AbortSignal): Promise<CatalogSong[]> {
   const q = query.trim();
-  if (q.length < 2) return [];
+  if (q.length < 2 || signal?.aborted) return [];
 
   try {
     const itunes = await searchItunes(q, signal);
+    if (signal?.aborted) return [];
     if (itunes.length > 0) return uniqueSongs(itunes).slice(0, 8);
   } catch {
     // fall through
@@ -124,6 +141,7 @@ export async function searchCatalogSongs(query: string, signal?: AbortSignal): P
 
   try {
     const deezer = await searchDeezer(q, signal);
+    if (signal?.aborted) return [];
     if (deezer.length > 0) return uniqueSongs(deezer).slice(0, 8);
   } catch {
     // fall through
@@ -131,6 +149,7 @@ export async function searchCatalogSongs(query: string, signal?: AbortSignal): P
 
   try {
     const musicbrainz = await searchMusicBrainz(q, signal);
+    if (signal?.aborted) return [];
     return uniqueSongs(musicbrainz).slice(0, 8);
   } catch {
     return [];

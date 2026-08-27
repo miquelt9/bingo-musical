@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Modal } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { ManualYoutubeModal } from "./ManualYoutubeModal";
@@ -6,17 +7,21 @@ import {
   getYoutubeThumbnailUrl,
   getYoutubeWatchUrl,
 } from "../../lib/youtube/parseUrl";
+import { isVideoEmbedBlocked } from "../../lib/youtube/validator";
 import {
   Search,
   ExternalLink,
   Sparkles,
   CheckCircle2,
+  XCircle,
   Clock,
   AlertCircle,
+  AlertTriangle,
   Edit2,
   Trash2,
   Music2,
-  PlaySquare,
+  ShieldCheck,
+  Loader2,
 } from "lucide-react";
 
 interface TrackTableProps {
@@ -26,6 +31,47 @@ interface TrackTableProps {
   onAutoMatchAll?: () => void;
   isMatching?: boolean;
   matchProgress?: { total: number; completed: number; matched: number; failed: number } | null;
+  onVerifyAllEmbeds?: () => void;
+  isValidating?: boolean;
+  validationProgress?: { total: number; completed: number; valid: number; invalid: number; currentTrackTitle?: string } | null;
+  initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
+}
+
+function StatusIconBadge({
+  title,
+  onClick,
+  tone = "neutral",
+  children,
+}: {
+  title: string;
+  onClick?: (e: React.MouseEvent) => void;
+  tone?: "success" | "danger" | "warning" | "neutral";
+  children: React.ReactNode;
+}) {
+  const toneClass =
+    tone === "success"
+      ? "text-green-700 dark:text-green-400"
+      : tone === "danger"
+        ? "text-red-600 dark:text-red-400"
+        : tone === "warning"
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-muted";
+
+  const className = `pc-button inline-flex items-center justify-center w-9 h-9 p-0 shrink-0 ${toneClass}`;
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className} title={title}>
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <span className={`${className} cursor-default`} title={title}>
+      {children}
+    </span>
+  );
 }
 
 export const TrackTable: React.FC<TrackTableProps> = ({
@@ -35,10 +81,23 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   onAutoMatchAll,
   isMatching = false,
   matchProgress = null,
+  onVerifyAllEmbeds,
+  isValidating = false,
+  validationProgress = null,
+  initialStatusFilter = "all",
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched" | "blocked">(
+    initialStatusFilter
+  );
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+  const [trackPendingDelete, setTrackPendingDelete] = useState<Track | null>(null);
+  const [activeCoachmarkId, setActiveCoachmarkId] = useState<string | null>(null);
+
+  const isTrackBlocked = (track: Track): boolean => {
+    if (track.matchStatus === "failed") return true;
+    return isVideoEmbedBlocked(track.youtubeVideoId);
+  };
 
   // Filtered list
   const filteredTracks = tracks.filter((track) => {
@@ -50,16 +109,20 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     if (!matchesSearch) return false;
 
     if (statusFilter === "matched") {
-      return track.matchStatus === "matched" || track.matchStatus === "manual";
+      return (track.matchStatus === "matched" || track.matchStatus === "manual") && !isTrackBlocked(track);
     }
     if (statusFilter === "unmatched") {
-      return track.matchStatus === "pending" || track.matchStatus === "failed";
+      return track.matchStatus === "pending" || !track.youtubeVideoId;
+    }
+    if (statusFilter === "blocked") {
+      return isTrackBlocked(track);
     }
     return true;
   });
 
-  const matchedCount = tracks.filter((t) => t.matchStatus === "matched" || t.matchStatus === "manual").length;
-  const unmatchedCount = tracks.length - matchedCount;
+  const matchedCount = tracks.filter((t) => (t.matchStatus === "matched" || t.matchStatus === "manual") && !isTrackBlocked(t)).length;
+  const blockedCount = tracks.filter((t) => isTrackBlocked(t)).length;
+  const unmatchedCount = tracks.length - matchedCount - blockedCount;
 
   const handleTimeChange = (track: Track, field: "startTime" | "endTime", valueStr: string) => {
     const num = parseInt(valueStr, 10);
@@ -82,269 +145,317 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   };
 
   return (
-    <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-xl">
-      {/* Search & Actions Header */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-6">
-        {/* Search & Filters */}
-        <div className="flex flex-wrap items-center gap-3 flex-1">
-          {/* Search Bar */}
+    <div className="pc-window">
+      <div className="pc-titlebar">
+        <div className="pc-titlebar-title">Tracks ({tracks.length})</div>
+      </div>
+      <div className="pc-window-content">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="relative min-w-[240px] flex-1 max-w-md">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Filter tracks by title, artist, or album..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-emerald-500 text-sm text-white placeholder-zinc-500 outline-none transition-colors"
+              className="pc-input w-full pl-8"
             />
           </div>
-
-          {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-950 border border-zinc-800 text-xs">
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                statusFilter === "all"
-                  ? "bg-zinc-800 text-white font-semibold"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
+          <div className="flex items-center gap-1 text-xs">
+            <button type="button" onClick={() => setStatusFilter("all")} className={`pc-button ${statusFilter === "all" ? "active" : ""}`}>
               All ({tracks.length})
             </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("matched")}
-              className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                statusFilter === "matched"
-                  ? "bg-emerald-500/20 text-emerald-400 font-semibold"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Matched ({matchedCount})
+            <button type="button" onClick={() => setStatusFilter("matched")} className={`pc-button ${statusFilter === "matched" ? "active" : ""}`}>
+              Ready ({matchedCount})
             </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("unmatched")}
-              className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                statusFilter === "unmatched"
-                  ? "bg-amber-500/20 text-amber-400 font-semibold"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Unmatched ({unmatchedCount})
-            </button>
+            {blockedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter("blocked")}
+                className={`pc-button text-amber-700 dark:text-amber-400 ${statusFilter === "blocked" ? "active" : ""}`}
+              >
+                Needs Attention ({blockedCount})
+              </button>
+            )}
+            {unmatchedCount > 0 && (
+              <button type="button" onClick={() => setStatusFilter("unmatched")} className={`pc-button ${statusFilter === "unmatched" ? "active" : ""}`}>
+                Unmatched ({unmatchedCount})
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Action button: Auto Match */}
-        {onAutoMatchAll && (
-          <button
-            type="button"
-            onClick={onAutoMatchAll}
-            disabled={isMatching || unmatchedCount === 0}
-            className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 ${
-              isMatching
-                ? "bg-zinc-800 text-zinc-400 cursor-wait border border-zinc-700"
-                : unmatchedCount === 0
-                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50"
-                : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-emerald-500/20"
-            }`}
-          >
-            <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin text-emerald-400" : ""}`} />
-            <span>
-              {isMatching
-                ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
-                : "Auto-Match All on YouTube"}
-            </span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {onVerifyAllEmbeds && (
+            <button
+              type="button"
+              onClick={onVerifyAllEmbeds}
+              disabled={isValidating || isMatching || tracks.length === 0}
+              className="pc-button"
+              title="Test all song video links to ensure they play smoothly in game"
+            >
+              {isValidating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>
+                    Checking ({validationProgress?.completed || 0}/{validationProgress?.total || tracks.length})...
+                  </span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Check Audio</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {onAutoMatchAll && (
+            <button
+              type="button"
+              onClick={onAutoMatchAll}
+              disabled={isMatching || isValidating || (unmatchedCount === 0 && blockedCount === 0)}
+              className="pc-button pc-button--primary"
+            >
+              <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
+              <span>
+                {isMatching
+                  ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
+                  : "Auto-Match All"}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Matching Progress Bar if Active */}
       {isMatching && matchProgress && (
-        <div className="mb-6 p-4 rounded-2xl bg-zinc-950/70 border border-emerald-500/30 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between text-xs text-zinc-300 mb-2 font-medium">
+        <div className="mb-4 p-3 pc-bevel-inset text-xs">
+          <div className="flex items-center justify-between mb-2 font-medium">
             <span className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
-              <span>Matching songs with YouTube public instance pool...</span>
+              <Sparkles className="w-3.5 h-3.5 animate-spin" />
+              <span>Matching songs with verified YouTube audio...</span>
             </span>
-            <span className="font-mono text-emerald-400">
+            <span className="font-mono">
               {matchProgress.completed} / {matchProgress.total} ({Math.round((matchProgress.completed / matchProgress.total) * 100)}%)
             </span>
           </div>
-          <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+          <div className="w-full h-2 pc-bevel-inset overflow-hidden">
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all duration-200"
+              className="h-full bg-[var(--pc-titlebar-bg)]"
               style={{ width: `${(matchProgress.completed / matchProgress.total) * 100}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Tracks Table */}
-      <div className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-zinc-950/40">
-        <table className="w-full text-left text-sm text-zinc-300 border-collapse">
+      {isValidating && validationProgress && (
+        <div className="mb-4 p-3 pc-bevel-inset text-xs">
+          <div className="flex items-center justify-between mb-2 font-medium">
+            <span className="flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>
+                Checking audio compatibility: {validationProgress.currentTrackTitle || "Testing songs..."}
+              </span>
+            </span>
+            <span className="font-mono">
+              {validationProgress.completed} / {validationProgress.total} ({Math.round((validationProgress.completed / validationProgress.total) * 100)}%)
+            </span>
+          </div>
+          <div className="w-full h-2 pc-bevel-inset overflow-hidden">
+            <div
+              className="h-full bg-green-600"
+              style={{ width: `${(validationProgress.completed / validationProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto pc-bevel-inset">
+        <table className="w-full text-left text-sm border-collapse">
           <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 text-xs font-semibold uppercase tracking-wider bg-zinc-900/40">
-              <th className="py-3.5 pl-4 pr-2 w-12 text-center">#</th>
-              <th className="py-3.5 px-3">Song & Artist</th>
-              <th className="py-3.5 px-3 w-32">Match Status</th>
-              <th className="py-3.5 px-3 w-40">YouTube Video</th>
-              <th className="py-3.5 px-3 w-48 text-center">Snippet Timestamps</th>
-              <th className="py-3.5 px-3 w-36 text-center">Preview</th>
-              <th className="py-3.5 pr-4 pl-2 w-28 text-right">Actions</th>
+            <tr className="text-xs font-bold">
+              <th className="py-2 pl-3 pr-2 w-10 text-center">#</th>
+              <th className="py-2 px-3">Song & Artist</th>
+              <th className="py-2 px-2 w-20 text-center">Status</th>
+              <th className="py-2 px-3 w-36">YouTube Video</th>
+              <th className="py-2 px-3 w-48 text-center">Snippet Timestamps</th>
+              <th className="py-2 px-3 w-32 text-center">Preview</th>
+              <th className="py-2 pr-3 pl-2 w-24 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/60 font-normal">
+          <tbody>
             {filteredTracks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-zinc-500">
-                  <Music2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <td colSpan={7} className="py-12 text-center">
+                  <Music2 className="w-8 h-8 mx-auto mb-2" />
                   <p className="font-medium text-sm">No tracks found matching your filter.</p>
                 </td>
               </tr>
             ) : (
               filteredTracks.map((track, idx) => {
                 const thumb = track.albumArtUrl || (track.youtubeVideoId ? getYoutubeThumbnailUrl(track.youtubeVideoId, "mqdefault") : null);
+                const isBlocked = isTrackBlocked(track);
+                const isCoachmarkOpen = activeCoachmarkId === track.id;
 
                 return (
-                  <tr
-                    key={track.id}
-                    className="hover:bg-zinc-800/30 transition-colors group"
-                  >
-                    {/* # Index */}
-                    <td className="py-3 pl-4 pr-2 text-center font-mono text-xs text-zinc-500">
+                  <tr key={track.id} className={isBlocked ? "bg-amber-500/10" : ""}>
+                    <td className="py-2 pl-3 pr-2 text-center font-mono text-xs">
                       {idx + 1}
                     </td>
-
-                    {/* Song & Artist */}
-                    <td className="py-3 px-3">
+                    <td className="py-2 px-3">
                       <div className="flex items-center gap-3">
                         {thumb ? (
-                          <img
-                            src={thumb}
-                            alt=""
-                            className="w-10 h-10 rounded-lg object-cover border border-zinc-700 shrink-0 shadow-sm"
-                          />
+                          <img src={thumb} alt="" className="w-10 h-10 object-cover shrink-0 pc-bevel-inset" />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 shrink-0 flex items-center justify-center text-zinc-500">
+                          <div className="w-10 h-10 pc-bevel-inset shrink-0 flex items-center justify-center">
                             <Music2 className="w-5 h-5" />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="font-semibold text-white truncate max-w-[260px] sm:max-w-xs">
-                            {track.title}
-                          </p>
-                          <p className="text-xs text-zinc-400 truncate max-w-[260px] sm:max-w-xs">
-                            {track.artist}
-                          </p>
+                          <p className="font-semibold truncate max-w-[260px] sm:max-w-xs">{track.title}</p>
+                          <p className="text-xs truncate max-w-[260px] sm:max-w-xs">{track.artist}</p>
                         </div>
                       </div>
                     </td>
-
-                    {/* Match Status Badge */}
-                    <td className="py-3 px-3">
-                      {track.matchStatus === "matched" ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Matched</span>
-                        </span>
-                      ) : track.matchStatus === "manual" ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                          <PlaySquare className="w-3 h-3" />
-                          <span>Manual</span>
-                        </span>
-                      ) : track.matchStatus === "failed" ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
-                          <AlertCircle className="w-3 h-3" />
-                          <span>Unmatched</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          <Clock className="w-3 h-3" />
-                          <span>Pending</span>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* YouTube Video link / preview */}
-                    <td className="py-3 px-3">
-                      {track.youtubeVideoId ? (
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={getYoutubeWatchUrl(track.youtubeVideoId, track.startTime)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-zinc-300 hover:text-white font-mono hover:underline truncate max-w-[120px]"
-                            title="Open video on YouTube"
+                    <td className="py-2 px-2 text-center">
+                      {isBlocked ? (
+                        <div className="relative inline-flex items-center justify-center">
+                          <StatusIconBadge
+                            title="Audio unavailable in game — click for info"
+                            tone="danger"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveCoachmarkId(isCoachmarkOpen ? null : track.id);
+                            }}
                           >
-                            <span>{track.youtubeVideoId}</span>
-                            <ExternalLink className="w-3 h-3 text-zinc-500" />
-                          </a>
+                            <XCircle className="w-5 h-5" />
+                          </StatusIconBadge>
+
+                          {/* Coachmark popover explaining the issue */}
+                          {isCoachmarkOpen && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setActiveCoachmarkId(null)}
+                              />
+                              <div
+                                className={`absolute ${
+                                  idx < 3 ? "top-full mt-1.5" : "bottom-full mb-1.5"
+                                } left-1/2 -translate-x-1/2 w-64 p-3 pc-window z-50 shadow-2xl text-left text-xs`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-start justify-between gap-1 mb-1 font-bold text-red-600 dark:text-red-400">
+                                  <span className="flex items-center gap-1.5">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                                    <span>Audio Unavailable</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveCoachmarkId(null)}
+                                    className="text-muted hover:text-foreground text-xs px-1 font-mono cursor-pointer"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                <p className="text-[11px] leading-relaxed">
+                                  The video owner restricted this song from playing outside YouTube.
+                                </p>
+                                <div className="mt-2.5 pt-2 border-t border-border flex items-center justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    className="pc-link text-[11px] font-semibold bg-transparent border-0 p-0 cursor-pointer"
+                                    onClick={() => {
+                                      setActiveCoachmarkId(null);
+                                      setEditingTrack(track);
+                                    }}
+                                  >
+                                    Change video ✎
+                                  </button>
+                                  <span className="text-[10px] text-muted">or use Auto-Fix</span>
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </div>
+                      ) : (track.matchStatus === "matched" || track.matchStatus === "manual") ? (
+                        <StatusIconBadge title="Ready to play" tone="success">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </StatusIconBadge>
+                      ) : track.matchStatus === "failed" ? (
+                        <StatusIconBadge title="No video match found" tone="warning">
+                          <AlertCircle className="w-5 h-5" />
+                        </StatusIconBadge>
                       ) : (
-                        <span className="text-xs text-zinc-500 italic">No video linked</span>
+                        <StatusIconBadge title="Pending search" tone="neutral">
+                          <Clock className="w-5 h-5 opacity-60" />
+                        </StatusIconBadge>
                       )}
                     </td>
-
-                    {/* Snippet Timestamps Start - End */}
-                    <td className="py-3 px-3">
+                    <td className="py-2 px-3">
+                      {track.youtubeVideoId ? (
+                        <a
+                          href={getYoutubeWatchUrl(track.youtubeVideoId, track.startTime)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="pc-link inline-flex items-center gap-1 text-xs font-mono truncate max-w-[120px]"
+                          title="Open video on YouTube"
+                        >
+                          <span>{track.youtubeVideoId}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span className="text-xs italic">No video linked</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">
                       <div className="flex items-center justify-center gap-1.5">
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-zinc-500 uppercase">Start</span>
+                          <span className="text-[10px] uppercase">Start</span>
                           <input
                             type="number"
                             min="0"
                             value={track.startTime}
                             onChange={(e) => handleTimeChange(track, "startTime", e.target.value)}
-                            className="w-14 px-1.5 py-1 text-center font-mono text-xs rounded-lg bg-zinc-950 border border-zinc-700 focus:border-emerald-500 outline-none text-white"
+                            className="pc-input w-14 px-1 py-0.5 text-center font-mono text-xs"
                           />
-                          <span className="text-xs text-zinc-500 font-mono">s</span>
+                          <span className="text-xs font-mono">s</span>
                         </div>
-
-                        <span className="text-zinc-600 font-mono">-</span>
-
+                        <span className="font-mono">-</span>
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-zinc-500 uppercase">End</span>
+                          <span className="text-[10px] uppercase">End</span>
                           <input
                             type="number"
                             min={track.startTime + 1}
                             value={track.endTime}
                             onChange={(e) => handleTimeChange(track, "endTime", e.target.value)}
-                            className="w-14 px-1.5 py-1 text-center font-mono text-xs rounded-lg bg-zinc-950 border border-zinc-700 focus:border-emerald-500 outline-none text-white"
+                            className="pc-input w-14 px-1 py-0.5 text-center font-mono text-xs"
                           />
-                          <span className="text-xs text-zinc-500 font-mono">s</span>
+                          <span className="text-xs font-mono">s</span>
                         </div>
-
-                        <span className="text-[10px] font-mono text-zinc-400 ml-1">
+                        <span className="text-[10px] font-mono ml-1">
                           ({track.endTime - track.startTime}s)
                         </span>
                       </div>
                     </td>
-
-                    {/* Preview Button */}
-                    <td className="py-3 px-3 text-center">
+                    <td className="py-2 px-3 text-center">
                       <ClipPreviewButton track={track} size="sm" showLabel />
                     </td>
-
-                    {/* Actions */}
-                    <td className="py-3 pr-4 pl-2 text-right">
+                    <td className="py-2 pr-3 pl-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
+                          className="pc-button"
                           onClick={() => setEditingTrack(track)}
-                          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                          title="Override or enter YouTube URL manually"
+                          title={isBlocked ? "Replace unavailable YouTube video" : "Change YouTube video"}
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-
                         {onDeleteTrack && (
                           <button
                             type="button"
-                            onClick={() => onDeleteTrack(track.id)}
-                            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            className="pc-button"
+                            onClick={() => setTrackPendingDelete(track)}
                             title="Remove track from deck"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -359,6 +470,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
           </tbody>
         </table>
       </div>
+      </div>
 
       {/* Edit YouTube Modal */}
       {editingTrack && (
@@ -371,6 +483,26 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             setEditingTrack(null);
           }}
         />
+      )}
+
+      {trackPendingDelete && onDeleteTrack && (
+        <Modal
+          open
+          variant="danger"
+          title="Remove song"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            onDeleteTrack(trackPendingDelete.id);
+            setTrackPendingDelete(null);
+          }}
+          onCancel={() => setTrackPendingDelete(null)}
+        >
+          <p>
+            Remove <strong>{trackPendingDelete.artist} — {trackPendingDelete.title}</strong> from
+            this deck? This cannot be undone.
+          </p>
+        </Modal>
       )}
     </div>
   );

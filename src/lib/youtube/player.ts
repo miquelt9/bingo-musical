@@ -5,6 +5,8 @@ declare global {
   }
 }
 
+import { markVideoEmbedBlocked } from "./validator";
+
 export interface Clip {
   videoId: string;
   startTime: number; // in seconds
@@ -97,9 +99,19 @@ export async function mountPlayer(elementId: string): Promise<YT.Player> {
   await loadYoutubeApi();
 
   if (player) {
-    currentState.isReady = true;
-    notifyListeners();
-    return player;
+    const iframe = document.querySelector(`#${elementId} iframe, iframe#${elementId}`);
+    if (iframe && document.body.contains(iframe)) {
+      currentState.isReady = true;
+      notifyListeners();
+      return player;
+    }
+    // Old player instance is detached from DOM, recreate
+    try {
+      player.destroy();
+    } catch {
+      // ignore
+    }
+    player = null;
   }
 
   return new Promise<YT.Player>((resolve, reject) => {
@@ -175,7 +187,17 @@ function handlePlayerError(code: number) {
     case 5: msg = "HTML5 player error."; break;
     case 100: msg = "Video not found or removed."; break;
     case 101:
-    case 150: msg = "Video owner has disabled embedded playback."; break;
+    case 150:
+      msg = window.location.hostname === "127.0.0.1"
+        ? "Playback blocked by YouTube on 127.0.0.1. Please access via http://localhost:5173/."
+        : "Video owner has disabled embedded playback.";
+      break;
+    case 153:
+      msg = "YouTube blocked embedder identification. Please ensure localhost domain or valid referrer is used.";
+      break;
+  }
+  if (activeClip?.videoId && (code === 100 || code === 101 || code === 150)) {
+    markVideoEmbedBlocked(activeClip.videoId, msg);
   }
   currentState.state = "error";
   currentState.errorMessage = msg;
@@ -287,11 +309,34 @@ export function pausePlayback(): void {
 }
 
 export function resumePlayback(): void {
-  if (player) {
-    try {
-      player.playVideo();
-    } catch {
-      //
+  if (!player) {
+    if (currentState.currentClip) {
+      playClip(currentState.currentClip, onClipEndCallback ?? undefined);
+    }
+    return;
+  }
+
+  if (currentState.currentClip) {
+    const curTime = typeof player.getCurrentTime === "function" ? player.getCurrentTime() || 0 : 0;
+    const isPastEnd = curTime >= currentState.currentClip.endTime - 0.2;
+    const isBeforeStart = curTime < currentState.currentClip.startTime - 0.5;
+    const isEndedOrError =
+      currentState.state === "ended" ||
+      currentState.state === "error" ||
+      currentState.state === "unstarted";
+
+    if (isPastEnd || isBeforeStart || isEndedOrError) {
+      playClip(currentState.currentClip, onClipEndCallback ?? undefined);
+      return;
+    }
+  }
+
+  try {
+    player.playVideo();
+  } catch (err) {
+    console.error("Error resuming playback:", err);
+    if (currentState.currentClip) {
+      playClip(currentState.currentClip, onClipEndCallback ?? undefined);
     }
   }
 }
