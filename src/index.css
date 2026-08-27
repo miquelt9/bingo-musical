@@ -45,6 +45,54 @@
   padding-bottom: 64px;
 }
 
+/* Floating video window (non-host routes) */
+.video-window--normal {
+  width: 18rem;
+}
+
+@media (min-width: 640px) {
+  .video-window--normal {
+    width: 20rem;
+  }
+}
+
+.video-window--large {
+  width: min(90vw, 720px);
+}
+
+.video-window--fullscreen {
+  width: min(96vw, 1200px);
+}
+
+/* Host-embedded video panel */
+.host-video-panel:empty {
+  display: none;
+}
+
+.host-video-panel__window {
+  width: 100%;
+}
+
+.host-video-panel__window--normal {
+  max-width: 100%;
+}
+
+.host-video-panel__window--large {
+  max-width: min(90vw, 720px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.host-video-panel__window--fullscreen {
+  max-width: min(96vw, 1200px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.host-video-panel__window--fullscreen .aspect-video {
+  min-height: min(60vh, 675px);
+}
+
 .pc-workspace-scroll:has(.home-split) {
   display: flex;
   flex-direction: column;

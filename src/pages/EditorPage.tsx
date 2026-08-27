@@ -24,6 +24,7 @@ import {
   Printer,
   Radio,
   Download,
+  Share2,
   Plus,
   ArrowLeft,
   Check,
@@ -36,7 +37,7 @@ export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { decks, loadDeck, updateDeck, exportDeck } = useDeck();
+  const { decks, loadDeck, updateDeck, exportDeck, shareDeck } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const initialStatusFilter =
     statusFilterParam === "blocked" ? "blocked" : "all";
@@ -393,6 +394,10 @@ export const EditorPage: React.FC = () => {
           Back to All Decks
         </Link>
         <div className="flex items-center gap-2">
+          <Button type="button" onClick={() => shareDeck(deck)}>
+            <Share2 className="w-3.5 h-3.5" />
+            Share
+          </Button>
           <Button type="button" onClick={() => exportDeck(deck)}>
             <Download className="w-3.5 h-3.5" />
             Export JSON

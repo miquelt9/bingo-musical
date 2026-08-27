@@ -8,6 +8,8 @@ import {
   exportDeckToJson,
   parseAndImportDeckFile,
 } from "../lib/storage/decks";
+import { shareDeckNative } from "../lib/share/deckShare";
+import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 
 interface DeckContextType {
   decks: Deck[];
@@ -20,6 +22,7 @@ interface DeckContextType {
   deleteDeck: (id: string) => void;
   duplicateDeck: (id: string) => Deck | null;
   exportDeck: (deck: Deck) => void;
+  shareDeck: (deck: Deck) => Promise<void>;
   importDeck: (file: File) => Promise<Deck>;
   refreshDecks: () => void;
 }
@@ -30,6 +33,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [decks, setDecks] = useState<Deck[]>([]);
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [shareTargetDeck, setShareTargetDeck] = useState<Deck | null>(null);
 
   const refreshDecks = useCallback(() => {
     const loaded = getStoredDecks();
@@ -107,6 +111,13 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     exportDeckToJson(deck);
   };
 
+  const shareDeck = async (deck: Deck) => {
+    const shared = await shareDeckNative(deck);
+    if (!shared) {
+      setShareTargetDeck(deck);
+    }
+  };
+
   const importDeck = async (file: File): Promise<Deck> => {
     const imported = await parseAndImportDeckFile(file);
     refreshDecks();
@@ -127,11 +138,15 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteDeck: deleteDeck,
         duplicateDeck: duplicate,
         exportDeck,
+        shareDeck,
         importDeck,
         refreshDecks,
       }}
     >
       {children}
+      {shareTargetDeck ? (
+        <ShareDeckModal deck={shareTargetDeck} onClose={() => setShareTargetDeck(null)} />
+      ) : null}
     </DeckContext.Provider>
   );
 };

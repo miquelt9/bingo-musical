@@ -2,7 +2,7 @@ import { Deck, Track, MatchStatus } from "../../types/deck";
 import { SAMPLE_POP_HITS_DECK } from "./mockDeck";
 import { parseYoutubeVideoId, getYoutubeWatchUrl } from "../youtube/parseUrl";
 import { createTrack } from "../tracks";
-import { downloadJson, slugifyFilename } from "./download";
+import { downloadTextFile, slugifyFilename } from "./download";
 
 const DECKS_STORAGE_KEY = "bingo-musical:decks";
 
@@ -78,7 +78,13 @@ export function duplicateDeck(id: string): Deck | null {
   return saveDeck(newDeck);
 }
 
-export function exportDeckToJson(deck: Deck): void {
+export interface SerializedDeckExport {
+  filename: string;
+  exportObject: Record<string, unknown>;
+  jsonText: string;
+}
+
+export function serializeDeckForExport(deck: Deck): SerializedDeckExport {
   const songs = deck.tracks.map((track) => {
     const song: Record<string, unknown> = {
       title: track.title,
@@ -93,13 +99,23 @@ export function exportDeckToJson(deck: Deck): void {
     return song;
   });
 
-  downloadJson(`${slugifyFilename(deck.name)}-deck.json`, {
+  const exportObject = {
     format: "bingo-musical-deck",
     schemaVersion: 1,
     name: deck.name,
     exportedAt: new Date().toISOString(),
     songs,
-  });
+  };
+
+  const filename = `${slugifyFilename(deck.name)}-deck.json`;
+  const jsonText = `${JSON.stringify(exportObject, null, 2)}\n`;
+
+  return { filename, exportObject, jsonText };
+}
+
+export function exportDeckToJson(deck: Deck): void {
+  const { filename, jsonText } = serializeDeckForExport(deck);
+  downloadTextFile(filename, jsonText, "application/json");
 }
 
 export interface SchemaValidationResult {

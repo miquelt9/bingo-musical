@@ -10,6 +10,7 @@ import { EditorPage } from "./pages/EditorPage";
 import { CardsPage } from "./pages/CardsPage";
 import { HostPage } from "./pages/HostPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ImportPage } from "./pages/ImportPage";
 
 export const App: React.FC = () => {
   return (
@@ -24,6 +25,7 @@ export const App: React.FC = () => {
                   <Route path="/deck/:id" element={<EditorPage />} />
                   <Route path="/deck/:id/cards" element={<CardsPage />} />
                   <Route path="/deck/:id/play" element={<HostPage />} />
+                  <Route path="/import" element={<ImportPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
