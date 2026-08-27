@@ -312,7 +312,7 @@ export const HomePage: React.FC = () => {
                       <p className="text-xs">
                         {deck.tracks.length} tracks · {matchedCount}/{deck.tracks.length} matched
                         {attentionCount > 0 ? (
-                          <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                          <span className="text-pc-warning font-semibold">
                             {" "}· {attentionCount} need attention
                           </span>
                         ) : null}

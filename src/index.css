@@ -107,38 +107,39 @@
   min-width: 0;
 }
 
+.text-pc-warning {
+  color: var(--pc-color-warning);
+}
+
+.bg-pc-warning {
+  background-color: var(--pc-color-warning-bg);
+}
+
+.border-pc-warning {
+  border-color: var(--pc-color-warning);
+}
+
 .pc-blocked-songs-notice {
   display: flex;
   align-items: center;
   gap: 8px;
   max-width: min(52vw, 520px);
   padding: 4px 8px;
-  border: 2px solid #d97706;
-  background: #fef3c7;
-  color: #78350f;
-  box-shadow: inset 1px 1px 0 #fff8e7, inset -1px -1px 0 #b45309;
+  border: 2px solid var(--pc-color-warning);
+  background: var(--pc-color-warning-bg);
+  color: var(--pc-color-warning);
+  box-shadow:
+    inset 1px 1px 0 color-mix(in srgb, var(--pc-color-warning-bg) 70%, white),
+    inset -1px -1px 0 color-mix(in srgb, var(--pc-color-warning) 60%, black);
   flex-shrink: 1;
   min-width: 0;
-}
-
-.pc-theme-dark .pc-blocked-songs-notice,
-[data-pc-theme="dark"] .pc-blocked-songs-notice {
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.18);
-  color: #fde68a;
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08), inset -1px -1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .pc-blocked-songs-notice-icon {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  color: #d97706;
-}
-
-.pc-theme-dark .pc-blocked-songs-notice-icon,
-[data-pc-theme="dark"] .pc-blocked-songs-notice-icon {
-  color: #fbbf24;
+  color: var(--pc-color-warning);
 }
 
 .pc-blocked-songs-notice-copy {
@@ -167,16 +168,9 @@
   font-size: 11px;
   padding: 2px 8px;
   gap: 4px;
-  border-color: #d97706;
-  background: #fff7ed;
-  color: #9a3412;
-}
-
-.pc-theme-dark .pc-blocked-songs-notice-action,
-[data-pc-theme="dark"] .pc-blocked-songs-notice-action {
-  border-color: #f59e0b;
-  background: rgba(245, 158, 11, 0.25);
-  color: #fde68a;
+  border-color: var(--pc-color-warning);
+  background: var(--pc-color-warning-bg);
+  color: var(--pc-color-warning);
 }
 
 @media (min-width: 900px) {
@@ -200,6 +194,98 @@
 
   .pc-blocked-songs-notice-action span {
     display: none;
+  }
+}
+
+.host-board-left .host-video-panel {
+  flex-shrink: 0;
+}
+
+.host-board-left .host-controls {
+  flex-shrink: 0;
+}
+
+.pc-workspace-scroll:has(.host-board) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.host-board {
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-board-main {
+  flex: 1 1 0;
+  min-height: 0;
+  --pc-tile-gap: 16px;
+}
+
+.host-board-left {
+  gap: 16px;
+}
+
+.host-board-left .host-answer-card {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.host-board-log.pc-window--fill > .pc-window-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.host-board-log-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.host-board-log-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.host-answer-card.pc-window--fill > .pc-window-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.host-answer-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+@media (max-width: 1023px) {
+  .pc-workspace-scroll:has(.host-board) {
+    display: block;
+    overflow: auto;
+  }
+
+  .host-board-main.pc-split--row {
+    flex-direction: column;
+    height: auto;
+    flex: none;
+  }
+
+  .host-board-left .host-answer-card {
+    flex: none;
+    min-height: 280px;
+  }
+
+  .host-board-log-list {
+    max-height: 320px;
   }
 }
 

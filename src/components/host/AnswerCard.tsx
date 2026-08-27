@@ -14,6 +14,8 @@ interface AnswerCardProps {
   remainingTime: number;
   callNumber: number;
   errorMessage?: string | null;
+  fill?: boolean;
+  className?: string;
 }
 
 export const AnswerCard: React.FC<AnswerCardProps> = ({
@@ -26,11 +28,21 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
   remainingTime,
   callNumber,
   errorMessage,
+  fill = false,
+  className = "",
 }) => {
+  const bodyClassName = fill
+    ? "host-answer-card-body relative"
+    : "relative flex flex-col min-h-[280px]";
+
+  const emptyStateClassName = fill
+    ? "flex flex-1 flex-col items-center justify-center text-center py-10"
+    : "py-10 text-center flex flex-col items-center justify-center min-h-[280px]";
+
   if (!track) {
     return (
-      <Window title="Current Call">
-        <div className="py-10 text-center flex flex-col items-center justify-center min-h-[280px]">
+      <Window fill={fill} className={className} title="Current Call">
+        <div className={emptyStateClassName}>
           <Music2 className="w-10 h-10 mb-3" />
           <h3 className="text-xl font-bold">No Song Called Yet</h3>
           <p className="text-sm max-w-sm mt-1">
@@ -47,8 +59,8 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
     (track.youtubeVideoId ? getYoutubeThumbnailUrl(track.youtubeVideoId, "hqdefault") : "");
 
   return (
-    <Window title={`Call #${callNumber}`}>
-      <div className="relative flex flex-col min-h-[280px]">
+    <Window fill={fill} className={className} title={`Call #${callNumber}`}>
+      <div className={bodyClassName}>
         <div className="h-2 pc-bevel-inset overflow-hidden shrink-0">
           <div
             className="h-full bg-[var(--pc-titlebar-bg)] transition-all duration-100"
@@ -56,7 +68,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
           />
         </div>
 
-        <div className="flex items-center mt-3 mb-4">
+        <div className="flex items-center mt-3 mb-4 shrink-0">
           <span className="inline-flex items-center gap-2 text-xs font-semibold">
             <Disc3 className={`w-3.5 h-3.5 ${isPlaying ? "animate-spin" : ""}`} />
             Call #{callNumber}
@@ -64,7 +76,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         </div>
 
         {errorMessage && (
-          <div className="p-3 pc-bevel-inset border-l-4 border-red-500 bg-red-500/10 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+          <div className="p-3 pc-bevel-inset border-l-4 border-red-500 bg-red-500/10 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 shrink-0">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
               <div>
@@ -90,13 +102,13 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         )}
 
         {!track.youtubeVideoId && (
-          <div className="p-2 pc-bevel-inset text-xs text-amber-600 flex items-center gap-2 mb-4">
+          <div className="p-2 pc-bevel-inset text-xs text-pc-warning flex items-center gap-2 mb-4 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>This track does not have a linked YouTube video.</span>
           </div>
         )}
 
-        <div className="flex-1">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {!isRevealed ? (
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
               <div className="relative shrink-0">
@@ -165,7 +177,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
           )}
         </div>
 
-        <div className="flex justify-end mt-4 pt-3">
+        <div className="flex justify-end mt-4 pt-3 shrink-0">
           <Button type="button" onClick={isRevealed ? onHide : onReveal}>
             {isRevealed ? (
               <>

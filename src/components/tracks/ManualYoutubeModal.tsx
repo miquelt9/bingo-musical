@@ -152,7 +152,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
               )}
 
               {audioStatus && !audioStatus.embeddable && (
-                <div className="text-amber-600 dark:text-amber-400">
+                <div className="text-pc-warning">
                   <p className="flex items-center gap-1 font-bold">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>Playback restricted by owner</span>

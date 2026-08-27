@@ -55,7 +55,7 @@ function StatusIconBadge({
       : tone === "danger"
         ? "text-red-600 dark:text-red-400"
         : tone === "warning"
-          ? "text-amber-600 dark:text-amber-400"
+          ? "text-pc-warning"
           : "text-muted";
 
   const className = `pc-button inline-flex items-center justify-center w-9 h-9 p-0 shrink-0 ${toneClass}`;
@@ -175,7 +175,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
               <button
                 type="button"
                 onClick={() => setStatusFilter("blocked")}
-                className={`pc-button text-amber-700 dark:text-amber-400 ${statusFilter === "blocked" ? "active" : ""}`}
+                className={`pc-button text-pc-warning ${statusFilter === "blocked" ? "active" : ""}`}
               >
                 Needs Attention ({blockedCount})
               </button>
@@ -301,7 +301,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                 const isCoachmarkOpen = activeCoachmarkId === track.id;
 
                 return (
-                  <tr key={track.id} className={isBlocked ? "bg-amber-500/10" : ""}>
+                  <tr key={track.id} className={isBlocked ? "bg-pc-warning" : ""}>
                     <td className="py-2 pl-3 pr-2 text-center font-mono text-xs">
                       {idx + 1}
                     </td>

@@ -487,7 +487,7 @@ export const SongSearch: React.FC<SongSearchProps> = ({
                       </p>
                     )}
                     {isBlocked && (
-                      <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <p className="text-[11px] mt-1 text-pc-warning flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         Embedding blocked
                       </p>

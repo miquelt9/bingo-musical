@@ -71,11 +71,11 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
           </div>
         ) : (
           <div className="space-y-4 text-xs">
-            <div className="flex items-start gap-3 p-3 pc-bevel-outset border-l-4 border-amber-500 bg-amber-500/10">
-              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-3 pc-bevel-outset border-l-4 border-pc-warning bg-pc-warning">
+              <AlertTriangle className="w-5 h-5 text-pc-warning shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-amber-900 dark:text-amber-300">{subtitle}</p>
-                <p className="text-amber-800 dark:text-amber-400 mt-1">
+                <p className="font-bold text-pc-warning">{subtitle}</p>
+                <p className="text-pc-warning mt-1 opacity-90">
                   {invalidTracks.length} song{invalidTracks.length === 1 ? "" : "s"} cannot be played
                   in the app. Fix them in the Deck Editor before continuing.
                 </p>
@@ -85,7 +85,7 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
             <div className="pc-bevel-inset p-2 max-h-48 overflow-y-auto space-y-1">
               {invalidTracks.slice(0, 12).map((entry) => (
                 <div key={entry.track.id} className="flex items-start gap-2 py-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-pc-warning shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="font-bold truncate">{entry.track.title}</p>
                     <p className="text-[11px] truncate">{entry.track.artist}</p>

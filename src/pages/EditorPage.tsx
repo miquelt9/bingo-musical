@@ -380,7 +380,7 @@ export const EditorPage: React.FC = () => {
             <p className="mt-2 text-xs flex flex-wrap items-center gap-2">
               <span>{deck.tracks.length} Total Tracks</span>
               <span>·</span>
-              <span className={blockedCount > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-green-600 dark:text-green-400 font-semibold"}>
+              <span className={blockedCount > 0 ? "text-pc-warning font-semibold" : "text-green-600 dark:text-green-400 font-semibold"}>
                 {playableCount} Ready / {blockedCount} Need Attention
               </span>
               {deck.source?.type === "spotify-playlist" ? <span>· Imported from Spotify</span> : ""}

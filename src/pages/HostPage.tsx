@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Button, Input, Window } from "@miquelt9/pc-ui";
+import { Button, Input, Window, Split } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
 import { Track } from "../types/deck";
@@ -22,7 +22,7 @@ import {
   PlayerPlaybackState,
 } from "../lib/youtube/player";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
-import { ArrowLeft, Radio, History, Search, Sparkles, Music2, RotateCcw } from "lucide-react";
+import { ArrowLeft, History, Search, Sparkles, Music2, RotateCcw } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -267,7 +267,7 @@ export const HostPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="host-board">
       <PlayabilityGateOverlay
         deckId={deck.id}
         context="host"
@@ -277,83 +277,84 @@ export const HostPage: React.FC = () => {
         onRetry={() => void runCheck(true)}
       />
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
         <Link to={`/deck/${deck.id}`} className="pc-button">
           <ArrowLeft className="w-4 h-4" />
           Exit Host Mode (Back to Editor)
         </Link>
-        <span className="pc-bevel-inset px-3 py-1 text-xs font-bold inline-flex items-center gap-2">
-          <Radio className="w-4 h-4" />
-          LIVE HOST BOARD
-        </span>
+        {currentCall && (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" onClick={triggerConfetti}>
+              <Sparkles className="w-3.5 h-3.5" />
+              Someone Called Bingo!
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setShowResetModal(true)}
+              title="Reset game and shuffle all songs"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Bingo
+            </Button>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        <div className="lg:col-span-7 space-y-4">
-          <div className="space-y-2">
-            <AnswerCard
-              track={currentCall?.track || null}
-              isRevealed={isRevealed}
-              onReveal={() => setIsRevealed(true)}
-              onHide={() => setIsRevealed(false)}
-              isPlaying={isPlaying}
-              progress={playbackProgress}
-              remainingTime={remainingTime}
-              callNumber={currentCall?.callNumber || 0}
-              errorMessage={currentErrorMessage}
-            />
-            {currentCall && (
-              <div className="flex justify-end gap-2">
-                <Button type="button" onClick={triggerConfetti}>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Someone Called Bingo!
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => setShowResetModal(true)}
-                  title="Reset game and reshuffle bag"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reshuffle
-                </Button>
-              </div>
-            )}
-          </div>
+      <Split direction="row" className="host-board-main">
+        <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "7" }}>
+          <AnswerCard
+            fill
+            className="host-answer-card"
+            track={currentCall?.track || null}
+            isRevealed={isRevealed}
+            onReveal={() => setIsRevealed(true)}
+            onHide={() => setIsRevealed(false)}
+            isPlaying={isPlaying}
+            progress={playbackProgress}
+            remainingTime={remainingTime}
+            callNumber={currentCall?.callNumber || 0}
+            errorMessage={currentErrorMessage}
+          />
 
           <div id="host-video-panel" className="host-video-panel" />
 
-          <CallNextControls
-            onCallNext={handleCallNext}
-            onReplayCurrent={handleReplayCurrent}
-            onTogglePlayPause={handleTogglePlayPause}
-            onStop={stopPlayback}
-            onToggleMute={toggleMute}
-            onVolumeChange={setVolume}
-            onToggleVideo={toggleVideo}
-            showVideo={showVideo}
-            playerState={playerState}
-            isPlaying={isPlaying}
-            hasCurrentTrack={Boolean(currentCall?.track?.youtubeVideoId)}
-            remainingCount={uncalledIds.length}
-            totalCount={deck.tracks.length}
-            autoRevealOnEnd={autoRevealOnEnd}
-            onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
-            autoCallNextOnEnd={autoCallNextOnEnd}
-            onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
-            disabled={!isPlayable}
-          />
+          <div className="host-controls">
+            <CallNextControls
+              onCallNext={handleCallNext}
+              onReplayCurrent={handleReplayCurrent}
+              onTogglePlayPause={handleTogglePlayPause}
+              onStop={stopPlayback}
+              onToggleMute={toggleMute}
+              onVolumeChange={setVolume}
+              onToggleVideo={toggleVideo}
+              showVideo={showVideo}
+              playerState={playerState}
+              isPlaying={isPlaying}
+              hasCurrentTrack={Boolean(currentCall?.track?.youtubeVideoId)}
+              remainingCount={uncalledIds.length}
+              totalCount={deck.tracks.length}
+              autoRevealOnEnd={autoRevealOnEnd}
+              onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
+              autoCallNextOnEnd={autoCallNextOnEnd}
+              onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
+              disabled={!isPlayable}
+            />
+          </div>
         </div>
 
-        <div className="lg:col-span-5">
-          <Window
-            title={
-              <span className="inline-flex items-center gap-2">
-                <History className="w-4 h-4" />
-                Called Songs Log ({calledHistory.length})
-              </span>
-            }
-          >
-            <div className="relative mb-3">
+        <Window
+          fill
+          grow={5}
+          className="host-board-log"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Called Songs Log ({calledHistory.length})
+            </span>
+          }
+        >
+          <div className="host-board-log-body">
+            <div className="relative mb-3 shrink-0">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
               <Input
                 type="text"
@@ -363,7 +364,7 @@ export const HostPage: React.FC = () => {
                 placeholder="Verify song: type title or artist..."
               />
             </div>
-            <div className="h-[520px] overflow-y-auto pc-bevel-inset p-2 space-y-1">
+            <div className="host-board-log-list pc-bevel-inset p-2 space-y-1">
               {calledHistory.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-xs">
                   <Music2 className="w-10 h-10 mb-2" />
@@ -420,9 +421,9 @@ export const HostPage: React.FC = () => {
                 })
               )}
             </div>
-          </Window>
-        </div>
-      </div>
+          </div>
+        </Window>
+      </Split>
 
       {showResetModal && (
         <PcModal title="Reset Game?" onClose={() => setShowResetModal(false)}>
@@ -435,7 +436,7 @@ export const HostPage: React.FC = () => {
             </Button>
             <Button type="button" variant="primary" onClick={handleResetGame}>
               <RotateCcw className="w-3.5 h-3.5" />
-              Reset &amp; reshuffle
+              Reset Bingo
             </Button>
           </div>
         </PcModal>
