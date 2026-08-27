@@ -1,8 +1,9 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Input, Split, TextArea, Window, Modal } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { parseSongList } from "../lib/tracks";
+import { getDeckById } from "../lib/storage/decks";
 import { SongSearch } from "../components/tracks/SongSearch";
 import { Deck, Track } from "../types/deck";
 import { getUnplayableTracks } from "../lib/youtube/validator";
@@ -11,7 +12,6 @@ import {
   Music,
   Plus,
   Upload,
-  Sparkles,
   Edit3,
   Radio,
   Printer,
@@ -23,21 +23,63 @@ import {
 } from "lucide-react";
 
 export const HomePage: React.FC = () => {
-  const { decks, createDeck, deleteDeck, duplicateDeck, exportDeck, shareDeck, importDeck } = useDeck();
+  const { decks, createDeck, updateDeck, deleteDeck, duplicateDeck, exportDeck, shareDeck, importDeck } = useDeck();
   const navigate = useNavigate();
 
   const [songList, setSongList] = useState("");
   const [deckName, setDeckName] = useState("");
   const [selectedTracks, setSelectedTracks] = useState<Track[]>([]);
+  const [buildingDeckId, setBuildingDeckId] = useState<string | null>(null);
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [ingestError, setIngestError] = useState<string | null>(null);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const buildingDeckIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    buildingDeckIdRef.current = buildingDeckId;
+  }, [buildingDeckId]);
+
+  useEffect(() => {
+    if (!buildingDeckId || selectedTracks.length === 0) return;
+    const existing = decks.find((d) => d.id === buildingDeckId);
+    const name = deckName.trim() || "Custom Bingo Deck";
+    if (existing && existing.name !== name) {
+      updateDeck({ ...existing, name });
+    }
+  }, [deckName, buildingDeckId, decks, selectedTracks.length, updateDeck]);
 
   const saveAndOpen = (deck: Deck) => {
     const saved = createDeck(deck);
     navigate(`/deck/${saved.id}`);
+  };
+
+  const persistBuildingDeck = (tracks: Track[]) => {
+    const now = new Date().toISOString();
+    const name = deckName.trim() || "Custom Bingo Deck";
+    const deckId = buildingDeckIdRef.current;
+
+    if (deckId) {
+      const existing = getDeckById(deckId) ?? decks.find((d) => d.id === deckId);
+      if (existing) {
+        updateDeck({ ...existing, name, tracks, updatedAt: now });
+        return;
+      }
+    }
+
+    const newDeck: Deck = {
+      schemaVersion: 1,
+      id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name,
+      createdAt: now,
+      updatedAt: now,
+      source: { type: "song-list", name },
+      tracks,
+    };
+    const saved = createDeck(newDeck);
+    buildingDeckIdRef.current = saved.id;
+    setBuildingDeckId(saved.id);
   };
 
   const handleSongListImport = (e: React.FormEvent) => {
@@ -67,42 +109,47 @@ export const HomePage: React.FC = () => {
   };
 
   const addSelectedTrack = (track: Track) => {
-    setSelectedTracks((current) => {
-      if (current.some((t) => t.youtubeVideoId && t.youtubeVideoId === track.youtubeVideoId)) {
-        return current;
-      }
-      return [...current, track];
-    });
+    if (selectedTracks.some((t) => t.youtubeVideoId && t.youtubeVideoId === track.youtubeVideoId)) {
+      return;
+    }
+    const next = [...selectedTracks, track];
+    setSelectedTracks(next);
+    setIngestError(null);
+    persistBuildingDeck(next);
   };
 
   const addSelectedTracks = (tracks: Track[]) => {
-    setSelectedTracks((current) => {
-      const seen = new Set(current.map((t) => t.youtubeVideoId).filter(Boolean));
-      const next = [...current];
-      for (const track of tracks) {
-        if (track.youtubeVideoId && seen.has(track.youtubeVideoId)) continue;
-        if (track.youtubeVideoId) seen.add(track.youtubeVideoId);
-        next.push(track);
-      }
-      return next;
-    });
+    const seen = new Set(selectedTracks.map((t) => t.youtubeVideoId).filter(Boolean));
+    const next = [...selectedTracks];
+    for (const track of tracks) {
+      if (track.youtubeVideoId && seen.has(track.youtubeVideoId)) continue;
+      if (track.youtubeVideoId) seen.add(track.youtubeVideoId);
+      next.push(track);
+    }
+    if (next.length === selectedTracks.length) return;
+    setSelectedTracks(next);
+    setIngestError(null);
+    persistBuildingDeck(next);
   };
 
-  const handleCreateFromSearch = () => {
-    if (selectedTracks.length === 0) {
-      setIngestError("Add at least one song from search results first.");
-      return;
+  const removeSelectedTrack = (trackId: string) => {
+    const next = selectedTracks.filter((t) => t.id !== trackId);
+    setSelectedTracks(next);
+    if (buildingDeckId) {
+      const existing = getDeckById(buildingDeckId) ?? decks.find((d) => d.id === buildingDeckId);
+      if (existing) {
+        updateDeck({ ...existing, tracks: next });
+      }
+      if (next.length === 0) {
+        buildingDeckIdRef.current = null;
+        setBuildingDeckId(null);
+      }
     }
-    const now = new Date().toISOString();
-    saveAndOpen({
-      schemaVersion: 1,
-      id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: deckName.trim() || "Custom Bingo Deck",
-      createdAt: now,
-      updatedAt: now,
-      source: { type: "song-list", name: deckName.trim() || "Searched songs" },
-      tracks: selectedTracks,
-    });
+  };
+
+  const openBuildingDeck = () => {
+    if (!buildingDeckId) return;
+    navigate(`/deck/${buildingDeckId}`);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,10 +184,6 @@ export const HomePage: React.FC = () => {
       <Window fill title="Musical Bingo Creator" grow={3}>
         <div className="home-create">
           <div className="home-create-main">
-            <p className="inline-flex items-center gap-2 text-xs mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
-              No Spotify account required
-            </p>
             <p className="text-sm mb-4">
               Search a song name or paste a YouTube link, pick the right video, then print cards and host game night.
             </p>
@@ -163,7 +206,8 @@ export const HomePage: React.FC = () => {
               {selectedTracks.length > 0 && (
                 <div className="pc-bevel-inset p-3 space-y-3">
                   <p className="text-xs font-bold">
-                    {selectedTracks.length} song{selectedTracks.length === 1 ? "" : "s"} in this deck
+                    {selectedTracks.length} song{selectedTracks.length === 1 ? "" : "s"} saved to{" "}
+                    {deckName.trim() || "Custom Bingo Deck"}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {selectedTracks.map((track) => (
@@ -171,19 +215,19 @@ export const HomePage: React.FC = () => {
                         key={track.id}
                         type="button"
                         className="pc-button text-xs"
-                        onClick={() =>
-                          setSelectedTracks((current) => current.filter((t) => t.id !== track.id))
-                        }
+                        onClick={() => removeSelectedTrack(track.id)}
                         title="Remove from deck"
                       >
                         {track.artist} — {track.title} ×
                       </button>
                     ))}
                   </div>
-                  <Button variant="primary" type="button" onClick={handleCreateFromSearch}>
-                    <Plus className="w-4 h-4" />
-                    Create deck
-                  </Button>
+                  {buildingDeckId && (
+                    <Button variant="primary" type="button" onClick={openBuildingDeck}>
+                      <Edit3 className="w-4 h-4" />
+                      Open deck
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -262,9 +306,19 @@ export const HomePage: React.FC = () => {
 
               return (
                 <Window key={deck.id} title={deck.name}>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <Music className="w-6 h-6 shrink-0" />
-                    <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Music className="w-6 h-6 shrink-0" />
+                      <p className="text-xs">
+                        {deck.tracks.length} tracks · {matchedCount}/{deck.tracks.length} matched
+                        {attentionCount > 0 ? (
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                            {" "}· {attentionCount} need attention
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
                       <button type="button" className="pc-button" onClick={() => shareDeck(deck)} title="Share deck">
                         <Share2 className="w-4 h-4" />
                       </button>
@@ -284,14 +338,6 @@ export const HomePage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs mb-3">
-                    {deck.tracks.length} tracks · {matchedCount}/{deck.tracks.length} matched
-                    {attentionCount > 0 ? (
-                      <span className="text-amber-600 dark:text-amber-400 font-semibold">
-                        {" "}· {attentionCount} need attention
-                      </span>
-                    ) : null}
-                  </p>
                   <div className="grid grid-cols-3 gap-2">
                     <Link to={`/deck/${deck.id}`} className="pc-button">
                       <Edit3 className="w-3.5 h-3.5" />
@@ -330,6 +376,11 @@ export const HomePage: React.FC = () => {
           confirmLabel="Delete"
           cancelLabel="Cancel"
           onConfirm={() => {
+            if (deckToDelete.id === buildingDeckId) {
+              buildingDeckIdRef.current = null;
+              setBuildingDeckId(null);
+              setSelectedTracks([]);
+            }
             deleteDeck(deckToDelete.id);
             setDeckToDelete(null);
           }}

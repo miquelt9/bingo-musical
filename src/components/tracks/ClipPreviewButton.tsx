@@ -105,8 +105,13 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
         )}
 
         {showLabel && (
-          <span>
-            {isPlaying ? "Stop" : "Preview"}
+          <span className="grid">
+            <span className="invisible col-start-1 row-start-1" aria-hidden="true">
+              Preview
+            </span>
+            <span className="col-start-1 row-start-1">
+              {isPlaying ? "Stop" : "Preview"}
+            </span>
           </span>
         )}
       </span>

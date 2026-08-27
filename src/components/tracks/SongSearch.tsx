@@ -450,7 +450,7 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             )}
           </div>
 
-          <div className="space-y-2 max-h-[min(28rem,calc(100vh-18rem))] overflow-y-auto pc-bevel-inset p-2">
+          <div className="space-y-2 pc-bevel-inset p-2">
             {hits.map((hit) => {
               const added = alreadyInDeck.has(hit.videoId) || addedIds.has(hit.videoId);
               const embedStatus = getEmbedStatus(hit.videoId);

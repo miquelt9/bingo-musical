@@ -19,7 +19,10 @@ import {
   Monitor,
   Moon,
   Sun,
+  Code,
 } from "lucide-react";
+
+const GITHUB_REPO_URL = "https://github.com/miquelt9/bingo-musical";
 
 export const SettingsPage: React.FC = () => {
   const { clientId, updateClientId, isAuthenticated, login, logout, error } = useAuth();
@@ -236,6 +239,29 @@ export const SettingsPage: React.FC = () => {
           and game progress never leave your device. YouTube video playback uses standard embed controls
           with zero API secrets.
         </p>
+      </Window>
+
+      <Window
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Code className="w-4 h-4" />
+            Open Source
+          </span>
+        }
+      >
+        <p className="text-xs leading-relaxed">
+          Musical Bingo Creator is free and open source. View the code, report issues, or contribute on
+          GitHub.
+        </p>
+        <a
+          href={GITHUB_REPO_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="pc-link inline-flex items-center gap-1 mt-2 text-xs font-semibold"
+        >
+          miquelt9/bingo-musical
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </Window>
     </div>
   );

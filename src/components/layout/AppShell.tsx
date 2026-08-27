@@ -29,6 +29,7 @@ import {
   setVolume,
   toggleMute,
 } from "../../lib/youtube/player";
+import { BlockedSongsTaskbarNotice } from "./BlockedSongsTaskbarNotice";
 
 function formatClock(date: Date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -341,7 +342,10 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </button>
         )}
 
-        <div className="pc-taskbar-clock">{clock}</div>
+        <div className="pc-taskbar-trailing">
+          <BlockedSongsTaskbarNotice />
+          <div className="pc-taskbar-clock">{clock}</div>
+        </div>
       </Taskbar>
     </Desktop>
   );

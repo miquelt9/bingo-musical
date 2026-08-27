@@ -19,6 +19,7 @@ import {
 } from "../lib/youtube/playabilityGate";
 import { PcModal } from "../components/ui/PcModal";
 import { useToast } from "../state/ToastContext";
+import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
 import {
   Edit3,
   Printer,
@@ -37,7 +38,7 @@ export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { decks, loadDeck, updateDeck, exportDeck, shareDeck } = useDeck();
+  const { decks, activeDeck, loadDeck, updateDeck, exportDeck, shareDeck } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const initialStatusFilter =
     statusFilterParam === "blocked" ? "blocked" : "all";
@@ -63,6 +64,19 @@ export const EditorPage: React.FC = () => {
   const [hostGateInvalid, setHostGateInvalid] = useState<InvalidTrackEntry[]>([]);
   const backgroundVerifyRef = useRef<string | null>(null);
 
+  const { handleAutoFixBlocked, isMatching: isAutoFixing } = useAutoFixBlocked(deck, {
+    onDeckUpdate: setDeck,
+    onViewProblems: deck ? () => navigate(`/deck/${deck.id}?filter=blocked`) : undefined,
+  });
+
+  useEffect(() => {
+    if (!activeDeck || activeDeck.id !== id) return;
+    setDeck((current) => {
+      if (!current || current.updatedAt === activeDeck.updatedAt) return current;
+      return activeDeck;
+    });
+  }, [activeDeck, id]);
+
   useEffect(() => {
     if (!id) return;
     const found = loadDeck(id);
@@ -78,7 +92,7 @@ export const EditorPage: React.FC = () => {
 
   // Silently verify uncached YouTube links when a deck is opened
   useEffect(() => {
-    if (!deck || isValidating || isMatching) return;
+    if (!deck || isValidating || isMatching || isAutoFixing) return;
     if (backgroundVerifyRef.current === deck.id) return;
 
     const uncached = deck.tracks.filter(
@@ -110,7 +124,7 @@ export const EditorPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [deck?.id, deck?.tracks.length, isValidating, isMatching, updateDeck]);
+  }, [deck?.id, deck?.tracks.length, isValidating, isMatching, isAutoFixing, updateDeck]);
 
   if (!deck) {
     return (
@@ -255,95 +269,6 @@ export const EditorPage: React.FC = () => {
     }
   };
 
-  const handleAutoFixBlocked = async () => {
-    const blockedTrackIds = new Set(
-      getUnplayableTracks(deck.tracks).map((t) => t.id)
-    );
-
-    if (blockedTrackIds.size === 0) return;
-
-    // Reset blocked tracks to pending so batchMatchTracks re-evaluates them with fallback
-    const preparedTracks = deck.tracks.map((t) => {
-      if (blockedTrackIds.has(t.id)) {
-        return {
-          ...t,
-          youtubeVideoId: null,
-          matchStatus: "pending" as const,
-        };
-      }
-      return t;
-    });
-
-    setIsMatching(true);
-    cancelMatchingRef.current = false;
-
-    try {
-      const updatedTracks = await batchMatchTracks(
-        preparedTracks,
-        2,
-        (progress, updatedTrack) => {
-          setMatchProgress(progress);
-          setDeck((current) => {
-            if (!current) return null;
-            const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
-            const nextDeck = { ...current, tracks: nextTracks };
-            updateDeck(nextDeck);
-            return nextDeck;
-          });
-        },
-        () => cancelMatchingRef.current
-      );
-
-      const finalDeck = { ...deck, tracks: updatedTracks };
-      setDeck(finalDeck);
-      updateDeck(finalDeck);
-
-      const recheck = await ensureDeckPlayable(updatedTracks, {
-        onProgress: setValidationProgress,
-      });
-      if (recheck.invalidTracks.length > 0) {
-        const invalidIds = new Set(recheck.invalidTracks.map((i) => i.track.id));
-        const markedTracks = updatedTracks.map((track) =>
-          invalidIds.has(track.id) ? { ...track, matchStatus: "failed" as const } : track
-        );
-        const markedDeck = { ...finalDeck, tracks: markedTracks };
-        setDeck(markedDeck);
-        updateDeck(markedDeck);
-      }
-      if (recheck.playable) {
-        showToast({
-          title: "Auto-Fix Complete",
-          icon: <ShieldCheck className="w-3.5 h-3.5" />,
-          message: "All songs verified! Replaced restricted tracks with playable alternatives.",
-          duration: 8000,
-        });
-      } else {
-        showToast({
-          title: "Auto-Fix Complete",
-          icon: <AlertTriangle className="w-3.5 h-3.5" />,
-          message: `Auto-fix complete, but ${recheck.invalidTracks.length} song${
-            recheck.invalidTracks.length > 1 ? "s" : ""
-          } still need attention.`,
-          duration: 12000,
-          actions: [
-            {
-              id: "view-problems",
-              label: "View Problems",
-              variant: "primary",
-              onClick: () => navigate(`/deck/${deck.id}?filter=blocked`),
-            },
-          ],
-        });
-      }
-    } catch (err) {
-      console.error("Auto-fix error:", err);
-    } finally {
-      setIsMatching(false);
-      setMatchProgress(null);
-      setValidationProgress(null);
-    }
-  };
-
   const handleHostLiveGame = async () => {
     if (!deck) return;
 
@@ -385,6 +310,7 @@ export const EditorPage: React.FC = () => {
 
   const blockedCount = getUnplayableTracks(deck.tracks).length;
   const playableCount = deck.tracks.length - blockedCount;
+  const isTrackBusy = isMatching || isAutoFixing;
 
   return (
     <div className="space-y-4">
@@ -410,7 +336,7 @@ export const EditorPage: React.FC = () => {
             type="button"
             variant="primary"
             onClick={handleHostLiveGame}
-            disabled={isMatching || isValidating || hostGateChecking}
+            disabled={isTrackBusy || isValidating || hostGateChecking}
           >
             <Radio className="w-4 h-4" />
             {hostGateChecking ? "Verifying..." : "Host Live Game"}
@@ -469,40 +395,13 @@ export const EditorPage: React.FC = () => {
         </div>
       </Window>
 
-      {/* Blocked Songs Warning Banner */}
-      {blockedCount > 0 && (
-        <div className="p-3 pc-bevel-outset border-l-4 border-amber-500 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <p className="font-bold text-amber-900 dark:text-amber-300">
-                {blockedCount} song{blockedCount > 1 ? "s" : ""} cannot play audio in the game
-              </p>
-              <p className="text-amber-800 dark:text-amber-400 mt-0.5">
-                Some videos have playback restrictions outside YouTube. Use Auto-Fix to automatically find and replace them with working versions.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleAutoFixBlocked}
-              disabled={isMatching || isValidating}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{isMatching ? "Auto-fixing..." : "Auto-Fix Songs"}</span>
-            </Button>
-          </div>
-        </div>
-      )}
-
       <TrackTable
         tracks={deck.tracks}
         onUpdateTrack={handleUpdateTrack}
         onDeleteTrack={handleDeleteTrack}
         onAutoMatchAll={handleAutoMatchAll}
-        isMatching={isMatching}
+        onAutoFixBlocked={handleAutoFixBlocked}
+        isMatching={isTrackBusy}
         matchProgress={matchProgress}
         onVerifyAllEmbeds={handleVerifyAllAudio}
         isValidating={isValidating}
@@ -544,7 +443,7 @@ export const EditorPage: React.FC = () => {
                   type="button"
                   variant="primary"
                   onClick={handleAutoFixBlocked}
-                  disabled={isMatching || isValidating}
+                  disabled={isTrackBusy || isValidating}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   Auto-Fix Songs
@@ -569,7 +468,7 @@ export const EditorPage: React.FC = () => {
         <PcModal
           title="Add a song"
           onClose={() => setShowAddTrackModal(false)}
-          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="max-w-3xl max-h-[90vh] overflow-y-auto"
         >
           <p className="text-xs mb-3">Search by name or paste a YouTube link, then pick the match.</p>
           <SongSearch

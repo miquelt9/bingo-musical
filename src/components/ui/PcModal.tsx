@@ -1,5 +1,6 @@
 import React from "react";
 import { Overlay, Window } from "@miquelt9/pc-ui";
+import { twMerge } from "tailwind-merge";
 
 interface PcModalProps {
   title: React.ReactNode;
@@ -19,7 +20,7 @@ export const PcModal: React.FC<PcModalProps> = ({
       <Window
         title={title}
         onClose={onClose}
-        className={`w-full max-w-lg ${className}`}
+        className={twMerge("w-full max-w-lg", className)}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
