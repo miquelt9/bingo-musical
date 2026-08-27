@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
+import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDeckOnLeave";
 import { PlayerUIProvider, usePlayerUI, VideoSize } from "../../state/PlayerUIContext";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import {
@@ -68,6 +69,8 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     cycleVideoSizeUp,
     cycleVideoSizeDown,
   } = usePlayerUI();
+
+  useAutoDeleteEmptyDeckOnLeave();
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
