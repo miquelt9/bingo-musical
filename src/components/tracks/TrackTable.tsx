@@ -29,6 +29,7 @@ interface TrackTableProps {
   onUpdateTrack: (updatedTrack: Track) => void;
   onDeleteTrack?: (trackId: string) => void;
   onAutoMatchAll?: () => void;
+  onAutoFixBlocked?: () => void;
   isMatching?: boolean;
   matchProgress?: { total: number; completed: number; matched: number; failed: number } | null;
   onVerifyAllEmbeds?: () => void;
@@ -79,6 +80,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   onUpdateTrack,
   onDeleteTrack,
   onAutoMatchAll,
+  onAutoFixBlocked,
   isMatching = false,
   matchProgress = null,
   onVerifyAllEmbeds,
@@ -345,8 +347,8 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                                 } left-1/2 -translate-x-1/2 w-64 p-3 pc-window z-50 shadow-2xl text-left text-xs`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-start justify-between gap-1 mb-1 font-bold text-red-600 dark:text-red-400">
-                                  <span className="flex items-center gap-1.5">
+                                <div className="flex items-start justify-between gap-1 mb-1 text-red-600 dark:text-red-400">
+                                  <span className="flex items-center gap-1.5 font-extrabold">
                                     <AlertTriangle className="w-4 h-4 shrink-0" />
                                     <span>Audio Unavailable</span>
                                   </span>
@@ -361,18 +363,32 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                                 <p className="text-[11px] leading-relaxed">
                                   The video owner restricted this song from playing outside YouTube.
                                 </p>
-                                <div className="mt-2.5 pt-2 border-t border-border flex items-center justify-between gap-2">
+                                <div className="mt-2.5 pt-2 border-t border-border flex flex-col gap-2">
+                                  {onAutoFixBlocked && (
+                                    <button
+                                      type="button"
+                                      className="pc-button pc-button--primary w-full text-[11px]"
+                                      disabled={isMatching || isValidating}
+                                      onClick={() => {
+                                        setActiveCoachmarkId(null);
+                                        onAutoFixBlocked();
+                                      }}
+                                    >
+                                      <Sparkles className={`w-3.5 h-3.5 ${isMatching ? "animate-spin" : ""}`} />
+                                      <span>{isMatching ? "Auto-fixing..." : "Auto-Fix"}</span>
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    className="pc-link text-[11px] font-semibold bg-transparent border-0 p-0 cursor-pointer"
+                                    className="pc-button pc-button--primary w-full text-[11px]"
                                     onClick={() => {
                                       setActiveCoachmarkId(null);
                                       setEditingTrack(track);
                                     }}
                                   >
-                                    Change video ✎
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                    <span>Change Video</span>
                                   </button>
-                                  <span className="text-[10px] text-muted">or use Auto-Fix</span>
                                 </div>
                               </div>
                             </>

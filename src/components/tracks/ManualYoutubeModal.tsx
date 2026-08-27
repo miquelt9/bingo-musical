@@ -94,7 +94,11 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
   };
 
   return (
-    <PcModal title={`Manual YouTube Link — ${track.title}`} onClose={onClose}>
+    <PcModal
+      title={`Manual YouTube Link — ${track.title}`}
+      onClose={onClose}
+      className="max-w-2xl"
+    >
       <p className="text-sm mb-3">{track.artist}</p>
       <div className="mb-4 pc-bevel-inset p-3 flex items-center justify-between gap-3">
         <div className="text-xs">Search YouTube in a new tab, copy the link, and paste it below:</div>

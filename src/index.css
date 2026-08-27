@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Clear fixed taskbar (tabs + clock); 3rem matches AppShell player bottom-12 */
+    --pc-toast-offset-y: calc(3rem + env(safe-area-inset-bottom, 0px));
+  }
+
   :root,
   .pc-theme-light,
   [data-pc-theme="light"] {
@@ -91,6 +96,111 @@
 
 .host-video-panel__window--fullscreen .aspect-video {
   min-height: min(60vh, 675px);
+}
+
+.pc-taskbar-trailing {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pc-blocked-songs-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(52vw, 520px);
+  padding: 4px 8px;
+  border: 2px solid #d97706;
+  background: #fef3c7;
+  color: #78350f;
+  box-shadow: inset 1px 1px 0 #fff8e7, inset -1px -1px 0 #b45309;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.pc-theme-dark .pc-blocked-songs-notice,
+[data-pc-theme="dark"] .pc-blocked-songs-notice {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08), inset -1px -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.pc-blocked-songs-notice-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.pc-theme-dark .pc-blocked-songs-notice-icon,
+[data-pc-theme="dark"] .pc-blocked-songs-notice-icon {
+  color: #fbbf24;
+}
+
+.pc-blocked-songs-notice-copy {
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.pc-blocked-songs-notice-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-blocked-songs-notice-detail {
+  margin: 0;
+  font-size: 10px;
+  opacity: 0.9;
+  display: none;
+}
+
+.pc-blocked-songs-notice-action {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 8px;
+  gap: 4px;
+  border-color: #d97706;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.pc-theme-dark .pc-blocked-songs-notice-action,
+[data-pc-theme="dark"] .pc-blocked-songs-notice-action {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.25);
+  color: #fde68a;
+}
+
+@media (min-width: 900px) {
+  .pc-blocked-songs-notice {
+    max-width: min(42vw, 640px);
+  }
+
+  .pc-blocked-songs-notice-detail {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 640px) {
+  .pc-blocked-songs-notice {
+    max-width: min(46vw, 220px);
+    padding: 4px 6px;
+  }
+
+  .pc-blocked-songs-notice-action span {
+    display: none;
+  }
 }
 
 .pc-workspace-scroll:has(.home-split) {
