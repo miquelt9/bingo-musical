@@ -18,11 +18,12 @@ import {
   Download,
   Copy,
   Trash2,
+  Share2,
   AlertCircle,
 } from "lucide-react";
 
 export const HomePage: React.FC = () => {
-  const { decks, createDeck, deleteDeck, duplicateDeck, exportDeck, importDeck } = useDeck();
+  const { decks, createDeck, deleteDeck, duplicateDeck, exportDeck, shareDeck, importDeck } = useDeck();
   const navigate = useNavigate();
 
   const [songList, setSongList] = useState("");
@@ -264,6 +265,9 @@ export const HomePage: React.FC = () => {
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <Music className="w-6 h-6 shrink-0" />
                     <div className="flex items-center gap-1">
+                      <button type="button" className="pc-button" onClick={() => shareDeck(deck)} title="Share deck">
+                        <Share2 className="w-4 h-4" />
+                      </button>
                       <button type="button" className="pc-button" onClick={() => exportDeck(deck)} title="Export deck as JSON">
                         <Download className="w-4 h-4" />
                       </button>

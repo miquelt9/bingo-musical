@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
@@ -8,19 +9,16 @@ import {
   Printer,
   Radio,
   Settings,
-  Volume2,
-  VolumeX,
-  Square,
-  Play,
-  Pause,
-  ChevronDown,
-  ChevronUp,
   LogOut,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
 import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDeckOnLeave";
+import { PlayerUIProvider, usePlayerUI, VideoSize } from "../../state/PlayerUIContext";
+import { NowPlayingControls } from "../player/NowPlayingControls";
 import {
   mountPlayer,
   subscribeToPlayerState,
@@ -36,19 +34,48 @@ function formatClock(date: Date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+function getVideoSizeClass(size: VideoSize, isHostRoute: boolean): string {
+  if (isHostRoute) {
+    switch (size) {
+      case "large":
+        return "host-video-panel__window--large";
+      case "fullscreen":
+        return "host-video-panel__window--fullscreen";
+      default:
+        return "host-video-panel__window--normal";
+    }
+  }
+  switch (size) {
+    case "large":
+      return "video-window--large";
+    case "fullscreen":
+      return "video-window--fullscreen";
+    default:
+      return "video-window--normal";
+  }
+}
+
+const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, logout } = useAuth();
   const { decks, activeDeck, loadDeck } = useDeck();
   const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const {
+    showVideo,
+    setShowVideo,
+    toggleVideo,
+    videoSize,
+    cycleVideoSizeUp,
+    cycleVideoSizeDown,
+  } = usePlayerUI();
 
   useAutoDeleteEmptyDeckOnLeave();
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
-  const [showVideoWindow, setShowVideoWindow] = useState(false);
   const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
   const [clock, setClock] = useState(() => formatClock(new Date()));
+  const [hostVideoPanel, setHostVideoPanel] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     mountPlayer("youtube-player-singleton").catch((err) => {
@@ -86,14 +113,100 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               ? "decks"
               : null;
 
+  const isHostRoute = activeTab === "host";
+
+  useEffect(() => {
+    if (isHostRoute) {
+      setShowVideo(true);
+    }
+  }, [isHostRoute, setShowVideo]);
+
+  useEffect(() => {
+    if (!isHostRoute) {
+      setHostVideoPanel(null);
+      return;
+    }
+
+    const findPanel = () => document.getElementById("host-video-panel");
+    setHostVideoPanel(findPanel());
+
+    const observer = new MutationObserver(() => {
+      setHostVideoPanel(findPanel());
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [isHostRoute, location.pathname]);
+
   const taskbarItemClass = (tab: string) =>
     `pc-button pc-taskbar-item ${activeTab === tab ? "active" : ""}`;
 
-  const scrollPaddingClass = hasActiveClip
-    ? isPlayerMinimized
-      ? "pc-workspace-scroll--player-minimized"
-      : "pc-workspace-scroll--has-player"
-    : "";
+  const scrollPaddingClass =
+    hasActiveClip && !isHostRoute
+      ? isPlayerMinimized
+        ? "pc-workspace-scroll--player-minimized"
+        : "pc-workspace-scroll--has-player"
+      : "";
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      pausePlayback();
+    } else {
+      resumePlayback();
+    }
+  };
+
+  const videoSizeClass = getVideoSizeClass(videoSize, isHostRoute);
+
+  const videoWindow = (
+    <div
+      className={`print:hidden ${
+        showVideo
+          ? isHostRoute
+            ? `host-video-panel__window ${videoSizeClass}`
+            : `fixed z-50 pc-window bottom-32 right-4 sm:right-8 video-window ${videoSizeClass}`
+          : isHostRoute
+            ? "hidden"
+            : "-left-[9999px] top-0 w-80 h-52 opacity-0 pointer-events-none -z-50 fixed"
+      }`}
+    >
+      {showVideo && (
+        <div className="pc-titlebar">
+          <div className="pc-titlebar-title">YouTube</div>
+          <div className="pc-titlebar-controls">
+            <button
+              type="button"
+              className="pc-titlebar-btn"
+              onClick={cycleVideoSizeDown}
+              aria-label="Make smaller"
+              title="Make smaller"
+            >
+              <Minimize2 className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              className="pc-titlebar-btn"
+              onClick={cycleVideoSizeUp}
+              aria-label="Make bigger"
+              title="Make bigger"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              className="pc-titlebar-btn"
+              onClick={() => setShowVideo(false)}
+              aria-label="Close"
+            >
+              X
+            </button>
+          </div>
+        </div>
+      )}
+      <div className={showVideo ? "aspect-video bg-black" : "w-80 h-52 bg-black"}>
+        <div id="youtube-player-singleton" className="w-full h-full" />
+      </div>
+    </div>
+  );
 
   return (
     <Desktop tiled theme={theme}>
@@ -101,7 +214,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <div className={`pc-workspace-scroll print:p-0 ${scrollPaddingClass}`}>{children}</div>
       </Workspace>
 
-      {hasActiveClip && (
+      {hasActiveClip && !isHostRoute && (
         <div className="fixed bottom-12 left-3 right-3 z-40 max-w-3xl mx-auto print:hidden shadow-lg">
           <Window
             title={
@@ -129,97 +242,31 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             onMaximize={isPlayerMinimized ? () => setIsPlayerMinimized(false) : undefined}
           >
             {!isPlayerMinimized && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-                  <Music className={`w-5 h-5 shrink-0 ${isPlaying ? "animate-bounce" : ""}`} />
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm truncate max-w-xs sm:max-w-md">
-                      {playerState?.currentClip?.title || "Playing YouTube Snippet"}
-                    </p>
-                    <p className="text-xs truncate max-w-xs sm:max-w-md">
-                      {playerState?.errorMessage ? (
-                        <span className="text-red-500 font-semibold">{playerState.errorMessage}</span>
-                      ) : (
-                        <>
-                          {playerState?.currentClip?.artist || "Audio snippet"} •{" "}
-                          {playerState?.remainingTime.toFixed(1)}s remaining
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    className="pc-button"
-                    onClick={isPlaying ? pausePlayback : resumePlayback}
-                    title={isPlaying ? "Pause" : "Play / Replay"}
-                  >
-                    {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-                  </button>
-                  <button type="button" className="pc-button" onClick={stopPlayback} title="Stop playback">
-                    <Square className="w-4 h-4 fill-current" />
-                  </button>
-                  <button
-                    type="button"
-                    className="pc-button"
-                    onClick={toggleMute}
-                    title={playerState?.isMuted ? "Unmute" : "Mute"}
-                  >
-                    {playerState?.isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                  </button>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={playerState?.isMuted ? 0 : playerState?.volume ?? 100}
-                    onChange={(e) => setVolume(Number(e.target.value))}
-                    className="w-20 cursor-pointer hidden sm:block"
-                    aria-label="Volume"
-                  />
-                  <button
-                    type="button"
-                    className="pc-button"
-                    onClick={() => setShowVideoWindow(!showVideoWindow)}
-                    title="Toggle visual video preview"
-                  >
-                    <span>Video</span>
-                    {showVideoWindow ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
+              <NowPlayingControls
+                playerState={playerState}
+                onPlayPause={handlePlayPause}
+                onStop={stopPlayback}
+                onToggleMute={toggleMute}
+                onVolumeChange={setVolume}
+                onToggleVideo={toggleVideo}
+                showVideo={showVideo}
+              />
             )}
           </Window>
         </div>
       )}
 
-      <div
-        className={`fixed print:hidden ${
-          showVideoWindow
-            ? "z-50 pc-window bottom-32 right-4 sm:right-8 w-72 sm:w-80"
-            : "-left-[9999px] top-0 w-80 h-52 opacity-0 pointer-events-none -z-50"
-        }`}
-      >
-        {showVideoWindow && (
-          <div className="pc-titlebar">
-            <div className="pc-titlebar-title">YouTube</div>
-            <div className="pc-titlebar-controls">
-              <button
-                type="button"
-                className="pc-titlebar-btn"
-                onClick={() => setShowVideoWindow(false)}
-                aria-label="Close"
-              >
-                X
-              </button>
+      {isHostRoute && hostVideoPanel && showVideo
+        ? createPortal(videoWindow, hostVideoPanel)
+        : !isHostRoute
+          ? videoWindow
+          : (
+            <div className="fixed -left-[9999px] top-0 w-80 h-52 opacity-0 pointer-events-none -z-50 print:hidden">
+              <div className="w-80 h-52 bg-black">
+                <div id="youtube-player-singleton" className="w-full h-full" />
+              </div>
             </div>
-          </div>
-        )}
-        <div className={showVideoWindow ? "aspect-video bg-black" : "w-80 h-52 bg-black"}>
-          <div id="youtube-player-singleton" className="w-full h-full" />
-        </div>
-      </div>
+          )}
 
       <Taskbar className="print:hidden">
         <Link to="/" className="pc-button pc-start-btn">
@@ -297,5 +344,13 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <div className="pc-taskbar-clock">{clock}</div>
       </Taskbar>
     </Desktop>
+  );
+};
+
+export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <PlayerUIProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </PlayerUIProvider>
   );
 };

@@ -1,13 +1,15 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
+import { usePlayerUI } from "../state/PlayerUIContext";
 import { Track } from "../types/deck";
 import { shuffleArray } from "../lib/bingo/generateCards";
 import { AnswerCard } from "../components/host/AnswerCard";
 import { CallNextControls } from "../components/host/CallNextControls";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
+import { PcModal } from "../components/ui/PcModal";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import {
   playClip,
@@ -15,9 +17,12 @@ import {
   resumePlayback,
   stopPlayback,
   subscribeToPlayerState,
+  setVolume,
+  toggleMute,
   PlayerPlaybackState,
 } from "../lib/youtube/player";
-import { ArrowLeft, Radio, History, Search, Sparkles, Music2 } from "lucide-react";
+import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
+import { ArrowLeft, Radio, History, Search, Sparkles, Music2, RotateCcw } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -26,10 +31,13 @@ export interface CalledEntry {
   calledAt: string;
 }
 
+const REVEAL_BEFORE_CHAIN_MS = 3000;
+
 export const HostPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { decks, loadDeck, updateDeck } = useDeck();
+  const { showVideo, toggleVideo } = usePlayerUI();
 
   const deck = useMemo(
     () => (id ? decks.find((d) => d.id === id) ?? null : null),
@@ -45,8 +53,28 @@ export const HostPage: React.FC = () => {
   const [currentCall, setCurrentCall] = useState<CalledEntry | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(true);
+  const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(false);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [historySearch, setHistorySearch] = useState<string>("");
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  const chainTimeoutRef = useRef<number | null>(null);
+  const uncalledIdsRef = useRef(uncalledIds);
+  const autoCallNextOnEndRef = useRef(autoCallNextOnEnd);
+  const autoRevealOnEndRef = useRef(autoRevealOnEnd);
+  const handleCallNextRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    uncalledIdsRef.current = uncalledIds;
+  }, [uncalledIds]);
+
+  useEffect(() => {
+    autoCallNextOnEndRef.current = autoCallNextOnEnd;
+  }, [autoCallNextOnEnd]);
+
+  useEffect(() => {
+    autoRevealOnEndRef.current = autoRevealOnEnd;
+  }, [autoRevealOnEnd]);
 
   const handleTracksUpdated = useCallback(
     (updatedTracks: Track[]) => {
@@ -67,37 +95,42 @@ export const HostPage: React.FC = () => {
     onTracksUpdated: handleTracksUpdated,
   });
 
+  const clearChainTimeout = useCallback(() => {
+    if (chainTimeoutRef.current !== null) {
+      window.clearTimeout(chainTimeoutRef.current);
+      chainTimeoutRef.current = null;
+    }
+  }, []);
+
   const initGame = useCallback(() => {
     if (!deck) return;
+    clearChainTimeout();
     const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
     setUncalledIds(shuffled);
     setCalledHistory([]);
     setCurrentCall(null);
     setIsRevealed(false);
     stopPlayback();
-  }, [deck]);
+  }, [deck, clearChainTimeout]);
 
-  useEffect(() => {
-    if (!deck) {
-      if (decks.length > 0) {
-        navigate(`/deck/${decks[0].id}/play`, { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
-      return;
+  const onClipEnd = useCallback(() => {
+    if (autoCallNextOnEndRef.current && uncalledIdsRef.current.length > 0) {
+      setIsRevealed(true);
+      chainTimeoutRef.current = window.setTimeout(() => {
+        chainTimeoutRef.current = null;
+        if (uncalledIdsRef.current.length > 0) {
+          handleCallNextRef.current();
+        }
+      }, REVEAL_BEFORE_CHAIN_MS);
+    } else if (autoRevealOnEndRef.current) {
+      setIsRevealed(true);
     }
-
-    initGame();
-  }, [deck, decks, navigate, initGame]);
-
-  useEffect(() => {
-    return subscribeToPlayerState((state) => {
-      setPlayerState(state);
-    });
   }, []);
 
   const handleCallNext = useCallback(() => {
     if (!deck || !isPlayable || uncalledIds.length === 0) return;
+
+    clearChainTimeout();
 
     const nextId = uncalledIds[0];
     const remaining = uncalledIds.slice(1);
@@ -127,16 +160,39 @@ export const HostPage: React.FC = () => {
           title: track.title,
           artist: track.artist,
         },
-        () => {
-          if (autoRevealOnEnd) {
-            setIsRevealed(true);
-          }
-        }
+        onClipEnd
       );
     } else {
       setIsRevealed(true);
     }
-  }, [deck, isPlayable, uncalledIds, calledHistory.length, autoRevealOnEnd]);
+  }, [deck, isPlayable, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout]);
+
+  useEffect(() => {
+    handleCallNextRef.current = handleCallNext;
+  }, [handleCallNext]);
+
+  useEffect(() => {
+    if (!deck) {
+      if (decks.length > 0) {
+        navigate(`/deck/${decks[0].id}/play`, { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
+      return;
+    }
+
+    initGame();
+  }, [deck, decks, navigate, initGame]);
+
+  useEffect(() => {
+    return subscribeToPlayerState((state) => {
+      setPlayerState(state);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => clearChainTimeout();
+  }, [clearChainTimeout]);
 
   const handleReplayCurrent = () => {
     if (!currentCall?.track?.youtubeVideoId) return;
@@ -149,11 +205,7 @@ export const HostPage: React.FC = () => {
         title: currentCall.track.title,
         artist: currentCall.track.artist,
       },
-      () => {
-        if (autoRevealOnEnd) {
-          setIsRevealed(true);
-        }
-      }
+      onClipEnd
     );
   };
 
@@ -166,12 +218,16 @@ export const HostPage: React.FC = () => {
   };
 
   const handleResetGame = () => {
-    if (calledHistory.length > 0) {
-      if (!confirm("Are you sure you want to reset the current game and reshuffle all songs?")) {
-        return;
-      }
-    }
+    setShowResetModal(false);
     initGame();
+  };
+
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 150,
+      spread: 90,
+      origin: { y: 0.5 },
+    });
   };
 
   useEffect(() => {
@@ -226,51 +282,64 @@ export const HostPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           Exit Host Mode (Back to Editor)
         </Link>
-        <div className="flex items-center gap-2">
-          <span className="pc-bevel-inset px-3 py-1 text-xs font-bold inline-flex items-center gap-2">
-            <Radio className="w-4 h-4" />
-            LIVE HOST BOARD
-          </span>
-          <Button
-            type="button"
-            onClick={() => {
-              confetti({
-                particleCount: 150,
-                spread: 90,
-                origin: { y: 0.5 },
-              });
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Bingo Confetti!
-          </Button>
-        </div>
+        <span className="pc-bevel-inset px-3 py-1 text-xs font-bold inline-flex items-center gap-2">
+          <Radio className="w-4 h-4" />
+          LIVE HOST BOARD
+        </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         <div className="lg:col-span-7 space-y-4">
-          <AnswerCard
-            track={currentCall?.track || null}
-            isRevealed={isRevealed}
-            onReveal={() => setIsRevealed(true)}
-            onHide={() => setIsRevealed(false)}
-            isPlaying={isPlaying}
-            progress={playbackProgress}
-            remainingTime={remainingTime}
-            callNumber={currentCall?.callNumber || 0}
-            errorMessage={currentErrorMessage}
-          />
+          <div className="space-y-2">
+            <AnswerCard
+              track={currentCall?.track || null}
+              isRevealed={isRevealed}
+              onReveal={() => setIsRevealed(true)}
+              onHide={() => setIsRevealed(false)}
+              isPlaying={isPlaying}
+              progress={playbackProgress}
+              remainingTime={remainingTime}
+              callNumber={currentCall?.callNumber || 0}
+              errorMessage={currentErrorMessage}
+            />
+            {currentCall && (
+              <div className="flex justify-end gap-2">
+                <Button type="button" onClick={triggerConfetti}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Someone Called Bingo!
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setShowResetModal(true)}
+                  title="Reset game and reshuffle bag"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reshuffle
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div id="host-video-panel" className="host-video-panel" />
+
           <CallNextControls
             onCallNext={handleCallNext}
             onReplayCurrent={handleReplayCurrent}
             onTogglePlayPause={handleTogglePlayPause}
-            onResetGame={handleResetGame}
+            onStop={stopPlayback}
+            onToggleMute={toggleMute}
+            onVolumeChange={setVolume}
+            onToggleVideo={toggleVideo}
+            showVideo={showVideo}
+            playerState={playerState}
             isPlaying={isPlaying}
             hasCurrentTrack={Boolean(currentCall?.track?.youtubeVideoId)}
             remainingCount={uncalledIds.length}
             totalCount={deck.tracks.length}
             autoRevealOnEnd={autoRevealOnEnd}
             onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
+            autoCallNextOnEnd={autoCallNextOnEnd}
+            onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
             disabled={!isPlayable}
           />
         </div>
@@ -308,6 +377,11 @@ export const HostPage: React.FC = () => {
               ) : (
                 filteredHistory.map((item) => {
                   const isCurrent = item.callNumber === currentCall?.callNumber;
+                  const thumbUrl =
+                    item.track.albumArtUrl ||
+                    (item.track.youtubeVideoId
+                      ? getYoutubeThumbnailUrl(item.track.youtubeVideoId, "hqdefault")
+                      : "");
                   return (
                     <div
                       key={item.callNumber}
@@ -319,6 +393,17 @@ export const HostPage: React.FC = () => {
                         <span className="pc-bevel-outset w-7 h-7 text-xs font-bold flex items-center justify-center shrink-0">
                           #{item.callNumber}
                         </span>
+                        {thumbUrl ? (
+                          <img
+                            src={thumbUrl}
+                            alt=""
+                            className="w-9 h-9 object-cover pc-bevel-inset shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 pc-bevel-inset flex items-center justify-center shrink-0">
+                            <Music2 className="w-4 h-4" />
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="font-bold text-xs truncate max-w-[180px] sm:max-w-xs">
                             {item.track.title}
@@ -338,6 +423,23 @@ export const HostPage: React.FC = () => {
           </Window>
         </div>
       </div>
+
+      {showResetModal && (
+        <PcModal title="Reset Game?" onClose={() => setShowResetModal(false)}>
+          <p className="text-sm mb-4">
+            This will reset the current game and reshuffle all songs. Called history will be cleared.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={() => setShowResetModal(false)}>
+              Cancel
+            </Button>
+            <Button type="button" variant="primary" onClick={handleResetGame}>
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset &amp; reshuffle
+            </Button>
+          </div>
+        </PcModal>
+      )}
     </div>
   );
 };
