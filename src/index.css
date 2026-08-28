@@ -240,6 +240,7 @@
 
 .host-controls-window {
   width: 100%;
+  box-shadow: none;
 }
 
 .host-now-playing-slot {

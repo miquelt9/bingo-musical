@@ -28,6 +28,32 @@ import {
   Loader2,
 } from "lucide-react";
 
+const CARD_SETTINGS_KEY = "bingo.cards.settings";
+
+interface CardSettings {
+  cardCount: number;
+  gridSize: number;
+  bingoPercent: number;
+}
+
+function readCardSettings(deckId: string): CardSettings | null {
+  try {
+    const raw = sessionStorage.getItem(`${CARD_SETTINGS_KEY}.${deckId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CardSettings;
+    if (
+      typeof parsed.cardCount === "number" &&
+      typeof parsed.gridSize === "number" &&
+      typeof parsed.bingoPercent === "number"
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export const CardsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -95,7 +121,29 @@ export const CardsPage: React.FC = () => {
   useEffect(() => {
     if (!deck) return;
     setCustomTitle(deck.name);
+    const stored = readCardSettings(deck.id);
+    if (stored) {
+      setCardCount(stored.cardCount);
+      setGridSize(stored.gridSize);
+      setBingoPercent(stored.bingoPercent);
+    }
   }, [deck?.id, deck?.name]);
+
+  useEffect(() => {
+    if (!deck) return;
+    try {
+      sessionStorage.setItem(
+        `${CARD_SETTINGS_KEY}.${deck.id}`,
+        JSON.stringify({ cardCount, gridSize, bingoPercent })
+      );
+    } catch {
+      // ignore
+    }
+  }, [deck?.id, cardCount, gridSize, bingoPercent]);
+
+  useEffect(() => {
+    setActivePreviewIndex((prev) => (cards.length === 0 ? 0 : Math.min(prev, cards.length - 1)));
+  }, [cards.length]);
 
   useEffect(() => {
     if (!deck || !isPlayable) {
@@ -111,14 +159,14 @@ export const CardsPage: React.FC = () => {
     setCards(
       generateBingoCards(deck.tracks, {
         deckName: deck.name,
-        customTitle: deck.name,
+        customTitle: customTitle || deck.name,
         cardCount,
         gridSize,
         bingoPercent,
       })
     );
     setActivePreviewIndex(0);
-  }, [deck?.id, deck?.updatedAt, cardCount, gridSize, bingoPercent, isPlayable]);
+  }, [deck?.id, deck?.updatedAt, deck?.name, customTitle, cardCount, gridSize, bingoPercent, isPlayable]);
 
   const handleRegenerate = () => {
     if (!deck || !cardOptions || deck.tracks.length === 0 || !isPlayable) return;

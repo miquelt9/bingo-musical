@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import { Button, Group, Input, Radio, Window, type DesktopTheme } from "@miquelt9/pc-ui";
+import React, { useState, useEffect } from "react";
+import { Button, Group, Input, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
 import { useAuth } from "../state/AuthContext";
 import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
+import { useToast } from "../state/ToastContext";
 import { getRedirectUri } from "../lib/spotify/auth";
 import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
@@ -28,10 +29,16 @@ export const SettingsPage: React.FC = () => {
   const { clientId, updateClientId, isAuthenticated, login, logout, error } = useAuth();
   const { refreshDecks } = useDeck();
   const { theme, setTheme } = useTheme();
+  const { showToast } = useToast();
 
   const [inputClientId, setInputClientId] = useState(clientId);
   const [copiedUri, setCopiedUri] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  useEffect(() => {
+    setInputClientId(clientId);
+  }, [clientId]);
 
   const redirectUri = getRedirectUri();
 
@@ -49,11 +56,15 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleResetSampleDeck = () => {
-    if (confirm("Reset local storage and restore the default Sample Pop Hits Deck?")) {
-      saveStoredDecks([SAMPLE_POP_HITS_DECK]);
-      refreshDecks();
-      alert("Sample deck restored!");
-    }
+    saveStoredDecks([SAMPLE_POP_HITS_DECK]);
+    refreshDecks();
+    setShowResetModal(false);
+    showToast({
+      title: "Data reset",
+      icon: <Check className="w-3.5 h-3.5" />,
+      message: "All decks were replaced with the default Sample Pop Hits deck.",
+      duration: 8000,
+    });
   };
 
   return (
@@ -215,16 +226,35 @@ export const SettingsPage: React.FC = () => {
       >
         <div className="flex items-center justify-between gap-4 pc-bevel-inset p-3">
           <div>
-            <h4 className="text-sm font-semibold">Reset Default Pop Classics Deck</h4>
+            <h4 className="text-sm font-semibold">Reset all data to sample deck</h4>
             <p className="text-xs mt-0.5">
-              Restores the 30-track classic sample deck with pre-matched YouTube clips.
+              Deletes every deck in local storage and restores only the 30-track Sample Pop Hits deck.
+              This cannot be undone.
             </p>
           </div>
-          <Button type="button" onClick={handleResetSampleDeck}>
-            Reset Sample Deck
+          <Button type="button" onClick={() => setShowResetModal(true)}>
+            Reset All Data
           </Button>
         </div>
       </Window>
+
+      {showResetModal && (
+        <Modal
+          open
+          variant="danger"
+          title="Reset all data to sample deck?"
+          confirmLabel="Reset all data"
+          cancelLabel="Cancel"
+          onConfirm={handleResetSampleDeck}
+          onCancel={() => setShowResetModal(false)}
+        >
+          <p className="text-sm">
+            This will permanently delete <strong>all of your decks</strong> and replace them with the
+            default Sample Pop Hits deck. Custom decks, matched songs, and game progress stored in this
+            browser will be lost.
+          </p>
+        </Modal>
+      )}
 
       <Window
         title={

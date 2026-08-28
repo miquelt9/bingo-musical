@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Modal } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
@@ -38,6 +38,8 @@ interface TrackTableProps {
   isValidating?: boolean;
   validationProgress?: { total: number; completed: number; valid: number; invalid: number; currentTrackTitle?: string } | null;
   initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
+  onCancelMatching?: () => void;
+  onCancelValidation?: () => void;
 }
 
 function StatusIconBadge({
@@ -89,6 +91,8 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   isValidating = false,
   validationProgress = null,
   initialStatusFilter = "all",
+  onCancelMatching,
+  onCancelValidation,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched" | "blocked">(
@@ -98,6 +102,10 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   const [timestampEditingTrack, setTimestampEditingTrack] = useState<Track | null>(null);
   const [trackPendingDelete, setTrackPendingDelete] = useState<Track | null>(null);
   const [activeCoachmarkId, setActiveCoachmarkId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStatusFilter(initialStatusFilter);
+  }, [initialStatusFilter]);
 
   const isTrackBlocked = (track: Track): boolean => {
     if (track.matchStatus === "failed") return true;
@@ -241,8 +249,15 @@ export const TrackTable: React.FC<TrackTableProps> = ({
               <Sparkles className="w-3.5 h-3.5 animate-spin" />
               <span>Matching songs with verified YouTube audio...</span>
             </span>
-            <span className="font-mono">
-              {matchProgress.completed} / {matchProgress.total} ({Math.round((matchProgress.completed / matchProgress.total) * 100)}%)
+            <span className="flex items-center gap-2">
+              <span className="font-mono">
+                {matchProgress.completed} / {matchProgress.total} ({Math.round((matchProgress.completed / matchProgress.total) * 100)}%)
+              </span>
+              {onCancelMatching && (
+                <button type="button" onClick={onCancelMatching} className="pc-button text-[11px]">
+                  Cancel
+                </button>
+              )}
             </span>
           </div>
           <div className="w-full h-2 pc-bevel-inset overflow-hidden">
@@ -263,8 +278,15 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                 Checking audio compatibility: {validationProgress.currentTrackTitle || "Testing songs..."}
               </span>
             </span>
-            <span className="font-mono">
-              {validationProgress.completed} / {validationProgress.total} ({Math.round((validationProgress.completed / validationProgress.total) * 100)}%)
+            <span className="flex items-center gap-2">
+              <span className="font-mono">
+                {validationProgress.completed} / {validationProgress.total} ({Math.round((validationProgress.completed / validationProgress.total) * 100)}%)
+              </span>
+              {onCancelValidation && (
+                <button type="button" onClick={onCancelValidation} className="pc-button text-[11px]">
+                  Cancel
+                </button>
+              )}
             </span>
           </div>
           <div className="w-full h-2 pc-bevel-inset overflow-hidden">
@@ -294,7 +316,11 @@ export const TrackTable: React.FC<TrackTableProps> = ({
               <tr>
                 <td colSpan={7} className="py-12 text-center">
                   <Music2 className="w-8 h-8 mx-auto mb-2" />
-                  <p className="font-medium text-sm">No tracks found matching your filter.</p>
+                  <p className="font-medium text-sm">
+                    {tracks.length === 0
+                      ? "No songs in this deck yet."
+                      : "No tracks found matching your filter."}
+                  </p>
                 </td>
               </tr>
             ) : (

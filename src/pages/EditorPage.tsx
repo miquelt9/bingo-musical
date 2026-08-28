@@ -357,7 +357,10 @@ export const EditorPage: React.FC = () => {
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSaveDeckName();
-                    if (e.key === "Escape") setIsEditingName(false);
+                    if (e.key === "Escape") {
+                      setDeckName(deck.name);
+                      setIsEditingName(false);
+                    }
                   }}
                 />
                 <Button type="button" variant="primary" onClick={handleSaveDeckName}>
@@ -407,7 +410,23 @@ export const EditorPage: React.FC = () => {
         isValidating={isValidating}
         validationProgress={validationProgress}
         initialStatusFilter={initialStatusFilter}
+        onCancelMatching={() => {
+          cancelMatchingRef.current = true;
+        }}
+        onCancelValidation={() => {
+          cancelValidationRef.current = true;
+        }}
       />
+
+      {deck.tracks.length === 0 && (
+        <Window title="Get Started">
+          <p className="text-sm mb-3">This deck has no songs yet. Add your first song to start building a bingo game.</p>
+          <Button type="button" variant="primary" onClick={() => setShowAddTrackModal(true)}>
+            <Plus className="w-4 h-4" />
+            Add your first song
+          </Button>
+        </Window>
+      )}
 
       {hostGateOpen && (hostGateChecking || hostGateInvalid.length > 0) && (
         <PcModal

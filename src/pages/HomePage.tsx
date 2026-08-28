@@ -8,6 +8,7 @@ import { SongSearch } from "../components/tracks/SongSearch";
 import { Deck, Track } from "../types/deck";
 import { getUnplayableTracks } from "../lib/youtube/validator";
 import { canStartGame } from "../lib/youtube/playabilityGate";
+import { useToast } from "../state/ToastContext";
 import {
   Music,
   Plus,
@@ -25,6 +26,7 @@ import {
 export const HomePage: React.FC = () => {
   const { decks, createDeck, updateDeck, deleteDeck, duplicateDeck, exportDeck, shareDeck, importDeck } = useDeck();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [songList, setSongList] = useState("");
   const [deckName, setDeckName] = useState("");
@@ -93,10 +95,35 @@ export const HomePage: React.FC = () => {
     }
 
     const now = new Date().toISOString();
+    const name = deckName.trim() || "Custom Bingo Deck";
+    const deckId = buildingDeckIdRef.current;
+
+    if (deckId) {
+      const existing = getDeckById(deckId) ?? decks.find((d) => d.id === deckId);
+      if (existing) {
+        updateDeck({
+          ...existing,
+          name,
+          tracks,
+          updatedAt: now,
+          source: { type: "song-list", name: deckName.trim() || "Pasted song list" },
+        });
+        navigate(`/deck/${existing.id}`);
+        if (skipped > 0) {
+          showToast({
+            title: "Bulk paste",
+            message: `Skipped ${skipped} duplicate or empty song line${skipped === 1 ? "" : "s"}.`,
+            duration: 8000,
+          });
+        }
+        return;
+      }
+    }
+
     saveAndOpen({
       schemaVersion: 1,
       id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: deckName.trim() || "Custom Bingo Deck",
+      name,
       createdAt: now,
       updatedAt: now,
       source: { type: "song-list", name: deckName.trim() || "Pasted song list" },
@@ -104,7 +131,11 @@ export const HomePage: React.FC = () => {
     });
 
     if (skipped > 0) {
-      console.info(`Skipped ${skipped} duplicate or empty song lines.`);
+      showToast({
+        title: "Bulk paste",
+        message: `Skipped ${skipped} duplicate or empty song line${skipped === 1 ? "" : "s"}.`,
+        duration: 8000,
+      });
     }
   };
 
@@ -160,7 +191,12 @@ export const HomePage: React.FC = () => {
       const imported = await importDeck(file);
       navigate(`/deck/${imported.id}`);
     } catch (err) {
-      alert("JSON import error: " + (err as Error).message);
+      showToast({
+        title: "JSON import failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: (err as Error).message,
+        duration: 10000,
+      });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -348,13 +384,17 @@ export const HomePage: React.FC = () => {
                       Cards
                     </Link>
                     <Link
-                      to={`/deck/${deck.id}/play`}
-                      className={`pc-button ${playReady ? "pc-button--primary" : ""}`}
+                      to={playReady ? `/deck/${deck.id}/play` : "#"}
+                      className={`pc-button ${playReady ? "pc-button--primary" : "opacity-60 pointer-events-none"}`}
+                      aria-disabled={!playReady}
                       title={
                         playReady
                           ? "Host live game"
                           : "Some songs need attention before hosting"
                       }
+                      onClick={(e) => {
+                        if (!playReady) e.preventDefault();
+                      }}
                     >
                       <Radio className="w-3.5 h-3.5" />
                       Play

@@ -39,10 +39,27 @@ export interface CalledEntry {
 const REVEAL_BEFORE_CHAIN_MS = 3000;
 const DEFAULT_CROSSFADE_MS = 1500;
 const CROSSFADE_SESSION_KEY = "bingo.host.crossfadeOverlapMs";
+const HOST_SESSION_KEY = "bingo.host.session";
 
-function trackToClip(track: Track): Clip {
+interface SerializedCalledEntry {
+  callNumber: number;
+  trackId: string;
+  calledAt: string;
+}
+
+interface HostSessionData {
+  uncalledIds: string[];
+  calledHistory: SerializedCalledEntry[];
+  currentCall: SerializedCalledEntry | null;
+  isRevealed: boolean;
+  autoRevealOnEnd: boolean;
+  autoCallNextOnEnd: boolean;
+}
+
+function trackToClip(track: Track): Clip | null {
+  if (!track.youtubeVideoId) return null;
   return {
-    videoId: track.youtubeVideoId!,
+    videoId: track.youtubeVideoId,
     startTime: track.startTime,
     endTime: track.endTime,
     trackId: track.id,
@@ -60,6 +77,90 @@ function readStoredCrossfadeMs(deckId: string): number {
     return Math.max(0, Math.min(3000, parsed));
   } catch {
     return DEFAULT_CROSSFADE_MS;
+  }
+}
+
+function serializeCalledEntry(entry: CalledEntry): SerializedCalledEntry {
+  return { callNumber: entry.callNumber, trackId: entry.track.id, calledAt: entry.calledAt };
+}
+
+function deserializeCalledEntry(
+  entry: SerializedCalledEntry,
+  tracks: Track[]
+): CalledEntry | null {
+  const track = tracks.find((t) => t.id === entry.trackId);
+  if (!track) return null;
+  return { callNumber: entry.callNumber, track, calledAt: entry.calledAt };
+}
+
+function readHostSession(
+  deckId: string,
+  tracks: Track[]
+): {
+  uncalledIds: string[];
+  calledHistory: CalledEntry[];
+  currentCall: CalledEntry | null;
+  isRevealed: boolean;
+  autoRevealOnEnd: boolean;
+  autoCallNextOnEnd: boolean;
+} | null {
+  try {
+    const raw = sessionStorage.getItem(`${HOST_SESSION_KEY}.${deckId}`);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as HostSessionData;
+    const trackIds = new Set(tracks.map((t) => t.id));
+    const uncalledIds = data.uncalledIds?.filter((id) => trackIds.has(id)) ?? [];
+    const calledHistory =
+      data.calledHistory
+        ?.map((e) => deserializeCalledEntry(e, tracks))
+        .filter((e): e is CalledEntry => e !== null) ?? [];
+    const currentCall = data.currentCall
+      ? deserializeCalledEntry(data.currentCall, tracks)
+      : null;
+    return {
+      uncalledIds,
+      calledHistory,
+      currentCall,
+      isRevealed: data.isRevealed ?? false,
+      autoRevealOnEnd: data.autoRevealOnEnd ?? true,
+      autoCallNextOnEnd: data.autoCallNextOnEnd ?? true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeHostSession(
+  deckId: string,
+  data: {
+    uncalledIds: string[];
+    calledHistory: CalledEntry[];
+    currentCall: CalledEntry | null;
+    isRevealed: boolean;
+    autoRevealOnEnd: boolean;
+    autoCallNextOnEnd: boolean;
+  }
+): void {
+  try {
+    const payload: HostSessionData = {
+      uncalledIds: data.uncalledIds,
+      calledHistory: data.calledHistory.map(serializeCalledEntry),
+      currentCall: data.currentCall ? serializeCalledEntry(data.currentCall) : null,
+      isRevealed: data.isRevealed,
+      autoRevealOnEnd: data.autoRevealOnEnd,
+      autoCallNextOnEnd: data.autoCallNextOnEnd,
+    };
+    sessionStorage.setItem(`${HOST_SESSION_KEY}.${deckId}`, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
+
+function clearHostSession(deckId: string): void {
+  try {
+    sessionStorage.removeItem(`${HOST_SESSION_KEY}.${deckId}`);
+  } catch {
+    // ignore
   }
 }
 
@@ -136,8 +237,9 @@ export const HostPage: React.FC = () => {
     (remainingIds: string[]) => {
       if (!deck || !autoCallNextOnEndRef.current || remainingIds.length === 0) return;
       const nextTrack = deck.tracks.find((t) => t.id === remainingIds[0]);
-      if (!nextTrack?.youtubeVideoId) return;
-      preloadClip(trackToClip(nextTrack));
+      if (!nextTrack) return;
+      const clip = trackToClip(nextTrack);
+      if (clip) preloadClip(clip);
     },
     [deck]
   );
@@ -177,6 +279,7 @@ export const HostPage: React.FC = () => {
     setCurrentCall(null);
     setIsRevealed(false);
     stopPlayback();
+    clearHostSession(deck.id);
   }, [deck, clearChainTimeout]);
 
   const onClipEnd = useCallback(() => {
@@ -218,7 +321,7 @@ export const HostPage: React.FC = () => {
     setCalledHistory((prev) => [newEntry, ...prev]);
     setIsRevealed(true);
 
-    if (track.youtubeVideoId) {
+    if (clip) {
       if (!continueClipPlayback(clip, onClipEnd) && !activatePreloadedClip(clip, onClipEnd)) {
         playClip(clip, onClipEnd);
       }
@@ -251,9 +354,39 @@ export const HostPage: React.FC = () => {
 
     if (initializedDeckIdRef.current !== deck.id) {
       initializedDeckIdRef.current = deck.id;
-      initGame();
+      const restored = readHostSession(deck.id, deck.tracks);
+      if (restored && restored.calledHistory.length > 0) {
+        setUncalledIds(restored.uncalledIds);
+        setCalledHistory(restored.calledHistory);
+        setCurrentCall(restored.currentCall);
+        setIsRevealed(restored.isRevealed);
+        setAutoRevealOnEnd(restored.autoRevealOnEnd);
+        setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
+      } else {
+        initGame();
+      }
     }
   }, [deck, decks, navigate, initGame]);
+
+  useEffect(() => {
+    if (!deck) return;
+    writeHostSession(deck.id, {
+      uncalledIds,
+      calledHistory,
+      currentCall,
+      isRevealed,
+      autoRevealOnEnd,
+      autoCallNextOnEnd,
+    });
+  }, [
+    deck,
+    uncalledIds,
+    calledHistory,
+    currentCall,
+    isRevealed,
+    autoRevealOnEnd,
+    autoCallNextOnEnd,
+  ]);
 
   useEffect(() => {
     return subscribeToPlayerState((state) => {
@@ -266,8 +399,10 @@ export const HostPage: React.FC = () => {
   }, [clearChainTimeout]);
 
   const handleReplayCurrent = () => {
-    if (!currentCall?.track?.youtubeVideoId) return;
-    playClip(trackToClip(currentCall.track), onClipEnd);
+    if (!currentCall?.track) return;
+    const clip = trackToClip(currentCall.track);
+    if (!clip) return;
+    playClip(clip, onClipEnd);
     if (uncalledIds.length > 0) {
       preloadNextTrack(uncalledIds);
     }
@@ -303,13 +438,32 @@ export const HostPage: React.FC = () => {
 
       if (e.code === "Space") {
         e.preventDefault();
-        handleCallNext();
+
+        const clipActiveForCurrent =
+          currentCall &&
+          playerState?.currentClip?.trackId === currentCall.track.id &&
+          (playerState.state === "playing" ||
+            playerState.state === "paused" ||
+            playerState.state === "buffering");
+
+        if (clipActiveForCurrent) {
+          handleTogglePlayPause();
+        } else if (uncalledIds.length > 0) {
+          handleCallNext();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentCall, handleCallNext, isPlayable]);
+  }, [
+    currentCall,
+    playerState,
+    uncalledIds.length,
+    handleCallNext,
+    handleTogglePlayPause,
+    isPlayable,
+  ]);
 
   if (!deck) return null;
 
@@ -428,7 +582,7 @@ export const HostPage: React.FC = () => {
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-xs">
                   <Music2 className="w-10 h-10 mb-2" />
                   <p className="font-semibold">No songs called yet.</p>
-                  <p className="mt-1">When you call a song, it will appear here in chronological order.</p>
+                  <p className="mt-1">When you call a song, it will appear here with the most recent first.</p>
                 </div>
               ) : filteredHistory.length === 0 ? (
                 <div className="py-12 text-center text-xs">
