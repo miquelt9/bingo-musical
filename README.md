@@ -1,7 +1,7 @@
 # Musical Bingo Creator 🎵 🎱
 
 A desktop-first static SPA for creating, editing, printing, and hosting interactive Musical Bingo games.
-Built with **Vite, React, TypeScript, Tailwind CSS, jsPDF, and the YouTube IFrame API**.
+Built with **Vite, React, TypeScript, Tailwind CSS, [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui), jsPDF, and the YouTube IFrame API**.
 
 Hosted serverless on GitHub Pages with zero backend dependencies and no Google or Spotify Premium requirement.
 
@@ -13,34 +13,59 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
   - Search a song or artist with public catalog autocomplete (iTunes, then Deezer/MusicBrainz).
   - Selecting a song searches YouTube with `Artist Title official audio`.
   - Paste a YouTube video or playlist URL if you already have the clip.
+  - Paste a bulk song list (`Artist - Title`, one per line) and match clips in the editor.
   - Connect Spotify to import playlists you own or collaborate on (YouTube matching runs automatically).
+  - Decks auto-save as you add songs from search.
 - 🔍 **Smart YouTube Matcher:**
   - Automated fallback search across public Invidious & Piped instances (no YouTube API token required).
   - Direct 1-click manual YouTube link or Video ID override with instant thumbnail validation.
+  - Cancellable batch auto-match and embed validation.
+  - **Auto-Fix** for blocked videos — finds and replaces restricted clips from the editor or taskbar notice.
+- 🛡️ **Playability gating:**
+  - Verifies YouTube embed permissions (via noembed.com) before hosting or printing cards.
+  - Surfaces blocked or unmatched tracks with a filterable list in the editor.
 - ✂️ **Interactive Track & Snippet Editor:**
   - Customizable start/end timestamps per track.
   - Built-in singleton YouTube preview player with precision pause-at-end bounding.
-- 🗄️ **Local Persistence & JSON Deck Portability:**
+- 🗄️ **Local Persistence & Deck Portability:**
   - Save full decks in browser `localStorage`.
   - Export decks as portable `.json` files.
   - Import JSON decks with instant schema validation and pre-matched YouTube IDs.
+  - **Share decks** via the native share sheet (or copy a message with the import link and JSON file).
+  - Dedicated **Import** page (`#/import`) for recipients of shared decks.
   - Built-in sample deck for testing without any external account.
+  - Empty decks created by mistake are discarded automatically when you navigate away.
 - 🖨️ **Printable Bingo Cards & High-Resolution Vector PDF:**
-  - Randomized 5x5 cards with center "FREE SPACE" (Fisher-Yates 24-track random sampling).
+  - Configurable **3×3 to 6×6** grids with adjustable **bingo percent** (how much of the deck appears on each card).
+  - Leftover squares become dark blocked tiles — no fixed center free space required.
   - Clean browser print layout (`@media print`).
   - Crisp vector PDF generator powered by `jsPDF` for multi-card batch downloads.
+  - Export generated card sets as JSON for reuse.
 - 🎙️ **Interactive Host Game Dashboard:**
   - "Call Next Song" randomized non-repeating shuffle bag.
   - Snippet playback controller (auto-pauses when clip ends).
+  - Inline video panel with optional draggable floating window.
+  - Crossfade overlap between songs, auto-reveal answers, and auto-call-next chaining.
   - Answer reveal card with countdown/clip-finished trigger or manual toggle.
-  - Live history log of called songs, verification, and celebratory Bingo confetti.
+  - Live searchable history log of called songs, verification, and celebratory Bingo confetti.
+  - **Space** toggles play/pause or calls the next song during a live game.
+  - Host session state persists in `sessionStorage` across page refreshes.
+- 🖥️ **Classic desktop UI:**
+  - Win9x-inspired shell via `@miquelt9/pc-ui` with light, dark (Night Win9x), or system theme.
 
 ---
 
 ## 🚀 Setup & Development
 
 ### 1. Install Dependencies
+
+This project depends on [`@miquelt9/pc-ui`](https://github.com/miquelt9/pc-ui) as a local sibling package. Clone both repos side by side, then install:
+
 ```bash
+# expected layout:
+#   ../pc-ui
+#   ./bingo-musical
+
 npm install
 ```
 
@@ -51,7 +76,7 @@ npm install
 3. Connect Spotify on the home page and import one of your playlists, or
 4. Import a previously exported JSON deck / use the sample deck.
 
-Then open **Editor**, trim clips if needed, print cards, and host the game. Spotify imports auto-start YouTube matching.
+Then open **Editor**, trim clips if needed, resolve any blocked songs, print cards, and host the game. Spotify imports auto-start YouTube matching.
 
 ### 3. Spotify (optional, for deployers)
 
@@ -62,30 +87,46 @@ End users do **not** need a Spotify Developer account. The site maintainer confi
 3. Set `VITE_SPOTIFY_CLIENT_ID` in `.env` locally or as a GitHub Actions secret for production builds.
 4. While the app is in Development Mode, add each user's Spotify email under **Users and Access**.
 
-Users then click **Connect with Spotify** on the home page and pick a playlist. Playback still uses YouTube only.
+Users then click **Connect with Spotify** on the home page (or in **Settings**) and pick a playlist. Playback still uses YouTube only.
 
 ### 4. Run Development Server
+
 ```bash
 npm run dev
 ```
 
-Visit [http://127.0.0.1:5173](http://127.0.0.1:5173) in your desktop browser.
+Visit [http://localhost:5173](http://localhost:5173) in your desktop browser.
 
 ### 5. Build for Production
+
 ```bash
 npm run build
 ```
+
+### 6. Deploy to GitHub Pages
+
+Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.yml`). Set the `VITE_SPOTIFY_CLIENT_ID` repository secret if Spotify import should be enabled in production.
+
+---
+
+## 📤 Sharing a deck
+
+1. Open a deck in the **Editor** (or use the share button on the home page deck list).
+2. Click **Share** — on supported browsers this opens the native share sheet with the JSON file attached.
+3. Otherwise, copy the share message (includes the `#/import` link) and send the JSON file separately.
+4. Recipients open the import link, drop the `.json` file, and land in the editor with the full deck.
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Framework:** React 18 + TypeScript + Vite
-- **Routing:** React Router DOM (HashRouter for foolproof GitHub Pages + OAuth query handling)
-- **Styling:** Tailwind CSS + Lucide Icons
+- **UI:** [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui) (Win9x desktop shell) + Tailwind CSS + Lucide Icons
+- **Routing:** React Router DOM (HashRouter for GitHub Pages + OAuth query handling)
 - **PDF Generation:** jsPDF
 - **Audio/Video Playback:** YouTube IFrame Player API
-- **Persistence:** Browser `localStorage` + JSON Import/Export
+- **Persistence:** Browser `localStorage` (decks, preferences, embed cache) + `sessionStorage` (host game & card settings) + JSON import/export
+- **Effects:** canvas-confetti
 
 ---
 
@@ -99,11 +140,12 @@ Musical Bingo Creator is a free personal hobby project. It is **not affiliated**
 
 ## Privacy
 
-Decks and preferences stay in your browser (`localStorage`). When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, Spotify (if connected), and GitHub Pages hosting. There is no analytics or user accounts on our side. See **Settings → Privacy** in the app for the full notice.
+Decks, theme, embed cache, and Spotify tokens (if connected) stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, Spotify (if connected), and GitHub Pages hosting. There is no analytics or user accounts on our side. See **Settings → Privacy** in the app for the full notice.
 
 ## Third-party services
 
 - **YouTube** — embedded playback via the IFrame Player API
 - **Invidious / Piped** — public instances for YouTube search and metadata (no official YouTube API key)
 - **iTunes, Deezer, MusicBrainz** — song title autocomplete
+- **noembed.com** — YouTube embed permission checks
 - **Spotify** (optional) — playlist metadata import only

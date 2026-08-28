@@ -236,10 +236,10 @@ export const SettingsPage: React.FC = () => {
       >
         <div className="text-xs leading-relaxed space-y-3">
           <p>
-            {APP_NAME} runs in your web browser with no backend of its own. Your decks, game
-            progress, embed cache, and preferences are stored in <strong>localStorage</strong> on
-            your device and are not sent to us. If you connect Spotify, your tokens stay in
-            localStorage too.
+            {APP_NAME} runs in your web browser with no backend of its own. Your decks, embed cache,
+            theme, and Spotify tokens (if connected) are stored in <strong>localStorage</strong> on
+            your device and are not sent to us. Active host games and card-print settings are kept
+            in <strong>sessionStorage</strong> until you close the browser tab.
           </p>
           <p>
             When you use certain features, your browser may contact third parties directly:
