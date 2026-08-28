@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
@@ -37,9 +37,10 @@ import {
 export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { decks, activeDeck, loadDeck, updateDeck, exportDeck, shareDeck } = useDeck();
   const statusFilterParam = searchParams.get("filter");
+  const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
     statusFilterParam === "blocked" ? "blocked" : "all";
 
@@ -63,6 +64,7 @@ export const EditorPage: React.FC = () => {
   const [hostGateProgress, setHostGateProgress] = useState<BatchValidationProgress | null>(null);
   const [hostGateInvalid, setHostGateInvalid] = useState<InvalidTrackEntry[]>([]);
   const backgroundVerifyRef = useRef<string | null>(null);
+  const autostartMatchRef = useRef(false);
 
   const { handleAutoFixBlocked, isMatching: isAutoFixing } = useAutoFixBlocked(deck, {
     onDeckUpdate: setDeck,
@@ -126,6 +128,59 @@ export const EditorPage: React.FC = () => {
     };
   }, [deck?.id, deck?.tracks.length, isValidating, isMatching, isAutoFixing, updateDeck]);
 
+  const handleAutoMatchAll = useCallback(async () => {
+    if (!deck) return;
+
+    setIsMatching(true);
+    cancelMatchingRef.current = false;
+
+    try {
+      const updatedTracks = await batchMatchTracks(
+        deck.tracks,
+        2,
+        (progress, updatedTrack) => {
+          setMatchProgress(progress);
+          setDeck((current) => {
+            if (!current) return null;
+            const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
+            const nextDeck = { ...current, tracks: nextTracks };
+            updateDeck(nextDeck);
+            return nextDeck;
+          });
+        },
+        () => cancelMatchingRef.current
+      );
+
+      setDeck((current) => {
+        if (!current) return null;
+        const finalDeck = { ...current, tracks: updatedTracks };
+        updateDeck(finalDeck);
+        return finalDeck;
+      });
+    } catch (err) {
+      console.error("Batch match error:", err);
+    } finally {
+      setIsMatching(false);
+      setMatchProgress(null);
+    }
+  }, [deck, updateDeck]);
+
+  useEffect(() => {
+    if (!deck || !autostartMatch || autostartMatchRef.current) return;
+    if (isMatching || isAutoFixing || isValidating) return;
+
+    const hasPending = deck.tracks.some((track) => track.matchStatus === "pending");
+    autostartMatchRef.current = true;
+    setSearchParams((params) => {
+      params.delete("autostart");
+      return params;
+    }, { replace: true });
+
+    if (hasPending) {
+      void handleAutoMatchAll();
+    }
+  }, [deck, autostartMatch, isMatching, isAutoFixing, isValidating, setSearchParams, handleAutoMatchAll]);
+
   if (!deck) {
     return (
       <Window title="Deck Editor">
@@ -177,38 +232,6 @@ export const EditorPage: React.FC = () => {
     const newDeck = { ...deck, tracks: [...fresh, ...deck.tracks] };
     setDeck(newDeck);
     updateDeck(newDeck);
-  };
-
-  const handleAutoMatchAll = async () => {
-    setIsMatching(true);
-    cancelMatchingRef.current = false;
-
-    try {
-      const updatedTracks = await batchMatchTracks(
-        deck.tracks,
-        2,
-        (progress, updatedTrack) => {
-          setMatchProgress(progress);
-          setDeck((current) => {
-            if (!current) return null;
-            const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
-            const nextDeck = { ...current, tracks: nextTracks };
-            updateDeck(nextDeck);
-            return nextDeck;
-          });
-        },
-        () => cancelMatchingRef.current
-      );
-
-      const finalDeck = { ...deck, tracks: updatedTracks };
-      setDeck(finalDeck);
-      updateDeck(finalDeck);
-    } catch (err) {
-      console.error("Batch match error:", err);
-    } finally {
-      setIsMatching(false);
-      setMatchProgress(null);
-    }
   };
 
   const handleVerifyAllAudio = async () => {

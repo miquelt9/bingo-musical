@@ -13,6 +13,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
   - Search a song or artist with public catalog autocomplete (iTunes, then Deezer/MusicBrainz).
   - Selecting a song searches YouTube with `Artist Title official audio`.
   - Paste a YouTube video or playlist URL if you already have the clip.
+  - Connect Spotify to import playlists you own or collaborate on (YouTube matching runs automatically).
 - 🔍 **Smart YouTube Matcher:**
   - Automated fallback search across public Invidious & Piped instances (no YouTube API token required).
   - Direct 1-click manual YouTube link or Video ID override with instant thumbnail validation.
@@ -43,24 +44,34 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
 npm install
 ```
 
-### 2. Create a deck (no Spotify needed)
+### 2. Create a deck
 
 1. Search a song or artist (autocomplete from iTunes/Deezer), pick the title, then choose the YouTube clip, or
 2. Paste a bulk song list (`Artist - Title`, one per line), or
-3. Import a previously exported JSON deck / use the sample deck.
+3. Connect Spotify on the home page and import one of your playlists, or
+4. Import a previously exported JSON deck / use the sample deck.
 
-Then open **Editor**, run **Auto-match YouTube**, trim clips, print cards, and host the game.
+Then open **Editor**, trim clips if needed, print cards, and host the game. Spotify imports auto-start YouTube matching.
 
-Spotify Web API is optional. New personal Spotify apps require Premium and are capped at 5 allowlisted users, so it is not the default path.
+### 3. Spotify (optional, for deployers)
 
-### 3. Run Development Server
+End users do **not** need a Spotify Developer account. The site maintainer configures Spotify once:
+
+1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Add your site redirect URI (e.g. `https://<user>.github.io/bingo-musical/` for GitHub Pages).
+3. Set `VITE_SPOTIFY_CLIENT_ID` in `.env` locally or as a GitHub Actions secret for production builds.
+4. While the app is in Development Mode, add each user's Spotify email under **Users and Access**.
+
+Users then click **Connect with Spotify** on the home page and pick a playlist. Playback still uses YouTube only.
+
+### 4. Run Development Server
 ```bash
 npm run dev
 ```
 
 Visit [http://127.0.0.1:5173](http://127.0.0.1:5173) in your desktop browser.
 
-### 4. Build for Production
+### 5. Build for Production
 ```bash
 npm run build
 ```

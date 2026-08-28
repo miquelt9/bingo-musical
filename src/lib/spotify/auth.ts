@@ -1,6 +1,5 @@
 import { createPkcePair, consumeVerifier } from "./pkce";
 
-const CLIENT_ID_STORAGE_KEY = "bingo-musical:spotify-client-id";
 const AUTH_TOKEN_STORAGE_KEY = "bingo-musical:spotify-auth";
 const SCOPES = "playlist-read-private playlist-read-collaborative";
 
@@ -10,20 +9,12 @@ export interface StoredAuthData {
   expiresAt: number; // timestamp in ms
 }
 
-export function getStoredClientId(): string {
-  const custom = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
-  if (custom && custom.trim()) {
-    return custom.trim();
-  }
+export function getClientId(): string {
   return (import.meta.env.VITE_SPOTIFY_CLIENT_ID || "").trim();
 }
 
-export function setStoredClientId(clientId: string): void {
-  if (!clientId || !clientId.trim()) {
-    localStorage.removeItem(CLIENT_ID_STORAGE_KEY);
-  } else {
-    localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId.trim());
-  }
+export function isSpotifyConfigured(): boolean {
+  return Boolean(getClientId());
 }
 
 export function getRedirectUri(): string {
@@ -55,10 +46,10 @@ export function clearStoredAuth(): void {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
-export async function beginLogin(customClientId?: string): Promise<void> {
-  const clientId = customClientId || getStoredClientId();
+export async function beginLogin(): Promise<void> {
+  const clientId = getClientId();
   if (!clientId) {
-    throw new Error("Spotify Client ID is not configured. Please set it in Settings.");
+    throw new Error("Spotify is not configured on this deployment.");
   }
 
   const { challenge } = await createPkcePair();
@@ -73,10 +64,10 @@ export async function beginLogin(customClientId?: string): Promise<void> {
   window.location.assign(url.toString());
 }
 
-export async function exchangeCode(code: string, customClientId?: string): Promise<StoredAuthData> {
-  const clientId = customClientId || getStoredClientId();
+export async function exchangeCode(code: string): Promise<StoredAuthData> {
+  const clientId = getClientId();
   if (!clientId) {
-    throw new Error("Missing Spotify Client ID");
+    throw new Error("Spotify is not configured on this deployment.");
   }
 
   const verifier = consumeVerifier();
@@ -114,10 +105,10 @@ export async function exchangeCode(code: string, customClientId?: string): Promi
   return authData;
 }
 
-export async function refreshAccessToken(refreshToken: string, customClientId?: string): Promise<StoredAuthData> {
-  const clientId = customClientId || getStoredClientId();
+export async function refreshAccessToken(refreshToken: string): Promise<StoredAuthData> {
+  const clientId = getClientId();
   if (!clientId) {
-    throw new Error("Missing Spotify Client ID");
+    throw new Error("Spotify is not configured on this deployment.");
   }
 
   const body = new URLSearchParams({
@@ -140,7 +131,7 @@ export async function refreshAccessToken(refreshToken: string, customClientId?: 
   const data = await res.json();
   const authData: StoredAuthData = {
     accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken, // fallback to current if omitted
+    refreshToken: data.refresh_token || refreshToken,
     expiresAt: Date.now() + data.expires_in * 1000 - 60000,
   };
 

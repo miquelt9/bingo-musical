@@ -5,6 +5,8 @@ import { useDeck } from "../state/DeckContext";
 import { parseSongList } from "../lib/tracks";
 import { getDeckById } from "../lib/storage/decks";
 import { SongSearch } from "../components/tracks/SongSearch";
+import { SpotifyPlaylistPicker } from "../components/spotify/SpotifyPlaylistPicker";
+import { isSpotifyConfigured } from "../lib/spotify/auth";
 import { Deck, Track } from "../types/deck";
 import { getUnplayableTracks } from "../lib/youtube/validator";
 import { canStartGame } from "../lib/youtube/playabilityGate";
@@ -21,6 +23,7 @@ import {
   Trash2,
   Share2,
   AlertCircle,
+  ListMusic,
 } from "lucide-react";
 
 export const HomePage: React.FC = () => {
@@ -295,6 +298,20 @@ export const HomePage: React.FC = () => {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{ingestError}</span>
               </div>
+            )}
+
+            {isSpotifyConfigured() && (
+              <Window
+                title={
+                  <span className="inline-flex items-center gap-2">
+                    <ListMusic className="w-4 h-4" />
+                    Import from Spotify
+                  </span>
+                }
+                className="mt-4"
+              >
+                <SpotifyPlaylistPicker />
+              </Window>
             )}
           </div>
 

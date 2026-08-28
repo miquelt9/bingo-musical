@@ -5,19 +5,17 @@ import {
   beginLogin,
   exchangeCode,
   clearStoredAuth,
-  getStoredClientId,
-  setStoredClientId,
+  isSpotifyConfigured,
 } from "../lib/spotify/auth";
 
 interface AuthContextType {
+  isConfigured: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   accessToken: string | null;
-  clientId: string;
   error: string | null;
   login: () => Promise<void>;
   logout: () => void;
-  updateClientId: (newId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,20 +24,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [clientId, setClientId] = useState<string>(getStoredClientId());
 
   const initAuth = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
-    // 1. Check if returning from Spotify OAuth redirect with ?code=
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const errorParam = params.get("error");
 
     if (errorParam) {
       setError(`Spotify login was denied or failed: ${errorParam}`);
-      // Clean query string
       const cleanUrl = window.location.origin + window.location.pathname + window.location.hash;
       window.history.replaceState({}, document.title, cleanUrl);
       setIsLoading(false);
@@ -48,9 +43,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (code) {
       try {
-        const authData = await exchangeCode(code, clientId);
+        const authData = await exchangeCode(code);
         setAccessToken(authData.accessToken);
-        // Strip code parameter from URL without reloading
         const cleanUrl = window.location.origin + window.location.pathname + window.location.hash;
         window.history.replaceState({}, document.title, cleanUrl);
         setIsLoading(false);
@@ -63,7 +57,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Check existing token in storage
     const stored = getStoredAuth();
     if (stored) {
       const validToken = await getValidAccessToken();
@@ -73,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setIsLoading(false);
-  }, [clientId]);
+  }, []);
 
   useEffect(() => {
     initAuth();
@@ -82,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async () => {
     setError(null);
     try {
-      await beginLogin(clientId);
+      await beginLogin();
     } catch (err) {
       setError((err as Error).message || "Failed to initialize Spotify login");
       throw err;
@@ -94,22 +87,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAccessToken(null);
   };
 
-  const updateClientId = (newId: string) => {
-    setStoredClientId(newId);
-    setClientId(newId);
-  };
-
   return (
     <AuthContext.Provider
       value={{
+        isConfigured: isSpotifyConfigured(),
         isAuthenticated: Boolean(accessToken),
         isLoading,
         accessToken,
-        clientId,
         error,
         login,
         logout,
-        updateClientId,
       }}
     >
       {children}

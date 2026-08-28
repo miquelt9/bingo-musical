@@ -1,23 +1,20 @@
-import React, { useState, useEffect } from "react";
-import { Button, Group, Input, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
+import React, { useState } from "react";
+import { Button, Group, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
 import { useAuth } from "../state/AuthContext";
 import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
 import { useToast } from "../state/ToastContext";
-import { getRedirectUri } from "../lib/spotify/auth";
 import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
 import {
-  Key,
-  Copy,
+  ListMusic,
   Check,
   ExternalLink,
   ShieldCheck,
   RotateCcw,
   LogIn,
   LogOut,
-  Info,
   Monitor,
   Moon,
   Sun,
@@ -26,34 +23,12 @@ import {
 } from "lucide-react";
 
 export const SettingsPage: React.FC = () => {
-  const { clientId, updateClientId, isAuthenticated, login, logout, error } = useAuth();
+  const { isConfigured, isAuthenticated, login, logout, error } = useAuth();
   const { refreshDecks } = useDeck();
   const { theme, setTheme } = useTheme();
   const { showToast } = useToast();
 
-  const [inputClientId, setInputClientId] = useState(clientId);
-  const [copiedUri, setCopiedUri] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
-
-  useEffect(() => {
-    setInputClientId(clientId);
-  }, [clientId]);
-
-  const redirectUri = getRedirectUri();
-
-  const handleSaveClientId = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateClientId(inputClientId);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
-  };
-
-  const handleCopyUri = () => {
-    navigator.clipboard.writeText(redirectUri);
-    setCopiedUri(true);
-    setTimeout(() => setCopiedUri(false), 2500);
-  };
 
   const handleResetSampleDeck = () => {
     saveStoredDecks([SAMPLE_POP_HITS_DECK]);
@@ -69,8 +44,8 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      <Window title="App Settings & Integrations">
-        <p className="text-sm mb-2">Configure your Spotify Client ID and local app options.</p>
+      <Window title="App Settings">
+        <p className="text-sm mb-2">Appearance, integrations, and local data options.</p>
       </Window>
 
       <Window
@@ -112,97 +87,32 @@ export const SettingsPage: React.FC = () => {
         </Group>
       </Window>
 
-      <Window
-        title={
-          <span className="inline-flex items-center gap-2">
-            <Key className="w-4 h-4" />
-            Spotify PKCE Authentication
-          </span>
-        }
-      >
-        <p className="text-xs mb-3">
-          {isAuthenticated ? "Connected" : "Not Connected"} — Direct browser Authorization Code flow with
-          PKCE (no client secret needed).
-        </p>
-
-        <div className="pc-bevel-inset p-3 text-xs space-y-2 mb-4">
-          <p className="font-semibold">Spotify is optional and blocked for most personal apps.</p>
-          <p>
-            Spotify requires a Premium developer account and limits new apps to 5 allowlisted users. Use a
-            pasted song list or a YouTube playlist instead.
+      {isConfigured && (
+        <Window
+          title={
+            <span className="inline-flex items-center gap-2">
+              <ListMusic className="w-4 h-4" />
+              Spotify
+            </span>
+          }
+        >
+          <p className="text-xs mb-3">
+            {isAuthenticated ? "Connected" : "Not connected"} — import playlists you own or collaborate on.
+            Playback still uses YouTube; Spotify is metadata only.
           </p>
-        </div>
 
-        <div className="pc-bevel-inset p-3 text-xs space-y-3 mb-4">
-          <div className="flex items-center gap-2 font-bold">
-            <Info className="w-4 h-4" />
-            Optional Spotify Client ID (Premium required):
+          <div className="pc-bevel-inset p-3 text-xs space-y-2 mb-4">
+            <p>
+              While the app is in Spotify Development Mode, only allowlisted Spotify accounts can connect.
+              If login fails, ask the site maintainer to add your Spotify email to the app.
+            </p>
           </div>
-          <ol className="list-decimal list-inside space-y-1.5 pl-1">
-            <li>
-              Go to the{" "}
-              <a
-                href="https://developer.spotify.com/dashboard"
-                target="_blank"
-                rel="noreferrer"
-                className="pc-link inline-flex items-center gap-0.5"
-              >
-                Spotify Developer Dashboard
-                <ExternalLink className="w-3 h-3" />
-              </a>{" "}
-              and log in.
-            </li>
-            <li>
-              Click <strong>Create app</strong> (name it e.g. <em>Musical Bingo Creator</em>).
-            </li>
-            <li>
-              Under <strong>Redirect URIs</strong> in your Spotify app settings, add the exact URI below.
-            </li>
-            <li>
-              Copy the <strong>Client ID</strong> and paste it into the field below.
-            </li>
-          </ol>
-        </div>
 
-        <label className="block text-xs font-bold mb-1.5">
-          Your Spotify App Redirect URI (Must match exactly in Spotify Dashboard):
-        </label>
-        <div className="flex items-center gap-2 mb-4">
-          <Input type="text" readOnly value={redirectUri} className="flex-1 font-mono text-xs" />
-          <Button type="button" onClick={handleCopyUri}>
-            {copiedUri ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copiedUri ? "Copied!" : "Copy URI"}
-          </Button>
-        </div>
-
-        <form onSubmit={handleSaveClientId} className="space-y-4">
-          <label className="block text-xs font-bold">
-            Custom Spotify Client ID
-            <Input
-              type="text"
-              className="w-full mt-1 font-mono"
-              value={inputClientId}
-              onChange={(e) => setInputClientId(e.target.value)}
-              placeholder="e.g. 3a7b9c1d2e5f8a4b6c0d..."
-            />
-          </label>
-
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Button type="submit" variant="primary">
-                Save Client ID
-              </Button>
-              {savedSuccess && (
-                <span className="text-xs font-semibold inline-flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  Saved to localStorage!
-                </span>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
             {isAuthenticated ? (
               <Button type="button" onClick={logout}>
                 <LogOut className="w-4 h-4" />
-                Log Out from Spotify
+                Disconnect Spotify
               </Button>
             ) : (
               <Button type="button" onClick={() => login()}>
@@ -212,9 +122,9 @@ export const SettingsPage: React.FC = () => {
             )}
           </div>
 
-          {error && <div className="pc-bevel-inset p-3 text-xs">{error}</div>}
-        </form>
-      </Window>
+          {error && <div className="pc-bevel-inset p-3 text-xs mt-4">{error}</div>}
+        </Window>
+      )}
 
       <Window
         title={
