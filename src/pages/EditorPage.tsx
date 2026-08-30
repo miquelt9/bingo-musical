@@ -61,6 +61,7 @@ export const EditorPage: React.FC = () => {
   const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
+  const [addSongRainbowDismissed, setAddSongRainbowDismissed] = useState(false);
   const [hostGateOpen, setHostGateOpen] = useState(false);
   const [hostGateChecking, setHostGateChecking] = useState(false);
   const [hostGateProgress, setHostGateProgress] = useState<BatchValidationProgress | null>(null);
@@ -97,6 +98,10 @@ export const EditorPage: React.FC = () => {
 
   useEffect(() => {
     blockedToastShownRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    setAddSongRainbowDismissed(false);
   }, [id]);
 
   useEffect(() => {
@@ -365,6 +370,12 @@ export const EditorPage: React.FC = () => {
   const blockedCount = getUnplayableTracks(deck.tracks).length;
   const playableCount = deck.tracks.length - blockedCount;
   const isTrackBusy = isMatching || isAutoFixing;
+  const showAddSongRainbow = deck.tracks.length === 0 && !addSongRainbowDismissed;
+
+  const handleOpenAddTrack = () => {
+    setAddSongRainbowDismissed(true);
+    setShowAddTrackModal(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -467,10 +478,14 @@ export const EditorPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => setShowAddTrackModal(true)}>
-              <Plus className="w-4 h-4" />
-              Add song
-            </Button>
+            <span
+              className={`pc-rainbow-attention${showAddSongRainbow ? " pc-rainbow-attention--active" : ""}`}
+            >
+              <Button type="button" variant="primary" onClick={handleOpenAddTrack}>
+                <Plus className="w-4 h-4" />
+                Add song
+              </Button>
+            </span>
           </div>
         </div>
       </Window>
@@ -495,16 +510,6 @@ export const EditorPage: React.FC = () => {
           cancelValidationRef.current = true;
         }}
       />
-
-      {deck.tracks.length === 0 && (
-        <Window title="Get Started">
-          <p className="text-sm mb-3">This deck has no songs yet. Add your first song to start building a bingo game.</p>
-          <Button type="button" variant="primary" onClick={() => setShowAddTrackModal(true)}>
-            <Plus className="w-4 h-4" />
-            Add your first song
-          </Button>
-        </Window>
-      )}
 
       {hostGateOpen && (hostGateChecking || hostGateInvalid.length > 0) && (
         <PcModal

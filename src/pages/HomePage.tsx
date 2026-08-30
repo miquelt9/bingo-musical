@@ -101,6 +101,7 @@ export const HomePage: React.FC = () => {
           ).length;
           const attentionCount = getUnplayableTracks(deck.tracks).length;
           const playReady = canStartGame(deck.tracks);
+          const cardsDisabledTitle = "Fix song issues in Edit before printing cards";
 
           const statsLine = (
             <p className="home-deck-card-stats text-xs">
@@ -129,6 +130,8 @@ export const HomePage: React.FC = () => {
               icon: <Printer className="w-4 h-4" />,
               label: "Cards",
               onClick: () => navigate(`/deck/${deck.id}/cards`),
+              disabled: !playReady,
+              title: playReady ? undefined : cardsDisabledTitle,
             },
             {
               icon: <Trash2 className="w-4 h-4" />,
@@ -234,13 +237,30 @@ export const HomePage: React.FC = () => {
                   <Edit3 className="w-3.5 h-3.5" />
                   Edit
                 </Link>
-                <Link
-                  to={`/deck/${deck.id}/cards`}
-                  className="pc-button home-deck-card-action-cards"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Cards
-                </Link>
+                {playReady ? (
+                  <Link
+                    to={`/deck/${deck.id}/cards`}
+                    className="pc-button home-deck-card-action-cards"
+                    title="Print bingo cards"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Cards
+                  </Link>
+                ) : (
+                  <span title={cardsDisabledTitle} className="contents">
+                    <Link
+                      to="#"
+                      className="pc-button home-deck-card-action-cards opacity-60 pointer-events-none"
+                      aria-disabled
+                      tabIndex={-1}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Cards
+                      {attentionCount > 0 ? " ⚠" : ""}
+                    </Link>
+                  </span>
+                )}
                 <Link
                   to={playReady ? `/deck/${deck.id}/play` : "#"}
                   className={`pc-button home-deck-card-action-play ${playReady ? "pc-button--primary" : "opacity-60 pointer-events-none"}`}

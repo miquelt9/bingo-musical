@@ -39,6 +39,16 @@ export interface PlayerPlaybackState {
 type StateListener = (state: PlayerPlaybackState) => void;
 type ClipEndHandler = () => void;
 
+export interface ClipPlaybackOptions {
+  /** Ramp volume from 0 at clip start (e.g. first song of a hosted game). */
+  fadeIn?: boolean;
+  /** Ramp volume to 0 before clip end (e.g. last song / game over). */
+  fadeOut?: boolean;
+}
+
+export const DEFAULT_INTRO_FADE_MS = 1500;
+export const DEFAULT_OUTRO_FADE_MS = 2000;
+
 interface PlayerSlot {
   wrapperId: string;
   container: HTMLElement;
@@ -72,6 +82,13 @@ let crossfadeInProgress = false;
 let crossfadeRafId: number | null = null;
 let visibleSlotIndex = 0;
 let muteApplyRaf: number | null = null;
+
+let introFadeMs = DEFAULT_INTRO_FADE_MS;
+let outroFadeMs = DEFAULT_OUTRO_FADE_MS;
+let playbackFadeIn = false;
+let playbackFadeOut = false;
+let outroFadeInProgress = false;
+let volumeRampRafId: number | null = null;
 
 let currentState: PlayerPlaybackState = {
   isReady: false,
@@ -170,6 +187,11 @@ export function getVisiblePlayerSlotIndex(): number {
 export function setCrossfadeConfig(overlapMs: number, enabled: boolean): void {
   crossfadeOverlapMs = Math.max(0, Math.min(3000, overlapMs));
   crossfadeEnabled = enabled;
+}
+
+export function setPlaybackFadeConfig(introMs: number, outroMs: number): void {
+  introFadeMs = Math.max(0, Math.min(5000, introMs));
+  outroFadeMs = Math.max(0, Math.min(5000, outroMs));
 }
 
 export function loadYoutubeApi(): Promise<void> {
@@ -298,6 +320,7 @@ export async function mountPlayer(elementId: string): Promise<YT.Player> {
 
 function destroyPlayers(): void {
   cancelCrossfade();
+  cancelVolumeRamp();
   cancelMuteApply();
   stopPoll();
   if (slots) {
@@ -440,6 +463,87 @@ function cancelCrossfade(): void {
   crossfadeInProgress = false;
 }
 
+function cancelVolumeRamp(): void {
+  if (volumeRampRafId !== null) {
+    cancelAnimationFrame(volumeRampRafId);
+    volumeRampRafId = null;
+  }
+  outroFadeInProgress = false;
+}
+
+function getTargetVolume(): number {
+  return currentState.isMuted ? 0 : currentState.volume;
+}
+
+function applyClipPlaybackOptions(options?: ClipPlaybackOptions): void {
+  if (!options) return;
+  if (options.fadeIn != null) playbackFadeIn = options.fadeIn;
+  if (options.fadeOut != null) playbackFadeOut = options.fadeOut;
+  outroFadeInProgress = false;
+}
+
+function rampSlotVolume(
+  slot: PlayerSlot,
+  fromVol: number,
+  toVol: number,
+  durationMs: number,
+  onComplete?: () => void
+): void {
+  cancelVolumeRamp();
+  if (durationMs <= 0 || Math.abs(fromVol - toVol) < 0.5) {
+    setSlotVolume(slot, toVol);
+    onComplete?.();
+    return;
+  }
+
+  const t0 = performance.now();
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - t0) / durationMs);
+    const eased = easeInOut(t);
+    setSlotVolume(slot, lerp(fromVol, toVol, eased));
+
+    if (t < 1) {
+      volumeRampRafId = requestAnimationFrame(tick);
+      return;
+    }
+
+    volumeRampRafId = null;
+    onComplete?.();
+  };
+
+  volumeRampRafId = requestAnimationFrame(tick);
+}
+
+function startIntroFade(slot: PlayerSlot): void {
+  if (!playbackFadeIn || introFadeMs <= 0 || crossfadeInProgress) return;
+  const target = getTargetVolume();
+  setSlotVolume(slot, 0);
+  rampSlotVolume(slot, 0, target, introFadeMs);
+}
+
+function maybeStartOutroFade(remainingSec: number): boolean {
+  if (!playbackFadeOut || outroFadeInProgress || crossfadeInProgress || !activeClip) {
+    return false;
+  }
+
+  const remainingMs = remainingSec * 1000;
+  if (remainingMs > outroFadeMs + 50) return false;
+
+  const active = getActiveSlot();
+  if (!active?.player) return false;
+
+  outroFadeInProgress = true;
+  stopPoll();
+
+  const fadeDuration = Math.max(remainingMs, 100);
+  const startVol = getTargetVolume();
+  rampSlotVolume(active, startVol, 0, fadeDuration, () => {
+    outroFadeInProgress = false;
+    finishClip();
+  });
+  return true;
+}
+
 function getEffectiveOverlapMs(clip: Clip): number {
   if (!crossfadeEnabled || crossfadeOverlapMs <= 0) return 0;
   const clipDurationMs = Math.max(0, clip.endTime - clip.startTime) * 1000;
@@ -538,6 +642,7 @@ function startCrossfade(incomingClip: Clip): void {
   if (overlapMs <= 0) return;
 
   crossfadeInProgress = true;
+  cancelVolumeRamp();
   incoming.clip = incomingClip;
 
   const incomingIndex = activeSlotIndex === 0 ? 1 : 0;
@@ -647,6 +752,10 @@ function startPoll() {
 
       maybeTriggerCrossfade(remaining);
 
+      if (maybeStartOutroFade(remaining)) {
+        return;
+      }
+
       if (cur >= clipEnd - 0.15) {
         if (chainClip && !chainEndFired && !crossfadeInProgress) {
           finishClip();
@@ -691,7 +800,11 @@ export function clearPreload(): void {
   if (standby) standby.preloadedClip = null;
 }
 
-export function continueClipPlayback(clip: Clip, handleEnd?: ClipEndHandler): boolean {
+export function continueClipPlayback(
+  clip: Clip,
+  handleEnd?: ClipEndHandler,
+  options?: ClipPlaybackOptions
+): boolean {
   if (currentState.currentClip?.trackId !== clip.trackId) return false;
   if (
     currentState.state !== "playing" &&
@@ -702,6 +815,7 @@ export function continueClipPlayback(clip: Clip, handleEnd?: ClipEndHandler): bo
   }
 
   handoffChainToClip(clip, handleEnd ?? null);
+  applyClipPlaybackOptions(options);
   activeClip = clip;
   const active = getActiveSlot();
   if (active) active.clip = clip;
@@ -724,14 +838,19 @@ export function continueClipPlayback(clip: Clip, handleEnd?: ClipEndHandler): bo
   return true;
 }
 
-export function activatePreloadedClip(clip: Clip, handleEnd?: ClipEndHandler): boolean {
-  if (continueClipPlayback(clip, handleEnd)) return true;
+export function activatePreloadedClip(
+  clip: Clip,
+  handleEnd?: ClipEndHandler,
+  options?: ClipPlaybackOptions
+): boolean {
+  if (continueClipPlayback(clip, handleEnd, options)) return true;
 
   const standby = getStandbySlot();
   if (!standby?.player) return false;
   if (standby.preloadedClip && standby.preloadedClip.trackId !== clip.trackId) return false;
 
   cancelCrossfade();
+  cancelVolumeRamp();
 
   const outgoing = getActiveSlot();
   if (outgoing?.player) {
@@ -751,12 +870,20 @@ export function activatePreloadedClip(clip: Clip, handleEnd?: ClipEndHandler): b
   chainClip = clip;
   chainEndFired = false;
   onClipEndCallback = handleEnd ?? null;
+  applyClipPlaybackOptions(options);
 
   currentState.currentClip = clip;
   currentState.errorMessage = null;
   updateActiveElementId();
   setVisibleSlot(activeSlotIndex);
-  applyVolumeToBothSlots();
+
+  if (playbackFadeIn && introFadeMs > 0) {
+    setSlotVolume(standby, 0);
+    const other = getStandbySlot();
+    if (other) setSlotVolume(other, 0);
+  } else {
+    applyVolumeToBothSlots();
+  }
 
   try {
     if (!isClipLoadedOnPlayer(standby.player, clip)) {
@@ -770,6 +897,9 @@ export function activatePreloadedClip(clip: Clip, handleEnd?: ClipEndHandler): b
     standby.player.playVideo();
     currentState.state = "playing";
     startPoll();
+    if (playbackFadeIn && introFadeMs > 0) {
+      startIntroFade(standby);
+    }
   } catch (err) {
     console.error("Error activating preloaded clip:", err);
     return false;
@@ -790,16 +920,21 @@ export function updateClipEndHandler(clip: Clip, handleEnd?: ClipEndHandler): vo
   notifyListeners();
 }
 
-export function playClip(clip: Clip, handleEnd?: ClipEndHandler): void {
+export function playClip(
+  clip: Clip,
+  handleEnd?: ClipEndHandler,
+  options?: ClipPlaybackOptions
+): void {
   const active = getActiveSlot();
   if (!active?.player) {
     console.warn("Player not yet mounted");
     return;
   }
 
-  if (continueClipPlayback(clip, handleEnd)) return;
+  if (continueClipPlayback(clip, handleEnd, options)) return;
 
   cancelCrossfade();
+  cancelVolumeRamp();
   clearPreload();
 
   const standby = getStandbySlot();
@@ -818,6 +953,7 @@ export function playClip(clip: Clip, handleEnd?: ClipEndHandler): void {
   chainClip = clip;
   chainEndFired = false;
   onClipEndCallback = handleEnd ?? null;
+  applyClipPlaybackOptions(options);
   active.clip = clip;
 
   currentState.currentClip = clip;
@@ -826,11 +962,21 @@ export function playClip(clip: Clip, handleEnd?: ClipEndHandler): void {
   currentState.remainingTime = Math.max(0, clip.endTime - clip.startTime);
   updateActiveElementId();
   setVisibleSlot(activeSlotIndex);
-  applyVolumeToBothSlots();
+
+  if (playbackFadeIn && introFadeMs > 0) {
+    setSlotVolume(active, 0);
+    const standby = getStandbySlot();
+    if (standby) setSlotVolume(standby, 0);
+  } else {
+    applyVolumeToBothSlots();
+  }
 
   try {
     loadClipOnPlayer(active.player, clip);
     active.player.playVideo();
+    if (playbackFadeIn && introFadeMs > 0) {
+      startIntroFade(active);
+    }
   } catch (err) {
     console.error("Error calling loadVideoById:", err);
   }
@@ -839,8 +985,11 @@ export function playClip(clip: Clip, handleEnd?: ClipEndHandler): void {
 }
 
 export function finishClip(clearClip = true): void {
+  if (outroFadeInProgress) return;
+
   stopPoll();
   cancelCrossfade();
+  cancelVolumeRamp();
 
   const active = getActiveSlot();
   if (active?.player) {
@@ -861,6 +1010,8 @@ export function finishClip(clearClip = true): void {
     activeClip = null;
     chainClip = null;
     chainEndFired = false;
+    playbackFadeIn = false;
+    playbackFadeOut = false;
     if (active) active.clip = null;
 
     notifyListeners();
@@ -871,6 +1022,7 @@ export function finishClip(clearClip = true): void {
 export function pausePlayback(): void {
   stopPoll();
   cancelCrossfade();
+  cancelVolumeRamp();
   if (slots) {
     for (const slot of slots) {
       try {
@@ -924,6 +1076,7 @@ export function resumePlayback(): void {
 export function stopPlayback(): void {
   stopPoll();
   cancelCrossfade();
+  cancelVolumeRamp();
   if (slots) {
     for (const slot of slots) {
       try {
@@ -939,6 +1092,8 @@ export function stopPlayback(): void {
   chainClip = null;
   chainEndFired = false;
   onClipEndCallback = null;
+  playbackFadeIn = false;
+  playbackFadeOut = false;
   currentState.currentClip = null;
   currentState.state = "unstarted";
   currentState.progress = 0;
@@ -954,7 +1109,7 @@ export function setVolume(vol: number): void {
   } else {
     currentState.isMuted = true;
   }
-  if (!crossfadeInProgress) {
+  if (!crossfadeInProgress && volumeRampRafId === null) {
     applyVolumeToBothSlots();
     if (getActiveSlot()?.player) {
       try {

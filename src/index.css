@@ -194,103 +194,6 @@
   border-color: var(--pc-color-warning);
 }
 
-.pc-blocked-songs-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: min(52vw, 520px);
-  padding: 4px 8px;
-  border: 2px solid var(--pc-color-warning);
-  background: var(--pc-color-warning-bg);
-  color: var(--pc-color-warning);
-  box-shadow:
-    inset 1px 1px 0 color-mix(in srgb, var(--pc-color-warning-bg) 70%, white),
-    inset -1px -1px 0 color-mix(in srgb, var(--pc-color-warning) 60%, black);
-  flex-shrink: 1;
-  min-width: 0;
-}
-
-.pc-blocked-songs-notice-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: var(--pc-color-warning);
-}
-
-.pc-blocked-songs-notice-copy {
-  min-width: 0;
-  line-height: 1.2;
-}
-
-.pc-blocked-songs-notice-title {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pc-blocked-songs-notice-detail {
-  margin: 0;
-  font-size: 10px;
-  opacity: 0.9;
-  display: none;
-}
-
-.pc-blocked-songs-notice-action {
-  flex-shrink: 0;
-  font-size: 11px;
-  padding: 2px 8px;
-  gap: 4px;
-  border-color: var(--pc-color-warning);
-  background: var(--pc-color-warning-bg);
-  color: var(--pc-color-warning);
-}
-
-@media (min-width: 900px) {
-  .pc-blocked-songs-notice {
-    max-width: min(42vw, 640px);
-  }
-
-  .pc-blocked-songs-notice-detail {
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
-
-.pc-blocked-songs-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 4px 8px;
-  border: 2px solid var(--pc-color-warning);
-  background: var(--pc-color-warning-bg);
-  color: var(--pc-color-warning);
-  box-shadow:
-    inset 1px 1px 0 color-mix(in srgb, var(--pc-color-warning-bg) 70%, white),
-    inset -1px -1px 0 color-mix(in srgb, var(--pc-color-warning) 60%, black);
-  cursor: pointer;
-  font: inherit;
-}
-
-.pc-blocked-songs-badge-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.pc-blocked-songs-badge-count {
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 .pc-overflow-menu {
   position: relative;
   display: inline-flex;
@@ -356,6 +259,15 @@
 .pc-overflow-menu-item--destructive:focus-visible {
   background: var(--pc-color-danger, #cc0000);
   color: #ffffff;
+}
+
+.pc-overflow-menu-item--disabled,
+.pc-overflow-menu-item--disabled:hover,
+.pc-overflow-menu-item--disabled:focus-visible {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: transparent;
+  color: inherit;
 }
 
 .pc-overflow-menu-item-icon {
@@ -767,39 +679,36 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 140px;
-  padding: 16px;
+  min-height: 152px;
+  padding: var(--pc-space-5, 16px);
   text-align: center;
-  border: 2px dashed var(--pc-border, #808080);
-  background: transparent;
+  border: 2px dashed var(--pc-bevel-dark);
+  background: color-mix(in srgb, var(--pc-chrome-bg) 35%, var(--pc-window-body-bg));
   cursor: pointer;
   color: inherit;
   font: inherit;
 }
 
 .home-deck-add:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-:root[data-theme="dark"] .home-deck-add:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--pc-button-hover-bg);
 }
 
 .home-deck-card {
   min-width: 0;
-  padding: 12px;
-  background: var(--pc-surface, #c0c0c0);
-  border: 1px solid var(--pc-border, #808080);
-  box-shadow:
-    inset 1px 1px 0 var(--pc-highlight, #ffffff),
-    inset -1px -1px 0 var(--pc-shadow, #404040);
+  padding: 20px var(--pc-space-5, 16px) 18px;
+  background: var(--pc-chrome-bg);
+  border-top: solid 1px var(--pc-bevel-dark);
+  border-left: solid 1px var(--pc-bevel-dark);
+  border-bottom: solid 1px var(--pc-bevel-light);
+  border-right: solid 1px var(--pc-bevel-light);
+  box-shadow: inset 1px 1px 0 var(--pc-bevel-inset-shadow, var(--pc-bevel-shadow));
 }
 
 .home-deck-card-body {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
 
 .home-deck-card-icon {
@@ -828,7 +737,15 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: auto auto;
   column-gap: 8px;
-  row-gap: 4px;
+  row-gap: 8px;
+}
+
+.home-deck-card-actions--desktop .home-deck-card-action-edit,
+.home-deck-card-actions--desktop .home-deck-card-action-cards,
+.home-deck-card-actions--desktop .home-deck-card-action-play {
+  justify-self: stretch;
+  justify-content: center;
+  min-width: 0;
 }
 
 .home-deck-card-toolbar--above-play {
@@ -952,7 +869,7 @@
   }
 
   .home-deck-card-body {
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
 }
 
@@ -1047,38 +964,68 @@
   margin-left: 0;
 }
 
-/* Auto-Match rainbow hint — animated border when tracks need attention */
+/* Rainbow attention hint — animated full-button fill at 45° */
 @keyframes pc-rainbow-shift {
   0% {
-    background-position: 0% 50%;
+    background-position: 0% 0%;
   }
   100% {
-    background-position: 200% 50%;
+    background-position: 200% 200%;
   }
 }
 
+.pc-rainbow-attention,
 .pc-auto-match-rainbow {
   display: inline-flex;
-  border-radius: 2px;
 }
 
-.pc-auto-match-rainbow--active {
-  padding: 2px;
-  background: linear-gradient(
-    90deg,
-    #c0392b,
-    #d35400,
-    #f1c40f,
-    #27ae60,
-    #2980b9,
-    #8e44ad,
-    #c0392b
-  );
-  background-size: 200% 100%;
-  animation: pc-rainbow-shift 4s linear infinite;
-}
-
+.pc-rainbow-attention--active > .pc-button,
 .pc-auto-match-rainbow--active > .pc-button {
-  position: relative;
-  z-index: 1;
+  --pc-rainbow-attention: linear-gradient(
+    45deg,
+    #c0392b 0%,
+    #d35400 16%,
+    #f1c40f 33%,
+    #27ae60 50%,
+    #2980b9 66%,
+    #8e44ad 83%,
+    #c0392b 100%
+  );
+  background-color: #2980b9;
+  background-image: var(--pc-rainbow-attention);
+  background-size: 200% 200%;
+  animation: pc-rainbow-shift 4s linear infinite;
+  color: #ffffff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.pc-rainbow-attention--active > .pc-button--primary,
+.pc-auto-match-rainbow--active > .pc-button--primary {
+  outline-color: rgba(255, 255, 255, 0.8);
+}
+
+.pc-rainbow-attention--active > .pc-button svg,
+.pc-auto-match-rainbow--active > .pc-button svg {
+  color: #ffffff;
+}
+
+.pc-rainbow-attention--active > .pc-button:hover,
+.pc-rainbow-attention--active > .pc-button:active,
+.pc-rainbow-attention--active > .pc-button.active,
+.pc-auto-match-rainbow--active > .pc-button:hover,
+.pc-auto-match-rainbow--active > .pc-button:active,
+.pc-auto-match-rainbow--active > .pc-button.active {
+  background-color: #2980b9;
+  background-image: var(--pc-rainbow-attention);
+  background-size: 200% 200%;
+}
+
+.pc-rainbow-attention--active > .pc-button:hover,
+.pc-auto-match-rainbow--active > .pc-button:hover {
+  filter: brightness(1.12);
+}
+
+.pc-rainbow-attention--active > .pc-button:active,
+.pc-auto-match-rainbow--active > .pc-button:active {
+  filter: brightness(0.9);
 }

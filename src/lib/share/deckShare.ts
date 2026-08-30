@@ -24,26 +24,18 @@ export function buildSharedDeckUrl(shareId: string): string {
   return `${getAppOrigin()}${getAppBasePath()}#/share/${encodeURIComponent(shareId)}`;
 }
 
+function buildShareIntro(deck: Deck): string {
+  return `Check out my "${deck.name}" musical bingo!`;
+}
+
 export function buildShareMessage(deck: Deck, shareUrl?: string): string {
-  const homeUrl = getHomePageUrl();
+  const intro = buildShareIntro(deck);
 
   if (shareUrl) {
-    return [
-      `I made a Musical Bingo deck: "${deck.name}"!`,
-      "",
-      `Open this link to use it: ${shareUrl}`,
-      "",
-      `Create your own at ${homeUrl}`,
-    ].join("\n");
+    return `${intro} ${shareUrl}`;
   }
 
-  return [
-    `I made a Musical Bingo deck: "${deck.name}"!`,
-    "",
-    "Ask me for the share link, or export the deck as JSON from Settings → Advanced options.",
-    "",
-    `Create your own at ${homeUrl}`,
-  ].join("\n");
+  return `${intro} Ask me for the link.`;
 }
 
 export async function shareDeckNative(deck: Deck, shareUrl: string): Promise<boolean> {
@@ -53,7 +45,7 @@ export async function shareDeckNative(deck: Deck, shareUrl: string): Promise<boo
 
   const shareData: ShareData = {
     title: `Musical Bingo: ${deck.name}`,
-    text: buildShareMessage(deck, shareUrl),
+    text: buildShareIntro(deck),
     url: shareUrl,
   };
 
@@ -84,6 +76,6 @@ export function getPlatformShareUrls(deck: Deck, shareUrl: string): PlatformShar
   return {
     whatsapp: `https://wa.me/?text=${encodeURIComponent(message)}`,
     telegram: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(message)}`,
-    email: `mailto:?subject=${encodeURIComponent(`Musical Bingo deck: ${deck.name}`)}&body=${encodeURIComponent(message)}`,
+    email: `mailto:?subject=${encodeURIComponent(`Musical Bingo: ${deck.name}`)}&body=${encodeURIComponent(message)}`,
   };
 }

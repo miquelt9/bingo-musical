@@ -26,7 +26,6 @@ import {
   setVolume,
   toggleMute,
 } from "../../lib/youtube/player";
-import { BlockedSongsTaskbarNotice } from "./BlockedSongsTaskbarNotice";
 import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
 
 function formatClock(date: Date) {
@@ -250,7 +249,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         )}
 
         <div className="pc-taskbar-trailing">
-          <BlockedSongsTaskbarNotice />
           <div className="pc-taskbar-clock hidden sm:block">{clock}</div>
         </div>
       </Taskbar>

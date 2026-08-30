@@ -25,6 +25,7 @@ import {
   toggleMute,
   preloadClip,
   setCrossfadeConfig,
+  setPlaybackFadeConfig,
   continueClipPlayback,
   activatePreloadedClip,
   PlayerPlaybackState,
@@ -217,6 +218,7 @@ export const HostPage: React.FC = () => {
   useEffect(() => {
     crossfadeOverlapMsRef.current = crossfadeOverlapMs;
     setCrossfadeConfig(crossfadeOverlapMs, autoCallNextOnEnd);
+    setPlaybackFadeConfig(crossfadeOverlapMs, crossfadeOverlapMs);
   }, [crossfadeOverlapMs, autoCallNextOnEnd]);
 
   useEffect(() => {
@@ -320,6 +322,9 @@ export const HostPage: React.FC = () => {
     };
 
     const clip = trackToClip(track);
+    const isFirstCall = calledHistory.length === 0;
+    const isLastCall = remaining.length === 0;
+    const playbackOpts = { fadeIn: isFirstCall, fadeOut: isLastCall };
 
     setUncalledIds(remaining);
     setCurrentCall(newEntry);
@@ -327,8 +332,11 @@ export const HostPage: React.FC = () => {
     setIsRevealed(true);
 
     if (clip) {
-      if (!continueClipPlayback(clip, onClipEnd) && !activatePreloadedClip(clip, onClipEnd)) {
-        playClip(clip, onClipEnd);
+      if (
+        !continueClipPlayback(clip, onClipEnd, playbackOpts) &&
+        !activatePreloadedClip(clip, onClipEnd, playbackOpts)
+      ) {
+        playClip(clip, onClipEnd, playbackOpts);
       }
       preloadNextTrack(remaining);
     } else if (autoCallNextOnEnd && remaining.length > 0) {

@@ -7,6 +7,8 @@ export interface OverflowMenuItem {
   label: string;
   onClick: () => void;
   destructive?: boolean;
+  disabled?: boolean;
+  title?: string;
 }
 
 interface OverflowMenuProps {
@@ -78,8 +80,13 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
               className={twMerge(
                 "pc-overflow-menu-item",
                 item.destructive && "pc-overflow-menu-item--destructive",
+                item.disabled && "pc-overflow-menu-item--disabled",
               )}
+              disabled={item.disabled}
+              aria-disabled={item.disabled || undefined}
+              title={item.title}
               onClick={() => {
+                if (item.disabled) return;
                 setOpen(false);
                 item.onClick();
               }}
