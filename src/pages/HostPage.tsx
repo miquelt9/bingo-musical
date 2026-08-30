@@ -610,10 +610,7 @@ export const HostPage: React.FC = () => {
       />
 
       <PageHeader
-        backLink={{
-          to: `/deck/${deck.id}`,
-          label: isMobile ? "Exit host" : "Exit Host Mode (Back to Editor)",
-        }}
+        back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
         primaryAction={
           currentCall ? (
             <div className="flex flex-wrap justify-end gap-2">

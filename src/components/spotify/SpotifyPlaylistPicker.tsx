@@ -110,12 +110,14 @@ export const SpotifyPlaylistPicker: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-3">
         <p className="text-xs">Pick a playlist to import. YouTube matching starts automatically in the editor.</p>
-        <Button type="button" onClick={logout} className="shrink-0">
-          <LogOut className="w-4 h-4" />
-          Disconnect
-        </Button>
+        <div className="flex justify-end">
+          <Button type="button" onClick={logout} className="w-full sm:w-auto">
+            <LogOut className="w-4 h-4" />
+            Disconnect
+          </Button>
+        </div>
       </div>
 
       {isLoadingPlaylists ? (

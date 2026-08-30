@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 interface TrackTableProps {
+  deckId?: string;
   tracks: Track[];
   onUpdateTrack: (updatedTrack: Track) => void;
   onDeleteTrack?: (trackId: string) => void;
@@ -82,7 +83,48 @@ function StatusIconBadge({
   );
 }
 
+function AutoMatchButton({
+  showRainbow,
+  className,
+  fullWidth = false,
+  disabled,
+  isMatching,
+  matchProgress,
+  totalTracks,
+  onClick,
+}: {
+  showRainbow: boolean;
+  className?: string;
+  fullWidth?: boolean;
+  disabled: boolean;
+  isMatching: boolean;
+  matchProgress: { completed: number; total: number } | null;
+  totalTracks: number;
+  onClick: () => void;
+}) {
+  return (
+    <span
+      className={`pc-auto-match-rainbow${showRainbow ? " pc-auto-match-rainbow--active" : ""}${className ? ` ${className}` : ""}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`pc-button pc-button--primary${fullWidth ? " w-full" : ""}`}
+      >
+        <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
+        <span>
+          {isMatching
+            ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || totalTracks})...`
+            : "Auto-Match All"}
+        </span>
+      </button>
+    </span>
+  );
+}
+
 export const TrackTable: React.FC<TrackTableProps> = ({
+  deckId,
   tracks,
   onUpdateTrack,
   onDeleteTrack,
@@ -106,10 +148,15 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   const [timestampEditingTrack, setTimestampEditingTrack] = useState<Track | null>(null);
   const [trackPendingDelete, setTrackPendingDelete] = useState<Track | null>(null);
   const [activeCoachmarkId, setActiveCoachmarkId] = useState<string | null>(null);
+  const [autoMatchRainbowDismissed, setAutoMatchRainbowDismissed] = useState(false);
 
   useEffect(() => {
     setStatusFilter(initialStatusFilter);
   }, [initialStatusFilter]);
+
+  useEffect(() => {
+    setAutoMatchRainbowDismissed(false);
+  }, [deckId]);
 
   const isTrackBlocked = (track: Track): boolean => {
     if (track.matchStatus === "failed") return true;
@@ -140,6 +187,13 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   const matchedCount = tracks.filter((t) => (t.matchStatus === "matched" || t.matchStatus === "manual") && !isTrackBlocked(t)).length;
   const blockedCount = tracks.filter((t) => isTrackBlocked(t)).length;
   const unmatchedCount = tracks.length - matchedCount - blockedCount;
+  const needsAttention = blockedCount > 0 || unmatchedCount > 0;
+  const showAutoMatchRainbow = needsAttention && !autoMatchRainbowDismissed;
+
+  const handleAutoMatchClick = () => {
+    setAutoMatchRainbowDismissed(true);
+    onAutoMatchAll?.();
+  };
 
   const handleTimeChange = (track: Track, field: "startTime" | "endTime", valueStr: string) => {
     const num = parseInt(valueStr, 10);
@@ -206,19 +260,16 @@ export const TrackTable: React.FC<TrackTableProps> = ({
 
             <div className="flex items-center gap-2">
               {onAutoMatchAll && (
-                <button
-                  type="button"
-                  onClick={onAutoMatchAll}
-                  disabled={isMatching || isValidating || (unmatchedCount === 0 && blockedCount === 0)}
-                  className="pc-button pc-button--primary flex-1 min-h-[44px]"
-                >
-                  <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
-                  <span>
-                    {isMatching
-                      ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
-                      : "Auto-Match All"}
-                  </span>
-                </button>
+                <AutoMatchButton
+                  showRainbow={showAutoMatchRainbow}
+                  className="flex-1 min-h-[44px]"
+                  fullWidth
+                  disabled={isMatching || isValidating || !needsAttention}
+                  isMatching={isMatching}
+                  matchProgress={matchProgress}
+                  totalTracks={tracks.length}
+                  onClick={handleAutoMatchClick}
+                />
               )}
               {onVerifyAllEmbeds && (
                 <OverflowMenu
@@ -297,19 +348,14 @@ export const TrackTable: React.FC<TrackTableProps> = ({
               )}
 
               {onAutoMatchAll && (
-                <button
-                  type="button"
-                  onClick={onAutoMatchAll}
-                  disabled={isMatching || isValidating || (unmatchedCount === 0 && blockedCount === 0)}
-                  className="pc-button pc-button--primary"
-                >
-                  <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
-                  <span>
-                    {isMatching
-                      ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
-                      : "Auto-Match All"}
-                  </span>
-                </button>
+                <AutoMatchButton
+                  showRainbow={showAutoMatchRainbow}
+                  disabled={isMatching || isValidating || !needsAttention}
+                  isMatching={isMatching}
+                  matchProgress={matchProgress}
+                  totalTracks={tracks.length}
+                  onClick={handleAutoMatchClick}
+                />
               )}
             </div>
           </div>

@@ -1,13 +1,12 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import { twMerge } from "tailwind-merge";
+import { BackButton, type BackNavTarget } from "../ui/BackButton";
 import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
 
 export type { OverflowMenuItem };
 
 interface PageHeaderProps {
-  backLink: { to: string; label: string };
+  back: BackNavTarget;
   title?: string;
   primaryAction?: React.ReactNode;
   overflowItems?: OverflowMenuItem[];
@@ -15,7 +14,7 @@ interface PageHeaderProps {
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
-  backLink,
+  back,
   title,
   primaryAction,
   overflowItems,
@@ -26,10 +25,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   return (
     <header className={twMerge("pc-page-header print:hidden", className)}>
       <div className="pc-page-header-leading">
-        <Link to={backLink.to} className="pc-button pc-page-header-back">
-          <ArrowLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
-          <span className="pc-page-header-back-label">{backLink.label}</span>
-        </Link>
+        <BackButton
+          {...back}
+          className="pc-page-header-back"
+          labelClassName="pc-page-header-back-label"
+        />
         {title && <h1 className="pc-page-header-title">{title}</h1>}
       </div>
       {hasActions && (

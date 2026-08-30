@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
@@ -17,13 +17,13 @@ import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay"
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
+import { BackButton } from "../components/ui/BackButton";
 import {
   Printer,
   Download,
   Shuffle,
   ChevronLeft,
   ChevronRight,
-  ArrowLeft,
   Settings2,
   FileText,
   FileJson,
@@ -283,7 +283,7 @@ export const CardsPage: React.FC = () => {
 
       {isMobile ? (
         <PageHeader
-          backLink={{ to: `/deck/${deck.id}`, label: "Back" }}
+          back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
           primaryAction={
             <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
               <Printer className="w-4 h-4" />
@@ -311,10 +311,7 @@ export const CardsPage: React.FC = () => {
         />
       ) : (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
-          <Link to={`/deck/${deck.id}`} className="pc-button">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Deck Editor
-          </Link>
+          <BackButton fallbackTo={`/deck/${deck.id}`} fallbackLabel="Deck editor" />
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
               <Printer className="w-4 h-4" />

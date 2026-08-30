@@ -46,17 +46,21 @@ export const BlockedSongsTaskbarNotice: React.FC = () => {
         {modalOpen && (
           <PcModal title="Blocked Songs" onClose={() => setModalOpen(false)}>
             <div className="space-y-4">
-              <p className="m-0 text-sm font-bold text-pc-warning">{title}</p>
-              <p className="m-0 text-sm opacity-90">{BLOCKED_DETAIL}</p>
-              <button
-                type="button"
-                className="pc-button pc-button--primary w-full"
-                onClick={() => void handleAutoFixBlocked()}
-                disabled={isMatching}
-              >
-                <Sparkles className="w-4 h-4" aria-hidden="true" />
-                <span>{isMatching ? "Auto-fixing..." : "Auto-Fix"}</span>
-              </button>
+              <div>
+                <p className="m-0 text-sm font-bold text-pc-warning">{title}</p>
+                <p className="m-0 text-sm opacity-90 mt-2">{BLOCKED_DETAIL}</p>
+              </div>
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  className="pc-button pc-button--primary w-full sm:w-auto"
+                  onClick={() => void handleAutoFixBlocked()}
+                  disabled={isMatching}
+                >
+                  <Sparkles className="w-4 h-4" aria-hidden="true" />
+                  <span>{isMatching ? "Auto-fixing..." : "Auto-Fix"}</span>
+                </button>
+              </div>
             </div>
           </PcModal>
         )}

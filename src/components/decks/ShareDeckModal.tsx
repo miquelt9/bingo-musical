@@ -112,7 +112,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
           <>
             <p className="text-sm">Anyone with this link can open the deck and add a copy to their browser.</p>
             <div className="pc-bevel-inset p-3 break-all text-xs">{shareUrl}</div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button type="button" variant="primary" onClick={() => void copyLink()}>
                 <Copy className="w-4 h-4" />
                 Copy link
@@ -122,7 +122,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
                 Copy message
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <a href={getPlatformShareUrls(deck, shareUrl).whatsapp} target="_blank" rel="noopener noreferrer" className="pc-button">
                 <MessageCircle className="w-4 h-4" />
                 WhatsApp
@@ -145,9 +145,11 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
                 : "Link sharing is not configured on this site yet. Export the deck as JSON from Settings to share it manually."}
             </p>
             {publishError ? <p className="text-xs pc-bevel-inset p-3">{publishError}</p> : null}
-            <Link to="/settings" className="pc-button inline-flex" onClick={onClose}>
-              Open Settings
-            </Link>
+            <div className="flex justify-end pt-2">
+              <Link to="/settings" className="pc-button inline-flex" onClick={onClose}>
+                Open Settings
+              </Link>
+            </div>
           </>
         )}
 

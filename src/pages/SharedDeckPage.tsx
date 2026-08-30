@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { AlertCircle, ArrowLeft, Download, Music2 } from "lucide-react";
+import { AlertCircle, Download, Music2 } from "lucide-react";
+import { BackButton } from "../components/ui/BackButton";
 import { useDeck } from "../state/DeckContext";
 import { fetchSharedDeckPayload, isShareApiConfigured } from "../lib/share/sharedDecksApi";
 import { validateDeckSchema } from "../lib/storage/decks";
@@ -81,10 +82,7 @@ export const SharedDeckPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
-      <Link to="/" className="pc-button inline-flex">
-        <ArrowLeft className="w-4 h-4" />
-        Back to home
-      </Link>
+      <BackButton fallbackTo="/" fallbackLabel="All decks" className="inline-flex" />
 
       <Window title="Shared Musical Bingo deck">
         {isLoading ? (

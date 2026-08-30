@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Group, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
+import { BackButton } from "../components/ui/BackButton";
 import { useAuth } from "../state/AuthContext";
 import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
@@ -214,7 +215,8 @@ export const SettingsPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto space-y-4">
+      <BackButton fallbackTo="/" fallbackLabel="All decks" />
       <Window title="App Settings">
         <p className="text-sm mb-4">Appearance, integrations, and local data options.</p>
 
@@ -303,7 +305,7 @@ export const SettingsPage: React.FC = () => {
               </span>
             }
           >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pc-bevel-inset p-3">
+            <div className="flex flex-col gap-4 pc-bevel-inset p-3">
               <div>
                 <h4 className="text-sm font-semibold">Reset all data to sample deck</h4>
                 <p className="text-xs mt-0.5">
@@ -311,9 +313,11 @@ export const SettingsPage: React.FC = () => {
                   deck. This cannot be undone.
                 </p>
               </div>
-              <Button type="button" onClick={() => setShowResetModal(true)} className="shrink-0">
-                Reset All Data
-              </Button>
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => setShowResetModal(true)} className="w-full sm:w-auto">
+                  Reset All Data
+                </Button>
+              </div>
             </div>
           </Group>
 

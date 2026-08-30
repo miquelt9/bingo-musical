@@ -99,7 +99,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         </div>
 
         {errorMessage && (
-          <div className="p-2 pc-bevel-inset border-l-4 border-red-500 bg-red-500/10 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
+          <div className="p-2 pc-bevel-inset border-l-4 border-red-500 bg-red-500/10 text-xs flex flex-col gap-2 shrink-0">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
               <div>
@@ -110,16 +110,18 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
               </div>
             </div>
             {track.youtubeVideoId && (
-              <a
-                href={getYoutubeWatchUrl(track.youtubeVideoId, track.startTime)}
-                target="_blank"
-                rel="noreferrer"
-                className="pc-button shrink-0 text-xs inline-flex items-center gap-1.5 font-bold"
-                title="Open video directly on YouTube in new tab"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Play in YouTube ({track.startTime}s)</span>
-              </a>
+              <div className="flex justify-end">
+                <a
+                  href={getYoutubeWatchUrl(track.youtubeVideoId, track.startTime)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="pc-button shrink-0 text-xs inline-flex items-center gap-1.5 font-bold w-full sm:w-auto justify-center"
+                  title="Open video directly on YouTube in new tab"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Play in YouTube ({track.startTime}s)</span>
+                </a>
+              </div>
             )}
           </div>
         )}

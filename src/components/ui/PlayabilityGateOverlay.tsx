@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Button, Overlay, Window } from "@miquelt9/pc-ui";
 import { AlertTriangle, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
+import { BackButton } from "./BackButton";
 import { InvalidTrackEntry } from "../../lib/youtube/playabilityGate";
 import { BatchValidationProgress } from "../../lib/youtube/validator";
 
@@ -111,7 +112,7 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Link
                 to={`/deck/${deckId}?filter=blocked`}
                 className="pc-button pc-button--primary"
@@ -124,9 +125,10 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
                   Re-check All Songs
                 </Button>
               )}
-              <Link to={`/deck/${deckId}`} className="pc-button">
-                Back to Editor
-              </Link>
+              <BackButton
+                fallbackTo={`/deck/${deckId}`}
+                fallbackLabel="Deck editor"
+              />
             </div>
           </div>
         )}

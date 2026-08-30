@@ -1,7 +1,8 @@
 import React, { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { AlertCircle, ArrowLeft, Upload } from "lucide-react";
+import { AlertCircle, Upload } from "lucide-react";
+import { BackButton } from "../components/ui/BackButton";
 import { useDeck } from "../state/DeckContext";
 
 export const ImportPage: React.FC = () => {
@@ -43,10 +44,7 @@ export const ImportPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
-      <Link to="/" className="pc-button inline-flex">
-        <ArrowLeft className="w-4 h-4" />
-        Back to home
-      </Link>
+      <BackButton fallbackTo="/" fallbackLabel="All decks" className="inline-flex" />
 
       <Window title="Import a shared deck">
         <p className="text-sm mb-4">

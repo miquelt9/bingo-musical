@@ -19,6 +19,7 @@ import {
 } from "../lib/youtube/playabilityGate";
 import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
+import { BackButton } from "../components/ui/BackButton";
 import { useToast } from "../state/ToastContext";
 import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -28,7 +29,6 @@ import {
   Radio,
   Share2,
   Plus,
-  ArrowLeft,
   Check,
   AlertTriangle,
   Sparkles,
@@ -67,6 +67,7 @@ export const EditorPage: React.FC = () => {
   const [hostGateInvalid, setHostGateInvalid] = useState<InvalidTrackEntry[]>([]);
   const backgroundVerifyRef = useRef<string | null>(null);
   const autostartMatchRef = useRef(false);
+  const blockedToastShownRef = useRef(false);
 
   const { handleAutoFixBlocked, isMatching: isAutoFixing } = useAutoFixBlocked(deck, {
     onDeckUpdate: setDeck,
@@ -93,6 +94,34 @@ export const EditorPage: React.FC = () => {
       navigate("/", { replace: true });
     }
   }, [id, loadDeck, decks, navigate]);
+
+  useEffect(() => {
+    blockedToastShownRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (!deck || blockedToastShownRef.current) return;
+
+    const count = getUnplayableTracks(deck.tracks).length;
+    if (count === 0) return;
+
+    blockedToastShownRef.current = true;
+    showToast({
+      title: `${count} song${count > 1 ? "s" : ""} cannot play audio in the game`,
+      icon: <AlertTriangle className="w-3.5 h-3.5" />,
+      message:
+        "Some videos have playback restrictions outside YouTube. Use Auto-Fix to automatically find and replace them with working versions.",
+      duration: 12000,
+      actions: [
+        {
+          id: "auto-fix",
+          label: "Auto-Fix",
+          variant: "primary",
+          onClick: () => handleAutoFixBlocked(),
+        },
+      ],
+    });
+  }, [deck, showToast, handleAutoFixBlocked]);
 
   // Silently verify uncached YouTube links when a deck is opened
   useEffect(() => {
@@ -341,7 +370,7 @@ export const EditorPage: React.FC = () => {
     <div className="space-y-4">
       {isMobile ? (
         <PageHeader
-          backLink={{ to: "/", label: "Back" }}
+          back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
           title={deck.name}
           primaryAction={
             <Button
@@ -369,10 +398,7 @@ export const EditorPage: React.FC = () => {
         />
       ) : (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
-          <Link to="/" className="pc-button">
-            <ArrowLeft className="w-4 h-4" />
-            Back to All Decks
-          </Link>
+          <BackButton fallbackTo="/" fallbackLabel="All decks" />
           <div className="flex items-center gap-2">
             <Button type="button" onClick={() => shareDeck(deck)}>
               <Share2 className="w-3.5 h-3.5" />
@@ -450,6 +476,7 @@ export const EditorPage: React.FC = () => {
       </Window>
 
       <TrackTable
+        deckId={deck.id}
         tracks={deck.tracks}
         onUpdateTrack={handleUpdateTrack}
         onDeleteTrack={handleDeleteTrack}
@@ -501,14 +528,16 @@ export const EditorPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4 text-xs">
-              <p className="font-bold">
-                All songs must be playable before starting the game.
-              </p>
-              <p>
-                {hostGateInvalid.length} song{hostGateInvalid.length > 1 ? "s" : ""} cannot be played.
-                Use Auto-Fix or fix them manually, then try again.
-              </p>
-              <div className="flex flex-wrap gap-2">
+              <div>
+                <p className="font-bold">
+                  All songs must be playable before starting the game.
+                </p>
+                <p className="mt-2">
+                  {hostGateInvalid.length} song{hostGateInvalid.length > 1 ? "s" : ""} cannot be played.
+                  Use Auto-Fix or fix them manually, then try again.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
                 <Button
                   type="button"
                   variant="primary"
