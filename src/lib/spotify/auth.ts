@@ -1,7 +1,22 @@
 import { createPkcePair, consumeVerifier } from "./pkce";
 
 const AUTH_TOKEN_STORAGE_KEY = "bingo-musical:spotify-auth";
-const SCOPES = "playlist-read-private playlist-read-collaborative";
+const SPOTIFY_RETURN_STORAGE_KEY = "bingo-musical:spotify-return";
+const SCOPES =
+  "playlist-read-private playlist-read-collaborative user-library-read";
+
+export type SpotifyReturnIntent = "import";
+
+export function setSpotifyReturnIntent(intent: SpotifyReturnIntent): void {
+  sessionStorage.setItem(SPOTIFY_RETURN_STORAGE_KEY, intent);
+}
+
+export function consumeSpotifyReturnIntent(): SpotifyReturnIntent | null {
+  const value = sessionStorage.getItem(SPOTIFY_RETURN_STORAGE_KEY);
+  if (value !== "import") return null;
+  sessionStorage.removeItem(SPOTIFY_RETURN_STORAGE_KEY);
+  return "import";
+}
 
 export interface StoredAuthData {
   accessToken: string;
@@ -61,6 +76,7 @@ export async function beginLogin(): Promise<void> {
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("code_challenge", challenge);
 
+  setSpotifyReturnIntent("import");
   window.location.assign(url.toString());
 }
 

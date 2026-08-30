@@ -147,33 +147,8 @@ export async function fetchAllPlaylistTracks(
     totalTracks = data.total || 0;
 
     for (const item of data.items || []) {
-      const t = item.track;
-      if (!t || !t.id || !t.name || t.is_local) continue;
-      if (seenIds.has(t.id)) continue;
-      seenIds.add(t.id);
-
-      const durationSec = Math.floor((t.duration_ms || 180000) / 1000);
-      const defaultStart = durationSec > 40 ? 30 : 0;
-      const defaultEnd = Math.min(defaultStart + 15, durationSec > 0 ? durationSec : defaultStart + 15);
-
-      // Best album art
-      const albumArtUrl =
-        t.album?.images?.[1]?.url ||
-        t.album?.images?.[0]?.url ||
-        "";
-
-      tracks.push({
-        id: t.id,
-        title: t.name,
-        artist: t.artists?.map((a) => a.name).join(", ") || "Unknown Artist",
-        album: t.album?.name || "",
-        albumArtUrl,
-        durationMs: t.duration_ms || 180000,
-        youtubeVideoId: null,
-        startTime: defaultStart,
-        endTime: defaultEnd,
-        matchStatus: "pending",
-      });
+      const mapped = item.track ? mapSpotifyTrackItem(item.track, seenIds) : null;
+      if (mapped) tracks.push(mapped);
     }
 
     if (onProgress) {
@@ -184,6 +159,90 @@ export async function fetchAllPlaylistTracks(
   }
 
   return tracks;
+}
+
+function mapSpotifyTrackItem(t: NonNullable<SpotifyTrackItem["track"]>, seenIds: Set<string>): Track | null {
+  if (!t.id || !t.name || t.is_local) return null;
+  if (seenIds.has(t.id)) return null;
+  seenIds.add(t.id);
+
+  const durationSec = Math.floor((t.duration_ms || 180000) / 1000);
+  const defaultStart = durationSec > 40 ? 30 : 0;
+  const defaultEnd = Math.min(defaultStart + 15, durationSec > 0 ? durationSec : defaultStart + 15);
+
+  const albumArtUrl = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || "";
+
+  return {
+    id: t.id,
+    title: t.name,
+    artist: t.artists?.map((a) => a.name).join(", ") || "Unknown Artist",
+    album: t.album?.name || "",
+    albumArtUrl,
+    durationMs: t.duration_ms || 180000,
+    youtubeVideoId: null,
+    startTime: defaultStart,
+    endTime: defaultEnd,
+    matchStatus: "pending",
+  };
+}
+
+export async function fetchSavedTracks(
+  accessToken: string,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<Track[]> {
+  const tracks: Track[] = [];
+  const seenIds = new Set<string>();
+  let nextUrl: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
+  let totalTracks = 0;
+
+  while (nextUrl) {
+    const res: Response = await fetch(nextUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) throw new Error("Spotify session expired. Please log in again.");
+      if (res.status === 403) {
+        throw new Error("Missing permission to read liked songs. Disconnect and reconnect Spotify.");
+      }
+      throw new Error(`Failed to fetch liked songs (HTTP ${res.status})`);
+    }
+
+    const data: {
+      items: SpotifyTrackItem[];
+      total: number;
+      next: string | null;
+    } = await res.json();
+
+    totalTracks = data.total || 0;
+
+    for (const item of data.items || []) {
+      const mapped = item.track ? mapSpotifyTrackItem(item.track, seenIds) : null;
+      if (mapped) tracks.push(mapped);
+    }
+
+    if (onProgress) {
+      onProgress(tracks.length, totalTracks);
+    }
+
+    nextUrl = data.next;
+  }
+
+  return tracks;
+}
+
+export function createDeckFromLikedSongs(tracks: Track[]): Deck {
+  return createDeckFromSpotify(
+    {
+      id: "liked-songs",
+      name: "Liked Songs",
+      description: "",
+      imageUrl: null,
+      totalTracks: tracks.length,
+      ownerName: "You",
+    },
+    tracks
+  );
 }
 
 export function createDeckFromSpotify(

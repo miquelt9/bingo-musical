@@ -4,12 +4,16 @@ import { Button } from "@miquelt9/pc-ui";
 import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
 import {
+  createDeckFromLikedSongs,
   createDeckFromSpotify,
   fetchAllPlaylistTracks,
+  fetchPlaylistDetails,
+  fetchSavedTracks,
   fetchUserPlaylists,
+  parseSpotifyPlaylistId,
   SpotifyPlaylistSummary,
 } from "../../lib/spotify/playlists";
-import { AlertCircle, Loader2, LogIn, LogOut, Music } from "lucide-react";
+import { AlertCircle, Heart, Loader2, LogIn, LogOut, Music } from "lucide-react";
 
 export const SpotifyPlaylistPicker: React.FC = () => {
   const { isConfigured, isAuthenticated, isLoading: authLoading, accessToken, login, logout, error: authError } =
@@ -23,6 +27,10 @@ export const SpotifyPlaylistPicker: React.FC = () => {
   const [importingId, setImportingId] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{ loaded: number; total: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [pasteUrl, setPasteUrl] = useState("");
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [isImportingPaste, setIsImportingPaste] = useState(false);
+  const [isImportingLiked, setIsImportingLiked] = useState(false);
 
   const loadPlaylists = useCallback(async () => {
     if (!accessToken) return;
@@ -49,7 +57,7 @@ export const SpotifyPlaylistPicker: React.FC = () => {
   }, [isAuthenticated, accessToken, loadPlaylists]);
 
   const handleImport = async (playlist: SpotifyPlaylistSummary) => {
-    if (!accessToken || importingId) return;
+    if (!accessToken || importingId || isImportingPaste || isImportingLiked) return;
 
     setImportingId(playlist.id);
     setImportError(null);
@@ -74,6 +82,73 @@ export const SpotifyPlaylistPicker: React.FC = () => {
       setImportProgress(null);
     }
   };
+
+  const handlePasteImport = async () => {
+    if (!accessToken || importingId || isImportingPaste || isImportingLiked) return;
+
+    const playlistId = parseSpotifyPlaylistId(pasteUrl);
+    if (!playlistId) {
+      setPasteError("Enter a valid Spotify playlist URL or 22-character playlist ID.");
+      return;
+    }
+
+    setPasteError(null);
+    setImportError(null);
+    setIsImportingPaste(true);
+    setImportProgress({ loaded: 0, total: 0 });
+
+    try {
+      const playlist = await fetchPlaylistDetails(playlistId, accessToken);
+      setImportProgress({ loaded: 0, total: playlist.totalTracks || 0 });
+
+      const tracks = await fetchAllPlaylistTracks(playlistId, accessToken, (loaded, total) => {
+        setImportProgress({ loaded, total });
+      });
+
+      if (tracks.length === 0) {
+        throw new Error("No playable tracks found in that playlist.");
+      }
+
+      const deck = createDeckFromSpotify(playlist, tracks);
+      const saved = createDeck(deck);
+      navigate(`/deck/${saved.id}?autostart=match`);
+    } catch (err) {
+      setPasteError((err as Error).message || "Failed to import playlist.");
+    } finally {
+      setIsImportingPaste(false);
+      setImportProgress(null);
+    }
+  };
+
+  const handleImportLikedSongs = async () => {
+    if (!accessToken || importingId || isImportingPaste || isImportingLiked) return;
+
+    setImportError(null);
+    setPasteError(null);
+    setIsImportingLiked(true);
+    setImportProgress({ loaded: 0, total: 0 });
+
+    try {
+      const tracks = await fetchSavedTracks(accessToken, (loaded, total) => {
+        setImportProgress({ loaded, total });
+      });
+
+      if (tracks.length === 0) {
+        throw new Error("No playable tracks found in your liked songs.");
+      }
+
+      const deck = createDeckFromLikedSongs(tracks);
+      const saved = createDeck(deck);
+      navigate(`/deck/${saved.id}?autostart=match`);
+    } catch (err) {
+      setImportError((err as Error).message || "Failed to import liked songs.");
+    } finally {
+      setIsImportingLiked(false);
+      setImportProgress(null);
+    }
+  };
+
+  const isBusy = Boolean(importingId) || isImportingPaste || isImportingLiked;
 
   if (!isConfigured) {
     return null;
@@ -112,13 +187,73 @@ export const SpotifyPlaylistPicker: React.FC = () => {
     <div className="space-y-3">
       <div className="flex flex-col gap-3">
         <p className="text-xs">Pick a playlist to import. YouTube matching starts automatically in the editor.</p>
-        <div className="flex justify-end">
-          <Button type="button" onClick={logout} className="w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+          <Button type="button" onClick={() => void handleImportLikedSongs()} disabled={isBusy} className="w-full sm:w-auto">
+            {isImportingLiked ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {importProgress
+                  ? `Importing… ${importProgress.loaded}/${importProgress.total || "?"}`
+                  : "Importing…"}
+              </>
+            ) : (
+              <>
+                <Heart className="w-4 h-4" />
+                Import Liked Songs
+              </>
+            )}
+          </Button>
+          <Button type="button" onClick={logout} disabled={isBusy} className="w-full sm:w-auto">
             <LogOut className="w-4 h-4" />
             Disconnect
           </Button>
         </div>
       </div>
+
+      <div className="space-y-2">
+        <label htmlFor="spotify-paste-url" className="text-xs font-semibold block">
+          Paste playlist URL
+        </label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            id="spotify-paste-url"
+            type="text"
+            value={pasteUrl}
+            onChange={(e) => {
+              setPasteUrl(e.target.value);
+              if (pasteError) setPasteError(null);
+            }}
+            placeholder="https://open.spotify.com/playlist/…"
+            disabled={isBusy}
+            className="flex-1 text-xs pc-bevel-inset px-2 py-1.5 min-w-0"
+          />
+          <Button
+            type="button"
+            onClick={() => void handlePasteImport()}
+            disabled={isBusy || !pasteUrl.trim()}
+            className="w-full sm:w-auto shrink-0"
+          >
+            {isImportingPaste ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {importProgress
+                  ? `${importProgress.loaded}/${importProgress.total || "?"}`
+                  : "Importing…"}
+              </>
+            ) : (
+              "Import"
+            )}
+          </Button>
+        </div>
+        {pasteError && (
+          <div className="flex items-start gap-2 text-xs pc-bevel-inset p-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{pasteError}</span>
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs font-semibold">Your playlists</p>
 
       {isLoadingPlaylists ? (
         <div className="pc-bevel-inset p-3 text-xs flex items-center gap-2">
@@ -140,7 +275,7 @@ export const SpotifyPlaylistPicker: React.FC = () => {
               <button
                 key={playlist.id}
                 type="button"
-                disabled={Boolean(importingId)}
+                disabled={isBusy}
                 onClick={() => void handleImport(playlist)}
                 className="w-full text-left pc-bevel-inset p-2 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-60"
               >

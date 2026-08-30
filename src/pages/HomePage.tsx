@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Window, Modal } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { SpotifyPlaylistPicker } from "../components/spotify/SpotifyPlaylistPicker";
-import { isSpotifyConfigured } from "../lib/spotify/auth";
+import { consumeSpotifyReturnIntent, isSpotifyConfigured } from "../lib/spotify/auth";
+import { useAuth } from "../state/AuthContext";
+import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { Deck } from "../types/deck";
 import { getUnplayableTracks } from "../lib/youtube/validator";
 import { canStartGame } from "../lib/youtube/playabilityGate";
@@ -24,11 +26,18 @@ import {
 
 export const HomePage: React.FC = () => {
   const { decks, createDeck, deleteDeck, duplicateDeck, shareDeck } = useDeck();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const spotifyImportEnabled = isSpotifyConfigured();
 
   const [showSpotifyModal, setShowSpotifyModal] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && consumeSpotifyReturnIntent() === "import") {
+      setShowSpotifyModal(true);
+    }
+  }, [isAuthenticated]);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
   const handleCreateEmptyDeck = () => {
@@ -100,8 +109,11 @@ export const HomePage: React.FC = () => {
             (t) => t.matchStatus === "matched" || t.matchStatus === "manual"
           ).length;
           const attentionCount = getUnplayableTracks(deck.tracks).length;
+          const emptyDeck = isEmptyDeck(deck);
           const playReady = canStartGame(deck.tracks);
-          const cardsDisabledTitle = "Fix song issues in Edit before printing cards";
+          const cardsDisabledTitle = emptyDeck
+            ? EMPTY_DECK_ACTION_TITLE
+            : "Fix song issues in Edit before printing cards";
 
           const statsLine = (
             <p className="home-deck-card-stats text-xs">
@@ -120,6 +132,8 @@ export const HomePage: React.FC = () => {
               icon: <Share2 className="w-4 h-4" />,
               label: "Share",
               onClick: () => shareDeck(deck),
+              disabled: emptyDeck,
+              title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
             },
             {
               icon: <Copy className="w-4 h-4" />,
@@ -209,7 +223,8 @@ export const HomePage: React.FC = () => {
                     type="button"
                     className="pc-button"
                     onClick={() => shareDeck(deck)}
-                    title="Share deck"
+                    disabled={emptyDeck}
+                    title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Share deck"}
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -266,7 +281,11 @@ export const HomePage: React.FC = () => {
                   className={`pc-button home-deck-card-action-play ${playReady ? "pc-button--primary" : "opacity-60 pointer-events-none"}`}
                   aria-disabled={!playReady}
                   title={
-                    playReady ? "Host live game" : "Some songs need attention before hosting"
+                    playReady
+                      ? "Host live game"
+                      : emptyDeck
+                        ? EMPTY_DECK_ACTION_TITLE
+                        : "Some songs need attention before hosting"
                   }
                   onClick={(e) => {
                     if (!playReady) e.preventDefault();

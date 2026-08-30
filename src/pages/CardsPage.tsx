@@ -10,7 +10,6 @@ import {
   uniqueSongCount,
 } from "../lib/bingo/generateCards";
 import { downloadBingoPdf } from "../lib/bingo/pdf";
-import { downloadBingoCardsJson } from "../lib/bingo/exportCards";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
@@ -26,7 +25,6 @@ import {
   ChevronRight,
   Settings2,
   FileText,
-  FileJson,
   Loader2,
   ChevronDown,
 } from "lucide-react";
@@ -200,11 +198,6 @@ export const CardsPage: React.FC = () => {
     }
   };
 
-  const handleDownloadJson = () => {
-    if (!deck || !cardOptions || cards.length === 0 || !isPlayable) return;
-    downloadBingoCardsJson(cards, cardOptions);
-  };
-
   const handleBrowserPrint = () => {
     if (!isPlayable) return;
     window.print();
@@ -302,11 +295,6 @@ export const CardsPage: React.FC = () => {
                 : `Download PDF (${cards.length} cards)`,
               onClick: () => void handleDownloadPdf(),
             },
-            {
-              icon: <FileJson className="w-4 h-4" />,
-              label: "Download JSON",
-              onClick: handleDownloadJson,
-            },
           ]}
         />
       ) : (
@@ -316,10 +304,6 @@ export const CardsPage: React.FC = () => {
             <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
               <Printer className="w-4 h-4" />
               Print in Browser
-            </Button>
-            <Button type="button" onClick={handleDownloadJson} disabled={exportsDisabled}>
-              <FileJson className="w-4 h-4" />
-              Download JSON
             </Button>
             <Button
               type="button"

@@ -11,6 +11,7 @@ import {
 } from "../lib/storage/decks";
 import { buildSharedDeckUrl, shareDeckNative } from "../lib/share/deckShare";
 import { fetchSharedDeckPayload, isShareApiConfigured, publishSharedDeck } from "../lib/share/sharedDecksApi";
+import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 
 interface ShareDeckTarget {
@@ -121,6 +122,8 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const shareDeck = async (deck: Deck) => {
+    if (isEmptyDeck(deck)) return;
+
     if (!isShareApiConfigured()) {
       setShareTarget({ deck });
       return;

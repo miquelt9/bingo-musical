@@ -17,6 +17,7 @@ import {
   ensureDeckPlayable,
   InvalidTrackEntry,
 } from "../lib/youtube/playabilityGate";
+import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { BackButton } from "../components/ui/BackButton";
@@ -370,7 +371,9 @@ export const EditorPage: React.FC = () => {
   const blockedCount = getUnplayableTracks(deck.tracks).length;
   const playableCount = deck.tracks.length - blockedCount;
   const isTrackBusy = isMatching || isAutoFixing;
-  const showAddSongRainbow = deck.tracks.length === 0 && !addSongRainbowDismissed;
+  const emptyDeck = isEmptyDeck(deck);
+  const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
+  const hostDisabled = isTrackBusy || isValidating || hostGateChecking || emptyDeck;
 
   const handleOpenAddTrack = () => {
     setAddSongRainbowDismissed(true);
@@ -388,7 +391,8 @@ export const EditorPage: React.FC = () => {
               type="button"
               variant="primary"
               onClick={handleHostLiveGame}
-              disabled={isTrackBusy || isValidating || hostGateChecking}
+              disabled={hostDisabled}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
             >
               <Radio className="w-4 h-4" />
               {hostGateChecking ? "Verifying..." : "Host"}
@@ -399,11 +403,15 @@ export const EditorPage: React.FC = () => {
               icon: <Share2 className="w-4 h-4" />,
               label: "Share",
               onClick: () => shareDeck(deck),
+              disabled: emptyDeck,
+              title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
             },
             {
               icon: <Printer className="w-4 h-4" />,
               label: "Bingo Cards",
               onClick: () => navigate(`/deck/${deck.id}/cards`),
+              disabled: emptyDeck,
+              title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
             },
           ]}
         />
@@ -411,19 +419,34 @@ export const EditorPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
           <BackButton fallbackTo="/" fallbackLabel="All decks" />
           <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => shareDeck(deck)}>
+            <Button
+              type="button"
+              onClick={() => shareDeck(deck)}
+              disabled={emptyDeck}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
+            >
               <Share2 className="w-3.5 h-3.5" />
               Share
             </Button>
-            <Link to={`/deck/${deck.id}/cards`} className="pc-button">
-              <Printer className="w-4 h-4" />
-              Bingo Cards
-            </Link>
+            {emptyDeck ? (
+              <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
+                <span className="pc-button opacity-60 pointer-events-none" aria-disabled tabIndex={-1}>
+                  <Printer className="w-4 h-4" />
+                  Bingo Cards
+                </span>
+              </span>
+            ) : (
+              <Link to={`/deck/${deck.id}/cards`} className="pc-button">
+                <Printer className="w-4 h-4" />
+                Bingo Cards
+              </Link>
+            )}
             <Button
               type="button"
               variant="primary"
               onClick={handleHostLiveGame}
-              disabled={isTrackBusy || isValidating || hostGateChecking}
+              disabled={hostDisabled}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
             >
               <Radio className="w-4 h-4" />
               {hostGateChecking ? "Verifying..." : "Host Live Game"}
