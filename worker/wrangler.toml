@@ -1,0 +1,12 @@
+name = "bingo-musical-share"
+main = "src/index.ts"
+compatibility_date = "2024-08-01"
+
+# After `npx wrangler kv namespace create SHARED_DECKS`, paste the ids below.
+[[kv_namespaces]]
+binding = "SHARED_DECKS"
+id = "b25a9c387c7440bc83de22a0754dacb2"
+preview_id = "081e52d940274e61a90482b07b30979a"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://miquelt9.github.io"

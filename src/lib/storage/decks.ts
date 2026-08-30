@@ -258,6 +258,15 @@ export function validateDeckSchema(data: unknown): SchemaValidationResult {
   return { isValid: true, deck: sanitizedDeck };
 }
 
+export function importDeckFromData(data: unknown): Deck {
+  const validation = validateDeckSchema(data);
+  if (!validation.isValid || !validation.deck) {
+    throw new Error(validation.error || "Invalid deck JSON schema.");
+  }
+
+  return saveDeck(validation.deck);
+}
+
 export function parseAndImportDeckFile(file: File): Promise<Deck> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -271,14 +280,7 @@ export function parseAndImportDeckFile(file: File): Promise<Deck> {
         }
 
         const parsed = JSON.parse(text);
-        const validation = validateDeckSchema(parsed);
-
-        if (!validation.isValid || !validation.deck) {
-          reject(new Error(validation.error || "Invalid deck JSON schema."));
-          return;
-        }
-
-        const saved = saveDeck(validation.deck);
+        const saved = importDeckFromData(parsed);
         resolve(saved);
       } catch (err) {
         reject(new Error("Failed to parse JSON file: " + (err as Error).message));

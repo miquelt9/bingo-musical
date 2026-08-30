@@ -22,10 +22,24 @@ export function getHomePageUrl(): string {
   return `${getAppOrigin()}${getAppBasePath()}`;
 }
 
-export function buildShareMessage(deck: Deck): string {
-  const importUrl = getImportPageUrl();
+export function buildSharedDeckUrl(shareId: string): string {
+  return `${getAppOrigin()}${getAppBasePath()}#/share/${encodeURIComponent(shareId)}`;
+}
+
+export function buildShareMessage(deck: Deck, shareUrl?: string): string {
   const homeUrl = getHomePageUrl();
 
+  if (shareUrl) {
+    return [
+      `I made a Musical Bingo deck: "${deck.name}"!`,
+      "",
+      `Open this link to use it: ${shareUrl}`,
+      "",
+      `Create your own at ${homeUrl}`,
+    ].join("\n");
+  }
+
+  const importUrl = getImportPageUrl();
   return [
     `I made a Musical Bingo deck: "${deck.name}"!`,
     "",
@@ -57,19 +71,31 @@ export function canShareDeckFile(file: File): boolean {
   }
 }
 
-export async function shareDeckNative(deck: Deck): Promise<boolean> {
-  const file = deckToShareFile(deck);
-  if (!canShareDeckFile(file)) {
+export async function shareDeckNative(deck: Deck, shareUrl?: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
     return false;
   }
 
+  const shareData: ShareData = {
+    title: `Musical Bingo: ${deck.name}`,
+    text: buildShareMessage(deck, shareUrl),
+    url: shareUrl ?? getImportPageUrl(),
+  };
+
+  if (!shareUrl) {
+    const file = deckToShareFile(deck);
+    if (!canShareDeckFile(file)) {
+      return false;
+    }
+    shareData.files = [file];
+  }
+
   try {
-    await navigator.share({
-      title: `Musical Bingo: ${deck.name}`,
-      text: buildShareMessage(deck),
-      files: [file],
-      url: getImportPageUrl(),
-    });
+    if (typeof navigator.canShare === "function" && !navigator.canShare(shareData)) {
+      return false;
+    }
+
+    await navigator.share(shareData);
     return true;
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
@@ -85,13 +111,13 @@ export interface PlatformShareUrls {
   email: string;
 }
 
-export function getPlatformShareUrls(deck: Deck): PlatformShareUrls {
-  const message = buildShareMessage(deck);
-  const importUrl = getImportPageUrl();
+export function getPlatformShareUrls(deck: Deck, shareUrl?: string): PlatformShareUrls {
+  const message = buildShareMessage(deck, shareUrl);
+  const link = shareUrl ?? getImportPageUrl();
 
   return {
     whatsapp: `https://wa.me/?text=${encodeURIComponent(message)}`,
-    telegram: `https://t.me/share/url?url=${encodeURIComponent(importUrl)}&text=${encodeURIComponent(message)}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(message)}`,
     email: `mailto:?subject=${encodeURIComponent(`Musical Bingo deck: ${deck.name}`)}&body=${encodeURIComponent(message)}`,
   };
 }

@@ -31,8 +31,8 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
   - Save full decks in browser `localStorage`.
   - Export decks as portable `.json` files.
   - Import JSON decks with instant schema validation and pre-matched YouTube IDs.
-  - **Share decks** via the native share sheet (or copy a message with the import link and JSON file).
-  - Dedicated **Import** page (`#/import`) for recipients of shared decks.
+  - **Share decks** via a short link (`#/share/abc123`) or the native share sheet; JSON file export remains as a fallback.
+  - Dedicated **Import** page (`#/import`) for `.json` files and **Shared deck** page (`#/share/:id`) for links.
   - Built-in sample deck for testing without any external account.
   - Empty decks created by mistake are discarded automatically when you navigate away.
 - 🖨️ **Printable Bingo Cards & High-Resolution Vector PDF:**
@@ -101,16 +101,25 @@ npm run build
 
 ### 6. Deploy to GitHub Pages
 
-Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.yml`). Set the `VITE_SPOTIFY_CLIENT_ID` repository secret if Spotify import should be enabled in production.
+Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.yml`). Set repository secrets as needed:
+
+- `VITE_SPOTIFY_CLIENT_ID` — optional Spotify playlist import
+- `VITE_SHARE_API_URL` — Cloudflare Worker URL for short deck share links (see `worker/README.md`)
+
+### 7. Deploy the share API (optional)
+
+Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`).
 
 ---
 
 ## 📤 Sharing a deck
 
 1. Open a deck in the **Editor** (or use the share button on the home page deck list).
-2. Click **Share** — on supported browsers this opens the native share sheet with the JSON file attached.
-3. Otherwise, copy the share message (includes the `#/import` link) and send the JSON file separately.
-4. Recipients open the import link, drop the `.json` file, and land in the editor with the full deck.
+2. Click **Share** — the app uploads a snapshot and gives you a short link like `…/bingo-musical/#/share/Ab12Cd34`.
+3. Send the link on WhatsApp, Telegram, or email (no JSON file required).
+4. Recipients open the link, preview the songs, and click **Add to my decks** to copy it locally.
+
+If link sharing is not configured, the share dialog falls back to downloading a `.json` file and the `#/import` flow.
 
 ---
 

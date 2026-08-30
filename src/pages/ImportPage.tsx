@@ -51,6 +51,8 @@ export const ImportPage: React.FC = () => {
       <Window title="Import a shared deck">
         <p className="text-sm mb-4">
           Drop a <code className="text-xs">.json</code> deck file shared with you, or choose it from your device.
+          If someone sent you a short link (for example <code className="text-xs">#/share/Ab12Cd34</code>), open that
+          link directly instead.
         </p>
 
         <div

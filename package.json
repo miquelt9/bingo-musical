@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "worker:dev": "wrangler dev --config worker/wrangler.toml",
+    "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
   },
   "dependencies": {
     "@miquelt9/pc-ui": "github:miquelt9/pc-ui",
@@ -20,6 +22,7 @@
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260830.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.10.1",
     "@types/react": "^18.3.12",
@@ -30,6 +33,7 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "wrangler": "^4.127.1"
   }
 }
