@@ -503,7 +503,6 @@ export const EditorPage: React.FC = () => {
               <span className={blockedCount > 0 ? "text-pc-warning font-semibold" : "text-green-600 dark:text-green-400 font-semibold"}>
                 {playableCount} Ready / {blockedCount} Need Attention
               </span>
-              {deck.source?.type === "spotify-playlist" ? <span>· Imported from Spotify</span> : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">

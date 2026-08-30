@@ -1,15 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Window, Modal } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
-import { SpotifyPlaylistPicker } from "../components/spotify/SpotifyPlaylistPicker";
-import { consumeSpotifyReturnIntent, isSpotifyConfigured } from "../lib/spotify/auth";
-import { useAuth } from "../state/AuthContext";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { Deck } from "../types/deck";
 import { getUnplayableTracks } from "../lib/youtube/validator";
 import { canStartGame } from "../lib/youtube/playabilityGate";
-import { PcModal } from "../components/ui/PcModal";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
@@ -21,23 +17,12 @@ import {
   Copy,
   Trash2,
   Share2,
-  ListMusic,
 } from "lucide-react";
 
 export const HomePage: React.FC = () => {
   const { decks, createDeck, deleteDeck, duplicateDeck, shareDeck } = useDeck();
-  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const spotifyImportEnabled = isSpotifyConfigured();
-
-  const [showSpotifyModal, setShowSpotifyModal] = useState(false);
-
-  useEffect(() => {
-    if (isAuthenticated && consumeSpotifyReturnIntent() === "import") {
-      setShowSpotifyModal(true);
-    }
-  }, [isAuthenticated]);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
   const handleCreateEmptyDeck = () => {
@@ -76,30 +61,12 @@ export const HomePage: React.FC = () => {
       titleBarProps={{ controls: showEmptyDeckAddTile ? undefined : newDeckButton }}
     >
       <p className="home-decks-intro text-sm mb-4">
-        {spotifyImportEnabled
-          ? isMobile
-            ? "Import a Spotify playlist or start an empty deck, then match clips and host bingo."
-            : "Import a Spotify playlist or start an empty deck, then match YouTube clips and print cards."
-          : isMobile
-            ? "Match clips, print cards, and host bingo."
-            : "Match YouTube clips, print bingo sheets, or launch the host board."}
+        {isMobile
+          ? "Match clips, print cards, and host bingo."
+          : "Match YouTube clips, print bingo sheets, or launch the host board."}
       </p>
 
       <div className="home-decks-grid">
-        {spotifyImportEnabled && (
-          <button
-            type="button"
-            className="home-deck-add home-deck-add--spotify"
-            onClick={() => setShowSpotifyModal(true)}
-          >
-            <ListMusic className="w-6 h-6 shrink-0 opacity-90" aria-hidden />
-            <span className="font-semibold text-sm">Import from Spotify</span>
-            <span className="text-xs opacity-75">
-              {isAuthenticated ? "Pick a playlist or liked songs" : "Connect and pick a playlist"}
-            </span>
-          </button>
-        )}
-
         {showEmptyDeckAddTile && (
           <button
             type="button"
@@ -307,21 +274,6 @@ export const HomePage: React.FC = () => {
           );
         })}
       </div>
-
-      {showSpotifyModal && (
-        <PcModal
-          title={
-            <span className="inline-flex items-center gap-2">
-              <ListMusic className="w-4 h-4" />
-              Import from Spotify
-            </span>
-          }
-          onClose={() => setShowSpotifyModal(false)}
-          className="max-w-lg max-h-[90vh] overflow-y-auto"
-        >
-          <SpotifyPlaylistPicker />
-        </PcModal>
-      )}
 
       {deckToDelete && (
         <Modal

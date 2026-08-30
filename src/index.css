@@ -693,16 +693,6 @@
   background: var(--pc-button-hover-bg);
 }
 
-.home-deck-add--spotify {
-  border-style: solid;
-  border-color: #1db954;
-  background: color-mix(in srgb, #1db954 8%, var(--pc-window-body-bg));
-}
-
-.home-deck-add--spotify:hover {
-  background: color-mix(in srgb, #1db954 14%, var(--pc-button-hover-bg));
-}
-
 .home-deck-card {
   min-width: 0;
   padding: 20px var(--pc-space-5, 16px) 18px;

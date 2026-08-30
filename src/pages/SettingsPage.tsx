@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Group, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
 import { BackButton } from "../components/ui/BackButton";
-import { useAuth } from "../state/AuthContext";
 import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
 import { useToast } from "../state/ToastContext";
@@ -11,13 +10,10 @@ import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
 import {
-  ListMusic,
   Check,
   ExternalLink,
   ShieldCheck,
   RotateCcw,
-  LogIn,
-  LogOut,
   Monitor,
   Moon,
   Sun,
@@ -61,7 +57,6 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { isConfigured, isAuthenticated, login, logout, error } = useAuth();
   const { decks, exportDeck, importDeck, refreshDecks } = useDeck();
   const { theme, setTheme } = useTheme();
   const { showToast } = useToast();
@@ -163,9 +158,9 @@ export const SettingsPage: React.FC = () => {
     <div className="text-xs leading-relaxed space-y-3">
       <p>
         {APP_NAME} runs in your web browser with no backend of its own. Your decks, embed cache,
-        theme, and Spotify tokens (if connected) are stored in <strong>localStorage</strong> on your
-        device and are not sent to us. Active host games and card-print settings are kept in{" "}
-        <strong>sessionStorage</strong> until you close the browser tab.
+        and theme are stored in <strong>localStorage</strong> on your device and are not sent to us.
+        Active host games and card-print settings are kept in <strong>sessionStorage</strong> until you
+        close the browser tab.
       </p>
       <p>When you use certain features, your browser may contact third parties directly:</p>
       <ul className="list-disc list-inside space-y-1 pl-1">
@@ -180,9 +175,6 @@ export const SettingsPage: React.FC = () => {
         </li>
         <li>
           <strong>noembed.com</strong> — embed permission checks
-        </li>
-        <li>
-          <strong>Spotify</strong> — only if you choose to connect
         </li>
         <li>
           <strong>GitHub Pages</strong> — hosting; see the{" "}
@@ -257,50 +249,6 @@ export const SettingsPage: React.FC = () => {
               ))}
             </div>
           </Group>
-
-          {isConfigured && (
-            <Group
-              legend={
-                <span className="inline-flex items-center gap-2">
-                  <ListMusic className="w-4 h-4" />
-                  Spotify
-                </span>
-              }
-            >
-              <p className="text-xs mb-3">
-                {isAuthenticated ? "Connected" : "Not connected"} — import playlists you own or
-                collaborate on. Playback still uses YouTube; Spotify is metadata only.
-              </p>
-
-              <div className="pc-bevel-inset p-3 text-xs space-y-2 mb-4">
-                <p>
-                  <strong>For the site maintainer:</strong> Spotify Development Mode requires the app owner
-                  to have an active <strong>Spotify Premium</strong> subscription. Without Premium, playlist
-                  import returns 403 errors even after login.
-                </p>
-                <p>
-                  Up to 5 users can be allowlisted under Users and Access in the Spotify Developer Dashboard.
-                  Playback in this app still uses YouTube only.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                {isAuthenticated ? (
-                  <Button type="button" onClick={logout}>
-                    <LogOut className="w-4 h-4" />
-                    Disconnect Spotify
-                  </Button>
-                ) : (
-                  <Button type="button" onClick={() => login()}>
-                    <LogIn className="w-4 h-4" />
-                    Connect with Spotify
-                  </Button>
-                )}
-              </div>
-
-              {error && <div className="pc-bevel-inset p-3 text-xs mt-4">{error}</div>}
-            </Group>
-          )}
 
           <Group
             legend={

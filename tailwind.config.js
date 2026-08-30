@@ -26,7 +26,6 @@ export default {
           600: '#16a34a',
           700: '#15803d',
         },
-        spotify: '#1DB954',
         youtube: '#FF0000',
       },
     },

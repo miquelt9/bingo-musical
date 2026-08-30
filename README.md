@@ -3,7 +3,7 @@
 A desktop-first static SPA for creating, editing, printing, and hosting interactive Musical Bingo games.
 Built with **Vite, React, TypeScript, Tailwind CSS, [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui), jsPDF, and the YouTube IFrame API**.
 
-Hosted serverless on GitHub Pages with zero backend dependencies and no Google or Spotify Premium requirement.
+Hosted serverless on GitHub Pages with zero backend dependencies and no Google account requirement.
 
 ---
 
@@ -14,7 +14,6 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
   - Selecting a song searches YouTube with `Artist Title official audio`.
   - Paste a YouTube video or playlist URL if you already have the clip.
   - Paste a bulk song list (`Artist - Title`, one per line) and match clips in the editor.
-  - Connect Spotify to import playlists you own or collaborate on (YouTube matching runs automatically).
   - Decks auto-save as you add songs from search.
 - 🔍 **Smart YouTube Matcher:**
   - Automated fallback search across public Invidious & Piped instances (no YouTube API token required).
@@ -69,46 +68,31 @@ npm install
 
 1. Search a song or artist (autocomplete from iTunes/Deezer), pick the title, then choose the YouTube clip, or
 2. Paste a bulk song list (`Artist - Title`, one per line), or
-3. Connect Spotify on the home page and import one of your playlists, or
-4. Import a previously exported JSON deck / use the sample deck.
+3. Import a previously exported JSON deck / use the sample deck.
 
-Then open **Editor**, trim clips if needed, resolve any blocked songs, print cards, and host the game. Spotify imports auto-start YouTube matching.
+Then open **Editor**, trim clips if needed, resolve any blocked songs, print cards, and host the game.
 
-### 3. Spotify (optional, for deployers)
-
-End users do **not** need a Spotify Developer account. The site maintainer configures Spotify once:
-
-1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Add redirect URIs (HTTPS only):
-   - Production: `https://miquelt9.github.io/bingo-musical/`
-   - Local dev: `https://127.0.0.1:5173/` (`npm run dev` serves HTTPS via a self-signed cert — accept the browser warning once)
-3. Set `VITE_SPOTIFY_CLIENT_ID` in `.env` locally or as a GitHub Actions secret for production builds.
-4. While the app is in Development Mode, add each user's Spotify account email under **Users and Access** (max 5 users). The **app owner must have Spotify Premium** or all API calls return 403.
-
-Users then click **Connect with Spotify** on the home page (or in **Settings**) and pick a playlist. Playback still uses YouTube only.
-
-### 4. Run Development Server
+### 3. Run Development Server
 
 ```bash
 npm run dev
 ```
 
-Visit [https://127.0.0.1:5173](https://127.0.0.1:5173) in your desktop browser (self-signed cert — proceed past the warning). Use this exact URL for Spotify OAuth; `localhost` and plain `http://` are not accepted by Spotify.
+Visit [http://localhost:5173](http://localhost:5173) in your desktop browser.
 
-### 5. Build for Production
+### 4. Build for Production
 
 ```bash
 npm run build
 ```
 
-### 6. Deploy to GitHub Pages
+### 5. Deploy to GitHub Pages
 
 Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.yml`). Set repository secrets as needed:
 
-- `VITE_SPOTIFY_CLIENT_ID` — optional Spotify playlist import
 - `VITE_SHARE_API_URL` — Cloudflare Worker URL for short deck share links (see `worker/README.md`)
 
-### 7. Deploy the share API (optional)
+### 6. Deploy the share API (optional)
 
 Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`).
 
@@ -129,7 +113,7 @@ If link sharing is not configured, the share dialog falls back to downloading a 
 
 - **Framework:** React 18 + TypeScript + Vite
 - **UI:** [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui) (Win9x desktop shell) + Tailwind CSS + Lucide Icons
-- **Routing:** React Router DOM (HashRouter for GitHub Pages + OAuth query handling)
+- **Routing:** React Router DOM (HashRouter for GitHub Pages)
 - **PDF Generation:** jsPDF
 - **Audio/Video Playback:** YouTube IFrame Player API
 - **Persistence:** Browser `localStorage` (decks, preferences, embed cache) + `sessionStorage` (host game & card settings) + JSON import/export
@@ -147,7 +131,7 @@ Musical Bingo Creator is a free personal hobby project. It is **not affiliated**
 
 ## Privacy
 
-Decks, theme, embed cache, and Spotify tokens (if connected) stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, Spotify (if connected), and GitHub Pages hosting. There is no analytics or user accounts on our side. See **Settings → Privacy** in the app for the full notice.
+Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, and GitHub Pages hosting. There is no analytics or user accounts on our side. See **Settings → Privacy** in the app for the full notice.
 
 ## Third-party services
 
@@ -155,4 +139,3 @@ Decks, theme, embed cache, and Spotify tokens (if connected) stay in your browse
 - **Invidious / Piped** — public instances for YouTube search and metadata (no official YouTube API key)
 - **iTunes, Deezer, MusicBrainz** — song title autocomplete
 - **noembed.com** — YouTube embed permission checks
-- **Spotify** (optional) — playlist metadata import only

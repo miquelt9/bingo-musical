@@ -3,10 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button, Window } from "@miquelt9/pc-ui";
 import { AlertCircle, Upload } from "lucide-react";
 import { BackButton } from "../components/ui/BackButton";
-import { SpotifyPlaylistPicker } from "../components/spotify/SpotifyPlaylistPicker";
-import { isSpotifyConfigured } from "../lib/spotify/auth";
 import { useDeck } from "../state/DeckContext";
-import { ListMusic } from "lucide-react";
 
 export const ImportPage: React.FC = () => {
   const { importDeck } = useDeck();
@@ -15,7 +12,6 @@ export const ImportPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const spotifyImportEnabled = isSpotifyConfigured();
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -103,22 +99,6 @@ export const ImportPage: React.FC = () => {
           .
         </p>
       </Window>
-
-      {spotifyImportEnabled && (
-        <Window
-          title={
-            <span className="inline-flex items-center gap-2">
-              <ListMusic className="w-4 h-4" />
-              Import from Spotify
-            </span>
-          }
-        >
-          <p className="text-sm mb-4">
-            Connect Spotify and import a playlist or your liked songs. Playback still uses YouTube clips.
-          </p>
-          <SpotifyPlaylistPicker />
-        </Window>
-      )}
     </div>
   );
 };

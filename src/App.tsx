@@ -1,6 +1,5 @@
 import React from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./state/AuthContext";
 import { DeckProvider } from "./state/DeckContext";
 import { ThemeProvider } from "./state/ThemeContext";
 import { ToastProvider } from "./state/ToastContext";
@@ -18,22 +17,20 @@ export const App: React.FC = () => {
     <HashRouter>
       <ThemeProvider>
         <ToastProvider>
-          <AuthProvider>
-            <DeckProvider>
-              <AppShell>
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/deck/:id" element={<EditorPage />} />
-                  <Route path="/deck/:id/cards" element={<CardsPage />} />
-                  <Route path="/deck/:id/play" element={<HostPage />} />
-                  <Route path="/import" element={<ImportPage />} />
-                  <Route path="/share/:shareId" element={<SharedDeckPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </AppShell>
-            </DeckProvider>
-          </AuthProvider>
+          <DeckProvider>
+            <AppShell>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/deck/:id" element={<EditorPage />} />
+                <Route path="/deck/:id/cards" element={<CardsPage />} />
+                <Route path="/deck/:id/play" element={<HostPage />} />
+                <Route path="/import" element={<ImportPage />} />
+                <Route path="/share/:shareId" element={<SharedDeckPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </AppShell>
+          </DeckProvider>
         </ToastProvider>
       </ThemeProvider>
     </HashRouter>

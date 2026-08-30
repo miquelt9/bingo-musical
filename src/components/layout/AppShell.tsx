@@ -7,9 +7,7 @@ import {
   Printer,
   Radio,
   Settings,
-  LogOut,
 } from "lucide-react";
-import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
 import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDeckOnLeave";
@@ -34,7 +32,6 @@ function formatClock(date: Date) {
 }
 
 const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, logout } = useAuth();
   const { decks, activeDeck, loadDeck } = useDeck();
   const { theme } = useTheme();
   const location = useLocation();
@@ -114,25 +111,14 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const mobileOverflowItems = useMemo((): OverflowMenuItem[] => {
-    const items: OverflowMenuItem[] = [
+    return [
       {
         icon: <Settings className="w-4 h-4" aria-hidden="true" />,
         label: "Settings",
         onClick: () => navigate("/settings"),
       },
     ];
-
-    if (isAuthenticated) {
-      items.push({
-        icon: <LogOut className="w-4 h-4" aria-hidden="true" />,
-        label: "Disconnect Spotify",
-        onClick: logout,
-        destructive: true,
-      });
-    }
-
-    return items;
-  }, [isAuthenticated, logout, navigate]);
+  }, [navigate]);
 
   return (
     <Desktop tiled theme={theme}>
@@ -239,18 +225,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="sm:hidden">
           <OverflowMenu items={mobileOverflowItems} ariaLabel="More options" align="left" />
         </div>
-
-        {isAuthenticated && (
-          <button
-            type="button"
-            onClick={logout}
-            title="Disconnect Spotify account"
-            className="pc-button hidden sm:inline-flex"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Spotify
-          </button>
-        )}
 
         <div className="pc-taskbar-trailing">
           <div className="pc-taskbar-clock hidden sm:block">{clock}</div>

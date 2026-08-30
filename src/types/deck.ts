@@ -1,7 +1,7 @@
 export type MatchStatus = "pending" | "matched" | "failed" | "manual";
 
 export interface Track {
-  id: string;              // Spotify track id or unique id
+  id: string;
   title: string;
   artist: string;
   album?: string;

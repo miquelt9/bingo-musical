@@ -33,7 +33,6 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_SPOTIFY_CLIENT_ID: ${{ secrets.VITE_SPOTIFY_CLIENT_ID }}
           VITE_SHARE_API_URL: ${{ secrets.VITE_SHARE_API_URL }}
 
       - name: Upload Pages artifact
