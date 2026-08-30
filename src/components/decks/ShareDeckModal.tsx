@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { Copy, Download, Loader2, Mail, MessageCircle, Send } from "lucide-react";
+import { Copy, Loader2, Mail, MessageCircle, Send } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
 import {
   buildShareMessage,
   buildSharedDeckUrl,
-  downloadDeckFile,
   getPlatformShareUrls,
 } from "../../lib/share/deckShare";
 import { isShareApiConfigured, publishSharedDeck } from "../../lib/share/sharedDecksApi";
@@ -63,9 +63,6 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     };
   }, [deck, shareUrl]);
 
-  const message = buildShareMessage(deck, shareUrl);
-  const platformUrls = getPlatformShareUrls(deck, shareUrl);
-
   const copyLink = async () => {
     if (!shareUrl) return;
     try {
@@ -85,6 +82,8 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   };
 
   const copyMessage = async () => {
+    if (!shareUrl) return;
+    const message = buildShareMessage(deck, shareUrl);
     try {
       await navigator.clipboard.writeText(message);
       showToast({
@@ -99,15 +98,6 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
         duration: 5000,
       });
     }
-  };
-
-  const handleDownload = () => {
-    downloadDeckFile(deck);
-    showToast({
-      title: "Deck downloaded",
-      message: "JSON file saved as a backup.",
-      duration: 4000,
-    });
   };
 
   return (
@@ -131,21 +121,17 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
                 <Copy className="w-4 h-4" />
                 Copy message
               </Button>
-              <Button type="button" onClick={handleDownload}>
-                <Download className="w-4 h-4" />
-                Download JSON
-              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
-              <a href={platformUrls.whatsapp} target="_blank" rel="noopener noreferrer" className="pc-button">
+              <a href={getPlatformShareUrls(deck, shareUrl).whatsapp} target="_blank" rel="noopener noreferrer" className="pc-button">
                 <MessageCircle className="w-4 h-4" />
                 WhatsApp
               </a>
-              <a href={platformUrls.telegram} target="_blank" rel="noopener noreferrer" className="pc-button">
+              <a href={getPlatformShareUrls(deck, shareUrl).telegram} target="_blank" rel="noopener noreferrer" className="pc-button">
                 <Send className="w-4 h-4" />
                 Telegram
               </a>
-              <a href={platformUrls.email} className="pc-button">
+              <a href={getPlatformShareUrls(deck, shareUrl).email} className="pc-button">
                 <Mail className="w-4 h-4" />
                 Email
               </a>
@@ -155,30 +141,17 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
           <>
             <p className="text-sm">
               {publishError
-                ? "Could not create a share link. You can still send the JSON file manually."
-                : "Link sharing is not configured yet. Download the JSON file to share this deck."}
+                ? "Could not create a share link right now. Try again later, or export the deck as JSON from Settings."
+                : "Link sharing is not configured on this site yet. Export the deck as JSON from Settings to share it manually."}
             </p>
             {publishError ? <p className="text-xs pc-bevel-inset p-3">{publishError}</p> : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="primary" onClick={handleDownload}>
-                <Download className="w-4 h-4" />
-                Download deck
-              </Button>
-              <Button type="button" onClick={() => void copyMessage()}>
-                <Copy className="w-4 h-4" />
-                Copy import message
-              </Button>
-            </div>
+            <Link to="/settings" className="pc-button inline-flex" onClick={onClose}>
+              Open Settings
+            </Link>
           </>
         )}
 
         {shareId ? <p className="text-xs opacity-70">Share id: {shareId}</p> : null}
-
-        {!shareUrl && !isPublishing ? (
-          <pre className="text-xs pc-bevel-inset p-3 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-            {message}
-          </pre>
-        ) : null}
       </div>
     </PcModal>
   );

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button, Group, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
 import { useAuth } from "../state/AuthContext";
 import { useDeck } from "../state/DeckContext";
@@ -20,15 +21,22 @@ import {
   Sun,
   Code,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Upload,
 } from "lucide-react";
 
 export const SettingsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { isConfigured, isAuthenticated, login, logout, error } = useAuth();
-  const { refreshDecks } = useDeck();
+  const { decks, exportDeck, importDeck, refreshDecks } = useDeck();
   const { theme, setTheme } = useTheme();
   const { showToast } = useToast();
 
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleResetSampleDeck = () => {
     saveStoredDecks([SAMPLE_POP_HITS_DECK]);
@@ -40,6 +48,32 @@ export const SettingsPage: React.FC = () => {
       message: "All decks were replaced with the default Sample Pop Hits deck.",
       duration: 8000,
     });
+  };
+
+  const handleImportFile = async (file: File | undefined) => {
+    if (!file) return;
+
+    try {
+      const imported = await importDeck(file);
+      showToast({
+        title: "Deck imported",
+        icon: <Check className="w-3.5 h-3.5" />,
+        message: `"${imported.name}" was added to your decks.`,
+        duration: 5000,
+      });
+      navigate(`/deck/${imported.id}`);
+    } catch (err) {
+      showToast({
+        title: "JSON import failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: (err as Error).message,
+        duration: 10000,
+      });
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   return (
@@ -146,6 +180,75 @@ export const SettingsPage: React.FC = () => {
             Reset All Data
           </Button>
         </div>
+      </Window>
+
+      <Window
+        title={
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 bg-transparent border-0 p-0 text-inherit font-inherit cursor-pointer w-full text-left"
+            onClick={() => setShowAdvanced((open) => !open)}
+            aria-expanded={showAdvanced}
+          >
+            {showAdvanced ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            Advanced options
+          </button>
+        }
+      >
+        {showAdvanced ? (
+          <div className="space-y-4">
+            <p className="text-xs">
+              Most people share decks with a link from the Share button. Use JSON files only when you need a
+              manual backup or offline transfer.
+            </p>
+
+            <Group legend="Import JSON deck">
+              <p className="text-xs mb-3">
+                Add a deck from a <code className="text-xs">.json</code> file. For short share links, open the
+                link directly instead.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => void handleImportFile(e.target.files?.[0])}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="w-4 h-4" />
+                  Choose JSON file
+                </Button>
+                <Link to="/import" className="pc-link text-xs">
+                  Open full import page
+                </Link>
+              </div>
+            </Group>
+
+            <Group legend="Export JSON deck">
+              {decks.length === 0 ? (
+                <p className="text-xs">No decks to export yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {decks.map((deck) => (
+                    <li
+                      key={deck.id}
+                      className="flex items-center justify-between gap-3 pc-bevel-inset p-2 text-xs"
+                    >
+                      <span className="truncate">{deck.name}</span>
+                      <Button type="button" onClick={() => exportDeck(deck)}>
+                        <Download className="w-4 h-4" />
+                        Export
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Group>
+          </div>
+        ) : (
+          <p className="text-xs">JSON import and export for manual deck transfer.</p>
+        )}
       </Window>
 
       {showResetModal && (

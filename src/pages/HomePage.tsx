@@ -14,11 +14,9 @@ import { useToast } from "../state/ToastContext";
 import {
   Music,
   Plus,
-  Upload,
   Edit3,
   Radio,
   Printer,
-  Download,
   Copy,
   Trash2,
   Share2,
@@ -27,7 +25,7 @@ import {
 } from "lucide-react";
 
 export const HomePage: React.FC = () => {
-  const { decks, createDeck, updateDeck, deleteDeck, duplicateDeck, exportDeck, shareDeck, importDeck } = useDeck();
+  const { decks, createDeck, updateDeck, deleteDeck, duplicateDeck, shareDeck } = useDeck();
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -39,7 +37,6 @@ export const HomePage: React.FC = () => {
   const [ingestError, setIngestError] = useState<string | null>(null);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const buildingDeckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -186,25 +183,6 @@ export const HomePage: React.FC = () => {
     navigate(`/deck/${buildingDeckId}`);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const imported = await importDeck(file);
-      navigate(`/deck/${imported.id}`);
-    } catch (err) {
-      showToast({
-        title: "JSON import failed",
-        icon: <AlertCircle className="w-3.5 h-3.5" />,
-        message: (err as Error).message,
-        duration: 10000,
-      });
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
   const handleCreateEmptyDeck = () => {
     const now = new Date().toISOString();
     saveAndOpen({
@@ -324,17 +302,6 @@ export const HomePage: React.FC = () => {
               {showBulkPaste ? "Hide bulk paste" : "Or paste a whole song list"}
             </button>
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".json,application/json"
-                className="hidden"
-              />
-              <Button type="button" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="w-4 h-4" />
-                Import JSON deck
-              </Button>
               <Button type="button" onClick={handleCreateEmptyDeck}>
                 <Plus className="w-4 h-4" />
                 Empty deck
@@ -374,9 +341,6 @@ export const HomePage: React.FC = () => {
                     <div className="flex items-center gap-1 shrink-0">
                       <button type="button" className="pc-button" onClick={() => shareDeck(deck)} title="Share deck">
                         <Share2 className="w-4 h-4" />
-                      </button>
-                      <button type="button" className="pc-button" onClick={() => exportDeck(deck)} title="Export deck as JSON">
-                        <Download className="w-4 h-4" />
                       </button>
                       <button type="button" className="pc-button" onClick={() => duplicateDeck(deck.id)} title="Duplicate deck">
                         <Copy className="w-4 h-4" />

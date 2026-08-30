@@ -1,6 +1,4 @@
 import { Deck } from "../../types/deck";
-import { serializeDeckForExport } from "../storage/decks";
-import { downloadTextFile } from "../storage/download";
 
 export function getAppOrigin(): string {
   if (typeof window !== "undefined") {
@@ -39,39 +37,16 @@ export function buildShareMessage(deck: Deck, shareUrl?: string): string {
     ].join("\n");
   }
 
-  const importUrl = getImportPageUrl();
   return [
     `I made a Musical Bingo deck: "${deck.name}"!`,
     "",
-    `1. Open this link: ${importUrl}`,
-    "2. Import the attached JSON file",
+    "Ask me for the share link, or export the deck as JSON from Settings → Advanced options.",
     "",
     `Create your own at ${homeUrl}`,
   ].join("\n");
 }
 
-export function deckToShareFile(deck: Deck): File {
-  const { filename, jsonText } = serializeDeckForExport(deck);
-  return new File([jsonText], filename, { type: "application/json" });
-}
-
-export function downloadDeckFile(deck: Deck): void {
-  const { filename, jsonText } = serializeDeckForExport(deck);
-  downloadTextFile(filename, jsonText, "application/json");
-}
-
-export function canShareDeckFile(file: File): boolean {
-  if (typeof navigator === "undefined" || typeof navigator.canShare !== "function") {
-    return false;
-  }
-  try {
-    return navigator.canShare({ files: [file] });
-  } catch {
-    return false;
-  }
-}
-
-export async function shareDeckNative(deck: Deck, shareUrl?: string): Promise<boolean> {
+export async function shareDeckNative(deck: Deck, shareUrl: string): Promise<boolean> {
   if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
     return false;
   }
@@ -79,16 +54,8 @@ export async function shareDeckNative(deck: Deck, shareUrl?: string): Promise<bo
   const shareData: ShareData = {
     title: `Musical Bingo: ${deck.name}`,
     text: buildShareMessage(deck, shareUrl),
-    url: shareUrl ?? getImportPageUrl(),
+    url: shareUrl,
   };
-
-  if (!shareUrl) {
-    const file = deckToShareFile(deck);
-    if (!canShareDeckFile(file)) {
-      return false;
-    }
-    shareData.files = [file];
-  }
 
   try {
     if (typeof navigator.canShare === "function" && !navigator.canShare(shareData)) {
@@ -111,13 +78,12 @@ export interface PlatformShareUrls {
   email: string;
 }
 
-export function getPlatformShareUrls(deck: Deck, shareUrl?: string): PlatformShareUrls {
+export function getPlatformShareUrls(deck: Deck, shareUrl: string): PlatformShareUrls {
   const message = buildShareMessage(deck, shareUrl);
-  const link = shareUrl ?? getImportPageUrl();
 
   return {
     whatsapp: `https://wa.me/?text=${encodeURIComponent(message)}`,
-    telegram: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(message)}`,
+    telegram: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(message)}`,
     email: `mailto:?subject=${encodeURIComponent(`Musical Bingo deck: ${deck.name}`)}&body=${encodeURIComponent(message)}`,
   };
 }

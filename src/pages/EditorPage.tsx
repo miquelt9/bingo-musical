@@ -24,7 +24,6 @@ import {
   Edit3,
   Printer,
   Radio,
-  Download,
   Share2,
   Plus,
   ArrowLeft,
@@ -38,7 +37,7 @@ export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { decks, activeDeck, loadDeck, updateDeck, exportDeck, shareDeck } = useDeck();
+  const { decks, activeDeck, loadDeck, updateDeck, shareDeck } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
@@ -346,10 +345,6 @@ export const EditorPage: React.FC = () => {
           <Button type="button" onClick={() => shareDeck(deck)}>
             <Share2 className="w-3.5 h-3.5" />
             Share
-          </Button>
-          <Button type="button" onClick={() => exportDeck(deck)}>
-            <Download className="w-3.5 h-3.5" />
-            Export JSON
           </Button>
           <Link to={`/deck/${deck.id}/cards`} className="pc-button">
             <Printer className="w-4 h-4" />
