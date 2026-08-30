@@ -68,17 +68,6 @@ export const HomePage: React.FC = () => {
     </button>
   );
 
-  const spotifyImportLink = (
-    <button
-      type="button"
-      className="pc-link text-xs bg-transparent border-0 p-0 inline-flex items-center gap-1"
-      onClick={() => setShowSpotifyModal(true)}
-    >
-      <ListMusic className="w-3.5 h-3.5" />
-      Import from Spotify
-    </button>
-  );
-
   return (
     <Window
       fill
@@ -87,12 +76,30 @@ export const HomePage: React.FC = () => {
       titleBarProps={{ controls: showEmptyDeckAddTile ? undefined : newDeckButton }}
     >
       <p className="home-decks-intro text-sm mb-4">
-        {isMobile
-          ? "Match clips, print cards, and host bingo."
-          : "Match YouTube clips, print bingo sheets, or launch the host board."}
+        {spotifyImportEnabled
+          ? isMobile
+            ? "Import a Spotify playlist or start an empty deck, then match clips and host bingo."
+            : "Import a Spotify playlist or start an empty deck, then match YouTube clips and print cards."
+          : isMobile
+            ? "Match clips, print cards, and host bingo."
+            : "Match YouTube clips, print bingo sheets, or launch the host board."}
       </p>
 
       <div className="home-decks-grid">
+        {spotifyImportEnabled && (
+          <button
+            type="button"
+            className="home-deck-add home-deck-add--spotify"
+            onClick={() => setShowSpotifyModal(true)}
+          >
+            <ListMusic className="w-6 h-6 shrink-0 opacity-90" aria-hidden />
+            <span className="font-semibold text-sm">Import from Spotify</span>
+            <span className="text-xs opacity-75">
+              {isAuthenticated ? "Pick a playlist or liked songs" : "Connect and pick a playlist"}
+            </span>
+          </button>
+        )}
+
         {showEmptyDeckAddTile && (
           <button
             type="button"
@@ -300,16 +307,6 @@ export const HomePage: React.FC = () => {
           );
         })}
       </div>
-
-      {spotifyImportEnabled &&
-        (isMobile ? (
-          <details className="home-decks-import-disclosure">
-            <summary className="home-decks-import-disclosure-summary">Import songs…</summary>
-            <div className="home-decks-import-disclosure-panel">{spotifyImportLink}</div>
-          </details>
-        ) : (
-          <div className="home-decks-import-links">{spotifyImportLink}</div>
-        ))}
 
       {showSpotifyModal && (
         <PcModal
