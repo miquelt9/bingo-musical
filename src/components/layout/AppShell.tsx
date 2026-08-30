@@ -13,6 +13,7 @@ import { useAuth } from "../../state/AuthContext";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
 import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDeckOnLeave";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
 import { YoutubeVideoSlots } from "../player/YoutubeVideoSlots";
@@ -45,6 +46,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     videoWindowBounds,
     setVideoWindowBounds,
   } = usePlayerUI();
+  const isMobile = useIsMobile();
 
   useAutoDeleteEmptyDeckOnLeave();
 
@@ -155,14 +157,16 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       )}
 
-      <DraggableVideoWindow
-        visible={showVideo && isHostRoute}
-        bounds={videoWindowBounds}
-        onBoundsChange={setVideoWindowBounds}
-        onClose={() => setShowVideo(false)}
-      >
-        <YoutubeVideoSlots />
-      </DraggableVideoWindow>
+      {isHostRoute && !isMobile && (
+        <DraggableVideoWindow
+          visible={showVideo && isHostRoute}
+          bounds={videoWindowBounds}
+          onBoundsChange={setVideoWindowBounds}
+          onClose={() => setShowVideo(false)}
+        >
+          <YoutubeVideoSlots />
+        </DraggableVideoWindow>
+      )}
 
       <Taskbar className="print:hidden">
         <Link to="/" className="pc-button pc-start-btn hidden sm:inline-flex">

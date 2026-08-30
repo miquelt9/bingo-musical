@@ -2,6 +2,10 @@ import { createPkcePair, consumeVerifier } from "./pkce";
 
 const AUTH_TOKEN_STORAGE_KEY = "bingo-musical:spotify-auth";
 const SPOTIFY_RETURN_STORAGE_KEY = "bingo-musical:spotify-return";
+const EXCHANGED_CODE_KEY = "bingo-musical:spotify-exchanged-code";
+
+let exchangeInFlight: Promise<StoredAuthData> | null = null;
+let refreshInFlight: Promise<StoredAuthData> | null = null;
 const SCOPES =
   "playlist-read-private playlist-read-collaborative user-library-read";
 
@@ -54,11 +58,19 @@ export function getStoredAuth(): StoredAuthData | null {
 }
 
 export function saveStoredAuth(auth: StoredAuthData): void {
-  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, JSON.stringify(auth));
+  try {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, JSON.stringify(auth));
+  } catch (err) {
+    if (err instanceof DOMException && (err.name === "QuotaExceededError" || err.code === 22)) {
+      throw new Error("Browser storage is full. Disconnect Spotify or free up space.");
+    }
+    throw err;
+  }
 }
 
 export function clearStoredAuth(): void {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  sessionStorage.removeItem(EXCHANGED_CODE_KEY);
 }
 
 export async function beginLogin(): Promise<void> {
@@ -75,12 +87,13 @@ export async function beginLogin(): Promise<void> {
   url.searchParams.set("scope", SCOPES);
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("code_challenge", challenge);
+  url.searchParams.set("show_dialog", "true");
 
   setSpotifyReturnIntent("import");
   window.location.assign(url.toString());
 }
 
-export async function exchangeCode(code: string): Promise<StoredAuthData> {
+async function performCodeExchange(code: string): Promise<StoredAuthData> {
   const clientId = getClientId();
   if (!clientId) {
     throw new Error("Spotify is not configured on this deployment.");
@@ -118,10 +131,28 @@ export async function exchangeCode(code: string): Promise<StoredAuthData> {
   };
 
   saveStoredAuth(authData);
+  sessionStorage.setItem(EXCHANGED_CODE_KEY, code);
   return authData;
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<StoredAuthData> {
+export async function exchangeCode(code: string): Promise<StoredAuthData> {
+  const existing = getStoredAuth();
+  const exchangedCode = sessionStorage.getItem(EXCHANGED_CODE_KEY);
+  if (exchangedCode === code && existing) {
+    return existing;
+  }
+
+  if (exchangeInFlight) {
+    return exchangeInFlight;
+  }
+
+  exchangeInFlight = performCodeExchange(code).finally(() => {
+    exchangeInFlight = null;
+  });
+  return exchangeInFlight;
+}
+
+async function performTokenRefresh(refreshToken: string): Promise<StoredAuthData> {
   const clientId = getClientId();
   if (!clientId) {
     throw new Error("Spotify is not configured on this deployment.");
@@ -153,6 +184,17 @@ export async function refreshAccessToken(refreshToken: string): Promise<StoredAu
 
   saveStoredAuth(authData);
   return authData;
+}
+
+export async function refreshAccessToken(refreshToken: string): Promise<StoredAuthData> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = performTokenRefresh(refreshToken).finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
 }
 
 export async function getValidAccessToken(): Promise<string | null> {

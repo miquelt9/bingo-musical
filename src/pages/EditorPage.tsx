@@ -207,15 +207,21 @@ export const EditorPage: React.FC = () => {
     if (isMatching || isAutoFixing || isValidating) return;
 
     const hasPending = deck.tracks.some((track) => track.matchStatus === "pending");
+    if (!hasPending) {
+      autostartMatchRef.current = true;
+      setSearchParams((params) => {
+        params.delete("autostart");
+        return params;
+      }, { replace: true });
+      return;
+    }
+
     autostartMatchRef.current = true;
     setSearchParams((params) => {
       params.delete("autostart");
       return params;
     }, { replace: true });
-
-    if (hasPending) {
-      void handleAutoMatchAll();
-    }
+    void handleAutoMatchAll();
   }, [deck, autostartMatch, isMatching, isAutoFixing, isValidating, setSearchParams, handleAutoMatchAll]);
 
   if (!deck) {

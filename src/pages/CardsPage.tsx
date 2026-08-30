@@ -9,7 +9,6 @@ import {
   cellCount,
   uniqueSongCount,
 } from "../lib/bingo/generateCards";
-import { downloadBingoPdf } from "../lib/bingo/pdf";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
@@ -186,6 +185,7 @@ export const CardsPage: React.FC = () => {
     setPdfProgress({ current: 0, total: cards.length });
 
     try {
+      const { downloadBingoPdf } = await import("../lib/bingo/pdf");
       await downloadBingoPdf(cards, cardOptions, (current, total) => {
         setPdfProgress({ current, total });
       });

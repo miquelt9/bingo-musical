@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useDeck } from "../state/DeckContext";
+import { getDeckById } from "../lib/storage/decks";
 import { isDiscardableDeck } from "../lib/decks/discardable";
 
 function getDeckIdFromPath(pathname: string): string | null {
@@ -10,7 +11,7 @@ function getDeckIdFromPath(pathname: string): string | null {
 
 export function useAutoDeleteEmptyDeckOnLeave(): void {
   const location = useLocation();
-  const { decks, deleteDeck } = useDeck();
+  const { deleteDeck } = useDeck();
   const prevPathRef = useRef(location.pathname);
 
   useEffect(() => {
@@ -24,9 +25,9 @@ export function useAutoDeleteEmptyDeckOnLeave(): void {
     const stillInSameDeck = currentPath.startsWith(`/deck/${leftDeckId}`);
     if (stillInSameDeck) return;
 
-    const leftDeck = decks.find((deck) => deck.id === leftDeckId);
+    const leftDeck = getDeckById(leftDeckId);
     if (leftDeck && isDiscardableDeck(leftDeck)) {
       deleteDeck(leftDeckId);
     }
-  }, [location.pathname, decks, deleteDeck]);
+  }, [location.pathname, deleteDeck]);
 }

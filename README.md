@@ -83,7 +83,7 @@ End users do **not** need a Spotify Developer account. The site maintainer confi
    - Production: `https://miquelt9.github.io/bingo-musical/`
    - Local dev: `https://127.0.0.1:5173/` (`npm run dev` serves HTTPS via a self-signed cert — accept the browser warning once)
 3. Set `VITE_SPOTIFY_CLIENT_ID` in `.env` locally or as a GitHub Actions secret for production builds.
-4. While the app is in Development Mode, add each user's Spotify email under **Users and Access**.
+4. While the app is in Development Mode, add each user's Spotify account email under **Users and Access** (max 5 users). The **app owner must have Spotify Premium** or all API calls return 403.
 
 Users then click **Connect with Spotify** on the home page (or in **Settings**) and pick a playlist. Playback still uses YouTube only.
 

@@ -68,6 +68,7 @@ const PLAYER_VARS: YT.PlayerVars = {
 };
 
 let slots: [PlayerSlot, PlayerSlot] | null = null;
+let playerMountCount = 0;
 let activeSlotIndex = 0;
 let pollTimer: number | null = null;
 let activeClip: Clip | null = null;
@@ -268,6 +269,7 @@ export async function mountDualPlayers(
   wrapA: HTMLElement,
   wrapB: HTMLElement
 ): Promise<void> {
+  playerMountCount += 1;
   await loadYoutubeApi();
 
   if (slots && areSlotsMounted()) {
@@ -334,6 +336,15 @@ function destroyPlayers(): void {
     }
   }
   slots = null;
+}
+
+/** Release a player mount; tears down iframes when the last mount is released. */
+export function teardownYoutubePlayers(): void {
+  playerMountCount = Math.max(0, playerMountCount - 1);
+  if (playerMountCount === 0) {
+    stopPlayback();
+    destroyPlayers();
+  }
 }
 
 function mapYTState(data: number): PlayerStateName {

@@ -1,5 +1,8 @@
 import { Track, Deck } from "../../types/deck";
 
+export const MAX_USER_PLAYLISTS = 200;
+export const MAX_LIKED_SONGS = 500;
+
 export interface SpotifyPlaylistSummary {
   id: string;
   name: string;
@@ -10,7 +13,7 @@ export interface SpotifyPlaylistSummary {
 }
 
 export interface SpotifyTrackItem {
-  track: {
+  track?: {
     id: string;
     name: string;
     duration_ms: number;
@@ -22,6 +25,42 @@ export interface SpotifyTrackItem {
     is_local?: boolean;
     type?: string;
   } | null;
+  /** Dev-mode playlist pages (Feb 2026+) use `item` instead of `track`. */
+  item?: SpotifyTrackItem["track"];
+}
+
+type SpotifyTrackPayload = NonNullable<SpotifyTrackItem["track"]>;
+
+const DEV_MODE_403_HINT =
+  "Spotify Development Mode requires the app owner to have Premium, and each user must be on the allowlist with their exact Spotify account email. Disconnect and reconnect after fixing.";
+
+async function throwSpotifyApiError(res: Response, action: string): Promise<never> {
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: { message?: string; status?: number };
+  };
+  const detail = body.error?.message?.trim();
+
+  if (res.status === 401) {
+    throw new Error("Spotify session expired. Please log in again.");
+  }
+
+  if (res.status === 403) {
+    throw new Error(
+      detail
+        ? `${detail} ${DEV_MODE_403_HINT}`
+        : `Spotify denied permission to ${action}. ${DEV_MODE_403_HINT}`
+    );
+  }
+
+  throw new Error(detail || `Failed to ${action} (HTTP ${res.status})`);
+}
+
+function trackFromPlaylistRow(row: SpotifyTrackItem): SpotifyTrackPayload | null {
+  return row.track ?? row.item ?? null;
+}
+
+function playlistTrackCount(playlist: { items?: { total?: number }; tracks?: { total?: number } }): number {
+  return playlist.items?.total ?? playlist.tracks?.total ?? 0;
 }
 
 export function parseSpotifyPlaylistId(input: string): string | null {
@@ -48,18 +87,26 @@ export function parseSpotifyPlaylistId(input: string): string | null {
   return null;
 }
 
-export async function fetchUserPlaylists(accessToken: string): Promise<SpotifyPlaylistSummary[]> {
+export async function fetchUserPlaylists(
+  accessToken: string,
+  signal?: AbortSignal
+): Promise<SpotifyPlaylistSummary[]> {
   const playlists: SpotifyPlaylistSummary[] = [];
-  let nextUrl: string | null = "https://api.spotify.com/v1/me/playlists?limit=50";
+  const limit = 50;
+  let offset = 0;
 
-  while (nextUrl) {
-    const res: Response = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const res = await fetch(
+      `https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal }
+    );
 
     if (!res.ok) {
-      if (res.status === 401) throw new Error("Spotify session expired. Please log in again.");
-      throw new Error(`Failed to load playlists (HTTP ${res.status})`);
+      await throwSpotifyApiError(res, "load playlists");
     }
 
     const data: {
@@ -68,10 +115,11 @@ export async function fetchUserPlaylists(accessToken: string): Promise<SpotifyPl
         name: string;
         description?: string;
         images?: Array<{ url: string }>;
+        items?: { total: number };
         tracks?: { total: number };
         owner?: { display_name?: string };
       }>;
-      next: string | null;
+      total: number;
     } = await res.json();
 
     for (const item of data.items || []) {
@@ -80,14 +128,15 @@ export async function fetchUserPlaylists(accessToken: string): Promise<SpotifyPl
         name: item.name,
         description: item.description || "",
         imageUrl: item.images?.[0]?.url || null,
-        totalTracks: item.tracks?.total || 0,
+        totalTracks: playlistTrackCount(item),
         ownerName: item.owner?.display_name || "Spotify User",
       });
     }
 
-    nextUrl = data.next;
-    // Cap at 200 playlists to avoid excessive paging in massive accounts
-    if (playlists.length >= 200) break;
+    offset += data.items?.length ?? 0;
+    if (!data.items?.length || offset >= (data.total ?? 0) || playlists.length >= MAX_USER_PLAYLISTS) {
+      break;
+    }
   }
 
   return playlists;
@@ -95,16 +144,17 @@ export async function fetchUserPlaylists(accessToken: string): Promise<SpotifyPl
 
 export async function fetchPlaylistDetails(
   playlistId: string,
-  accessToken: string
+  accessToken: string,
+  signal?: AbortSignal
 ): Promise<SpotifyPlaylistSummary> {
-  const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,tracks.total,owner.display_name`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,items.total,tracks.total,owner.display_name`,
+    { headers: { Authorization: `Bearer ${accessToken}` }, signal }
+  );
 
   if (!res.ok) {
     if (res.status === 404) throw new Error("Playlist not found or is private.");
-    if (res.status === 401) throw new Error("Spotify session expired. Please log in again.");
-    throw new Error(`Failed to fetch playlist details (HTTP ${res.status})`);
+    await throwSpotifyApiError(res, "fetch playlist details");
   }
 
   const data = await res.json();
@@ -113,7 +163,7 @@ export async function fetchPlaylistDetails(
     name: data.name,
     description: data.description || "",
     imageUrl: data.images?.[0]?.url || null,
-    totalTracks: data.tracks?.total || 0,
+    totalTracks: playlistTrackCount(data),
     ownerName: data.owner?.display_name || "Spotify User",
   };
 }
@@ -121,33 +171,39 @@ export async function fetchPlaylistDetails(
 export async function fetchAllPlaylistTracks(
   playlistId: string,
   accessToken: string,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<Track[]> {
   const tracks: Track[] = [];
   const seenIds = new Set<string>();
-  let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+  const limit = 50;
+  let offset = 0;
   let totalTracks = 0;
 
-  while (nextUrl) {
-    const res: Response = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const res = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal }
+    );
 
     if (!res.ok) {
-      if (res.status === 401) throw new Error("Spotify session expired. Please log in again.");
-      throw new Error(`Failed to fetch playlist tracks (HTTP ${res.status})`);
+      await throwSpotifyApiError(res, "fetch playlist tracks");
     }
 
     const data: {
       items: SpotifyTrackItem[];
       total: number;
-      next: string | null;
     } = await res.json();
 
     totalTracks = data.total || 0;
 
     for (const item of data.items || []) {
-      const mapped = item.track ? mapSpotifyTrackItem(item.track, seenIds) : null;
+      const track = trackFromPlaylistRow(item);
+      const mapped = track ? mapSpotifyTrackItem(track, seenIds) : null;
       if (mapped) tracks.push(mapped);
     }
 
@@ -155,14 +211,19 @@ export async function fetchAllPlaylistTracks(
       onProgress(tracks.length, totalTracks);
     }
 
-    nextUrl = data.next;
+    const pageSize = data.items?.length ?? 0;
+    offset += pageSize;
+    if (!pageSize || offset >= totalTracks) {
+      break;
+    }
   }
 
   return tracks;
 }
 
-function mapSpotifyTrackItem(t: NonNullable<SpotifyTrackItem["track"]>, seenIds: Set<string>): Track | null {
+function mapSpotifyTrackItem(t: SpotifyTrackPayload, seenIds: Set<string>): Track | null {
   if (!t.id || !t.name || t.is_local) return null;
+  if (t.type && t.type !== "track") return null;
   if (seenIds.has(t.id)) return null;
   seenIds.add(t.id);
 
@@ -188,36 +249,39 @@ function mapSpotifyTrackItem(t: NonNullable<SpotifyTrackItem["track"]>, seenIds:
 
 export async function fetchSavedTracks(
   accessToken: string,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<Track[]> {
   const tracks: Track[] = [];
   const seenIds = new Set<string>();
-  let nextUrl: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
+  const limit = 50;
+  let offset = 0;
   let totalTracks = 0;
 
-  while (nextUrl) {
-    const res: Response = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const res = await fetch(
+      `https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal }
+    );
 
     if (!res.ok) {
-      if (res.status === 401) throw new Error("Spotify session expired. Please log in again.");
-      if (res.status === 403) {
-        throw new Error("Missing permission to read liked songs. Disconnect and reconnect Spotify.");
-      }
-      throw new Error(`Failed to fetch liked songs (HTTP ${res.status})`);
+      await throwSpotifyApiError(res, "fetch liked songs");
     }
 
     const data: {
       items: SpotifyTrackItem[];
       total: number;
-      next: string | null;
     } = await res.json();
 
     totalTracks = data.total || 0;
 
     for (const item of data.items || []) {
-      const mapped = item.track ? mapSpotifyTrackItem(item.track, seenIds) : null;
+      const track = trackFromPlaylistRow(item);
+      const mapped = track ? mapSpotifyTrackItem(track, seenIds) : null;
       if (mapped) tracks.push(mapped);
     }
 
@@ -225,7 +289,15 @@ export async function fetchSavedTracks(
       onProgress(tracks.length, totalTracks);
     }
 
-    nextUrl = data.next;
+    if (tracks.length >= MAX_LIKED_SONGS) {
+      break;
+    }
+
+    const pageSize = data.items?.length ?? 0;
+    offset += pageSize;
+    if (!pageSize || offset >= totalTracks) {
+      break;
+    }
   }
 
   return tracks;

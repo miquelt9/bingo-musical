@@ -6,6 +6,24 @@ import { downloadTextFile, slugifyFilename } from "./download";
 
 const DECKS_STORAGE_KEY = "bingo-musical:decks";
 
+export class StorageQuotaError extends Error {
+  constructor(message = "Browser storage is full. Try exporting or deleting old decks.") {
+    super(message);
+    this.name = "StorageQuotaError";
+  }
+}
+
+function writeLocalStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    if (err instanceof DOMException && (err.name === "QuotaExceededError" || err.code === 22)) {
+      throw new StorageQuotaError();
+    }
+    throw err;
+  }
+}
+
 export function getStoredDecks(): Deck[] {
   try {
     const raw = localStorage.getItem(DECKS_STORAGE_KEY);
@@ -29,7 +47,7 @@ export function getStoredDecks(): Deck[] {
 }
 
 export function saveStoredDecks(decks: Deck[]): void {
-  localStorage.setItem(DECKS_STORAGE_KEY, JSON.stringify(decks));
+  writeLocalStorage(DECKS_STORAGE_KEY, JSON.stringify(decks));
 }
 
 export function getDeckById(id: string): Deck | null {
@@ -72,7 +90,10 @@ export function duplicateDeck(id: string): Deck | null {
     name: `${deck.name} (Copy)`,
     createdAt: now,
     updatedAt: now,
-    tracks: deck.tracks.map((t) => ({ ...t, id: `track-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` })),
+    tracks: deck.tracks.map((t, index) => ({
+      ...t,
+      id: `track-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 7)}`,
+    })),
   };
 
   return saveDeck(newDeck);
@@ -241,9 +262,7 @@ export function validateDeckSchema(data: unknown): SchemaValidationResult {
   }
 
   const now = new Date().toISOString();
-  const deckId = typeof obj.id === "string" && obj.id.trim()
-    ? `deck-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-    : `deck-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const deckId = `deck-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
   const sanitizedDeck: Deck = {
     schemaVersion: 1,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@miquelt9/pc-ui";
 import { useAuth } from "../../state/AuthContext";
@@ -10,18 +10,27 @@ import {
   fetchPlaylistDetails,
   fetchSavedTracks,
   fetchUserPlaylists,
+  MAX_LIKED_SONGS,
+  MAX_USER_PLAYLISTS,
   parseSpotifyPlaylistId,
   SpotifyPlaylistSummary,
 } from "../../lib/spotify/playlists";
 import { AlertCircle, Heart, Loader2, LogIn, LogOut, Music } from "lucide-react";
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
 
 export const SpotifyPlaylistPicker: React.FC = () => {
   const { isConfigured, isAuthenticated, isLoading: authLoading, accessToken, login, logout, error: authError } =
     useAuth();
   const { createDeck } = useDeck();
   const navigate = useNavigate();
+  const importAbortRef = useRef<AbortController | null>(null);
+  const playlistsAbortRef = useRef<AbortController | null>(null);
 
   const [playlists, setPlaylists] = useState<SpotifyPlaylistSummary[]>([]);
+  const [playlistsTruncated, setPlaylistsTruncated] = useState(false);
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [importingId, setImportingId] = useState<string | null>(null);
@@ -32,19 +41,36 @@ export const SpotifyPlaylistPicker: React.FC = () => {
   const [isImportingPaste, setIsImportingPaste] = useState(false);
   const [isImportingLiked, setIsImportingLiked] = useState(false);
 
+  useEffect(() => {
+    return () => {
+      playlistsAbortRef.current?.abort();
+      importAbortRef.current?.abort();
+    };
+  }, []);
+
   const loadPlaylists = useCallback(async () => {
     if (!accessToken) return;
+
+    playlistsAbortRef.current?.abort();
+    const controller = new AbortController();
+    playlistsAbortRef.current = controller;
 
     setIsLoadingPlaylists(true);
     setLoadError(null);
     try {
-      const items = await fetchUserPlaylists(accessToken);
+      const items = await fetchUserPlaylists(accessToken, controller.signal);
+      if (controller.signal.aborted) return;
       setPlaylists(items);
+      setPlaylistsTruncated(items.length >= MAX_USER_PLAYLISTS);
     } catch (err) {
+      if (isAbortError(err)) return;
       setLoadError((err as Error).message || "Failed to load playlists.");
       setPlaylists([]);
+      setPlaylistsTruncated(false);
     } finally {
-      setIsLoadingPlaylists(false);
+      if (!controller.signal.aborted) {
+        setIsLoadingPlaylists(false);
+      }
     }
   }, [accessToken]);
 
@@ -52,21 +78,36 @@ export const SpotifyPlaylistPicker: React.FC = () => {
     if (isAuthenticated && accessToken) {
       void loadPlaylists();
     } else {
+      playlistsAbortRef.current?.abort();
       setPlaylists([]);
+      setPlaylistsTruncated(false);
     }
   }, [isAuthenticated, accessToken, loadPlaylists]);
+
+  const beginImport = () => {
+    importAbortRef.current?.abort();
+    const controller = new AbortController();
+    importAbortRef.current = controller;
+    return controller;
+  };
 
   const handleImport = async (playlist: SpotifyPlaylistSummary) => {
     if (!accessToken || importingId || isImportingPaste || isImportingLiked) return;
 
+    const controller = beginImport();
     setImportingId(playlist.id);
     setImportError(null);
     setImportProgress({ loaded: 0, total: playlist.totalTracks || 0 });
 
     try {
-      const tracks = await fetchAllPlaylistTracks(playlist.id, accessToken, (loaded, total) => {
-        setImportProgress({ loaded, total });
-      });
+      const tracks = await fetchAllPlaylistTracks(
+        playlist.id,
+        accessToken,
+        (loaded, total) => {
+          setImportProgress({ loaded, total });
+        },
+        controller.signal
+      );
 
       if (tracks.length === 0) {
         throw new Error("No playable tracks found in that playlist.");
@@ -76,10 +117,13 @@ export const SpotifyPlaylistPicker: React.FC = () => {
       const saved = createDeck(deck);
       navigate(`/deck/${saved.id}?autostart=match`);
     } catch (err) {
+      if (isAbortError(err)) return;
       setImportError((err as Error).message || "Failed to import playlist.");
     } finally {
-      setImportingId(null);
-      setImportProgress(null);
+      if (!controller.signal.aborted) {
+        setImportingId(null);
+        setImportProgress(null);
+      }
     }
   };
 
@@ -92,18 +136,24 @@ export const SpotifyPlaylistPicker: React.FC = () => {
       return;
     }
 
+    const controller = beginImport();
     setPasteError(null);
     setImportError(null);
     setIsImportingPaste(true);
     setImportProgress({ loaded: 0, total: 0 });
 
     try {
-      const playlist = await fetchPlaylistDetails(playlistId, accessToken);
+      const playlist = await fetchPlaylistDetails(playlistId, accessToken, controller.signal);
       setImportProgress({ loaded: 0, total: playlist.totalTracks || 0 });
 
-      const tracks = await fetchAllPlaylistTracks(playlistId, accessToken, (loaded, total) => {
-        setImportProgress({ loaded, total });
-      });
+      const tracks = await fetchAllPlaylistTracks(
+        playlistId,
+        accessToken,
+        (loaded, total) => {
+          setImportProgress({ loaded, total });
+        },
+        controller.signal
+      );
 
       if (tracks.length === 0) {
         throw new Error("No playable tracks found in that playlist.");
@@ -113,25 +163,33 @@ export const SpotifyPlaylistPicker: React.FC = () => {
       const saved = createDeck(deck);
       navigate(`/deck/${saved.id}?autostart=match`);
     } catch (err) {
+      if (isAbortError(err)) return;
       setPasteError((err as Error).message || "Failed to import playlist.");
     } finally {
-      setIsImportingPaste(false);
-      setImportProgress(null);
+      if (!controller.signal.aborted) {
+        setIsImportingPaste(false);
+        setImportProgress(null);
+      }
     }
   };
 
   const handleImportLikedSongs = async () => {
     if (!accessToken || importingId || isImportingPaste || isImportingLiked) return;
 
+    const controller = beginImport();
     setImportError(null);
     setPasteError(null);
     setIsImportingLiked(true);
     setImportProgress({ loaded: 0, total: 0 });
 
     try {
-      const tracks = await fetchSavedTracks(accessToken, (loaded, total) => {
-        setImportProgress({ loaded, total });
-      });
+      const tracks = await fetchSavedTracks(
+        accessToken,
+        (loaded, total) => {
+          setImportProgress({ loaded, total });
+        },
+        controller.signal
+      );
 
       if (tracks.length === 0) {
         throw new Error("No playable tracks found in your liked songs.");
@@ -141,10 +199,13 @@ export const SpotifyPlaylistPicker: React.FC = () => {
       const saved = createDeck(deck);
       navigate(`/deck/${saved.id}?autostart=match`);
     } catch (err) {
+      if (isAbortError(err)) return;
       setImportError((err as Error).message || "Failed to import liked songs.");
     } finally {
-      setIsImportingLiked(false);
-      setImportProgress(null);
+      if (!controller.signal.aborted) {
+        setIsImportingLiked(false);
+        setImportProgress(null);
+      }
     }
   };
 
@@ -208,6 +269,9 @@ export const SpotifyPlaylistPicker: React.FC = () => {
             Disconnect
           </Button>
         </div>
+        <p className="text-xs opacity-80">
+          Liked songs import is capped at {MAX_LIKED_SONGS} tracks for performance.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -268,47 +332,54 @@ export const SpotifyPlaylistPicker: React.FC = () => {
       ) : playlists.length === 0 ? (
         <p className="text-xs pc-bevel-inset p-3">No playlists found on your Spotify account.</p>
       ) : (
-        <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-          {playlists.map((playlist) => {
-            const isImporting = importingId === playlist.id;
-            return (
-              <button
-                key={playlist.id}
-                type="button"
-                disabled={isBusy}
-                onClick={() => void handleImport(playlist)}
-                className="w-full text-left pc-bevel-inset p-2 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-60"
-              >
-                {playlist.imageUrl ? (
-                  <img
-                    src={playlist.imageUrl}
-                    alt=""
-                    className="w-10 h-10 shrink-0 object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 shrink-0 pc-bevel-inset flex items-center justify-center">
-                    <Music className="w-5 h-5 opacity-60" />
+        <>
+          {playlistsTruncated && (
+            <p className="text-xs opacity-80">
+              Showing the first {MAX_USER_PLAYLISTS} playlists. Paste a URL above to import one not listed.
+            </p>
+          )}
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+            {playlists.map((playlist) => {
+              const isImporting = importingId === playlist.id;
+              return (
+                <button
+                  key={playlist.id}
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => void handleImport(playlist)}
+                  className="w-full text-left pc-bevel-inset p-2 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-60"
+                >
+                  {playlist.imageUrl ? (
+                    <img
+                      src={playlist.imageUrl}
+                      alt=""
+                      className="w-10 h-10 shrink-0 object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 shrink-0 pc-bevel-inset flex items-center justify-center">
+                      <Music className="w-5 h-5 opacity-60" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold truncate">{playlist.name}</p>
+                    <p className="text-xs opacity-80 truncate">
+                      {playlist.totalTracks} track{playlist.totalTracks === 1 ? "" : "s"}
+                      {playlist.ownerName ? ` · ${playlist.ownerName}` : ""}
+                    </p>
                   </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold truncate">{playlist.name}</p>
-                  <p className="text-xs opacity-80 truncate">
-                    {playlist.totalTracks} track{playlist.totalTracks === 1 ? "" : "s"}
-                    {playlist.ownerName ? ` · ${playlist.ownerName}` : ""}
-                  </p>
-                </div>
-                {isImporting && (
-                  <span className="text-xs shrink-0 flex items-center gap-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    {importProgress
-                      ? `${importProgress.loaded}/${importProgress.total || "?"}`
-                      : "Importing…"}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  {isImporting && (
+                    <span className="text-xs shrink-0 flex items-center gap-1">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      {importProgress
+                        ? `${importProgress.loaded}/${importProgress.total || "?"}`
+                        : "Importing…"}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {importError && (

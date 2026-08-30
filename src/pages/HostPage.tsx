@@ -173,7 +173,7 @@ export const HostPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { decks, loadDeck, updateDeck } = useDeck();
+  const { decks, loadDeck, updateDeck, isLoading } = useDeck();
   const { showVideo, toggleVideo } = usePlayerUI();
 
   const deck = useMemo(
@@ -195,6 +195,7 @@ export const HostPage: React.FC = () => {
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [historySearch, setHistorySearch] = useState<string>("");
   const [showResetModal, setShowResetModal] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const chainTimeoutRef = useRef<number | null>(null);
   const uncalledIdsRef = useRef(uncalledIds);
@@ -356,33 +357,71 @@ export const HostPage: React.FC = () => {
   const initializedDeckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!deck) {
-      if (decks.length > 0) {
-        navigate(`/deck/${decks[0].id}/play`, { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+    if (!id) {
+      navigate("/", { replace: true });
       return;
     }
 
-    if (initializedDeckIdRef.current !== deck.id) {
-      initializedDeckIdRef.current = deck.id;
-      const restored = readHostSession(deck.id, deck.tracks);
-      if (restored && restored.calledHistory.length > 0) {
-        setUncalledIds(restored.uncalledIds);
-        setCalledHistory(restored.calledHistory);
-        setCurrentCall(restored.currentCall);
-        setIsRevealed(restored.isRevealed);
-        setAutoRevealOnEnd(restored.autoRevealOnEnd);
-        setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
-      } else {
-        initGame();
-      }
+    if (isLoading) return;
+
+    if (!deck) {
+      navigate("/", { replace: true });
+      return;
     }
-  }, [deck, decks, navigate, initGame]);
+
+    if (initializedDeckIdRef.current === deck.id) return;
+
+    initializedDeckIdRef.current = deck.id;
+    setSessionReady(false);
+
+    const restored = readHostSession(deck.id, deck.tracks);
+    const hasRestorableSession =
+      restored &&
+      (restored.calledHistory.length > 0 || restored.uncalledIds.length > 0);
+
+    if (hasRestorableSession) {
+      setUncalledIds(restored.uncalledIds);
+      setCalledHistory(restored.calledHistory);
+      setCurrentCall(restored.currentCall);
+      setIsRevealed(restored.isRevealed);
+      setAutoRevealOnEnd(restored.autoRevealOnEnd);
+      setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
+    } else {
+      clearChainTimeout();
+      const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
+      setUncalledIds(shuffled);
+      setCalledHistory([]);
+      setCurrentCall(null);
+      setIsRevealed(false);
+      stopPlayback();
+      writeHostSession(deck.id, {
+        uncalledIds: shuffled,
+        calledHistory: [],
+        currentCall: null,
+        isRevealed: false,
+        autoRevealOnEnd: true,
+        autoCallNextOnEnd: true,
+      });
+      setSessionReady(true);
+    }
+  }, [id, deck, isLoading, navigate, clearChainTimeout]);
 
   useEffect(() => {
-    if (!deck) return;
+    if (!deck || sessionReady || initializedDeckIdRef.current !== deck.id) return;
+    setSessionReady(true);
+  }, [
+    deck,
+    sessionReady,
+    uncalledIds,
+    calledHistory,
+    currentCall,
+    isRevealed,
+    autoRevealOnEnd,
+    autoCallNextOnEnd,
+  ]);
+
+  useEffect(() => {
+    if (!deck || !sessionReady) return;
     writeHostSession(deck.id, {
       uncalledIds,
       calledHistory,
@@ -399,6 +438,7 @@ export const HostPage: React.FC = () => {
     isRevealed,
     autoRevealOnEnd,
     autoCallNextOnEnd,
+    sessionReady,
   ]);
 
   useEffect(() => {
@@ -408,7 +448,10 @@ export const HostPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    return () => clearChainTimeout();
+    return () => {
+      clearChainTimeout();
+      stopPlayback();
+    };
   }, [clearChainTimeout]);
 
   const handleReplayCurrent = () => {
@@ -478,7 +521,10 @@ export const HostPage: React.FC = () => {
     isPlayable,
   ]);
 
-  if (!deck) return null;
+  if (!deck) {
+    if (isLoading) return null;
+    return null;
+  }
 
   const isPlaying = playerState?.state === "playing" && playerState?.currentClip?.trackId === currentCall?.track.id;
   const playbackProgress = playerState?.progress || 0;

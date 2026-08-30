@@ -9,6 +9,10 @@ const MAX_BODY_BYTES = 256 * 1024;
 const MAX_SONGS = 150;
 const SHARE_TTL_SECONDS = 60 * 60 * 24 * 365;
 const SHARE_KEY_PREFIX = "share:";
+const RATE_LIMIT_PREFIX = "rl:";
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_SEC = 60;
+const SHARE_ID_RETRIES = 5;
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
@@ -80,7 +84,47 @@ function isValidSharePayload(data: unknown): data is Record<string, unknown> {
   return songCount > 0 && songCount <= MAX_SONGS;
 }
 
+function getClientIp(request: Request): string {
+  return (
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
+}
+
+async function checkRateLimit(request: Request, env: Env): Promise<boolean> {
+  const ip = getClientIp(request);
+  const window = Math.floor(Date.now() / 60000);
+  const key = `${RATE_LIMIT_PREFIX}${ip}:${window}`;
+  const current = await env.SHARED_DECKS.get(key);
+  const count = current ? Number.parseInt(current, 10) : 0;
+  if (!Number.isFinite(count) || count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+  await env.SHARED_DECKS.put(key, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW_SEC });
+  return true;
+}
+
+async function allocateShareId(env: Env, serialized: string): Promise<string | null> {
+  for (let attempt = 0; attempt < SHARE_ID_RETRIES; attempt++) {
+    const shareId = generateShareId();
+    const key = `${SHARE_KEY_PREFIX}${shareId}`;
+    const existing = await env.SHARED_DECKS.get(key);
+    if (existing) continue;
+
+    await env.SHARED_DECKS.put(key, serialized, {
+      expirationTtl: SHARE_TTL_SECONDS,
+    });
+    return shareId;
+  }
+  return null;
+}
+
 async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
+  if (!(await checkRateLimit(request, env))) {
+    return errorResponse(request, env, "Too many share requests. Please try again later.", 429);
+  }
+
   const contentLength = Number(request.headers.get("Content-Length") ?? "0");
   if (contentLength > MAX_BODY_BYTES) {
     return errorResponse(request, env, "Deck payload is too large.", 413);
@@ -102,10 +146,10 @@ async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
     return errorResponse(request, env, "Invalid deck payload.", 400);
   }
 
-  const shareId = generateShareId();
-  await env.SHARED_DECKS.put(`${SHARE_KEY_PREFIX}${shareId}`, serialized, {
-    expirationTtl: SHARE_TTL_SECONDS,
-  });
+  const shareId = await allocateShareId(env, serialized);
+  if (!shareId) {
+    return errorResponse(request, env, "Could not create share link. Please try again.", 503);
+  }
 
   return jsonResponse(request, env, { shareId }, 201);
 }

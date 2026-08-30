@@ -274,8 +274,13 @@ export const SettingsPage: React.FC = () => {
 
               <div className="pc-bevel-inset p-3 text-xs space-y-2 mb-4">
                 <p>
-                  While the app is in Spotify Development Mode, only allowlisted Spotify accounts can
-                  connect. If login fails, ask the site maintainer to add your Spotify email to the app.
+                  <strong>For the site maintainer:</strong> Spotify Development Mode requires the app owner
+                  to have an active <strong>Spotify Premium</strong> subscription. Without Premium, playlist
+                  import returns 403 errors even after login.
+                </p>
+                <p>
+                  Up to 5 users can be allowlisted under Users and Access in the Spotify Developer Dashboard.
+                  Playback in this app still uses YouTube only.
                 </p>
               </div>
 
