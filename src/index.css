@@ -444,71 +444,88 @@
   }
 }
 
-.pc-workspace-scroll:has(.home-split) {
+.pc-workspace-scroll:has(.home-decks) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.home-split {
-  flex: 1 1 0;
-  height: 100%;
-  min-height: 0;
-  --pc-tile-gap: 8px;
-  gap: 8px;
-}
-
-.home-create {
+.home-decks > .pc-window-content {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  gap: 12px;
-}
-
-.home-create-main {
-  flex: 1 1 0;
   min-height: 0;
   overflow: auto;
 }
 
-.home-create-footer {
+.home-decks-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.home-deck-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 140px;
+  padding: 16px;
+  text-align: center;
+  border: 2px dashed var(--pc-border, #808080);
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.home-deck-add:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="dark"] .home-deck-add:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.home-deck-card {
+  min-width: 0;
+}
+
+.home-decks-import-links {
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 12px 16px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pc-border, #808080);
 }
 
-@media (max-width: 1023px) {
-  .pc-workspace-scroll:has(.home-split) {
+@media (min-width: 640px) {
+  .home-decks-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-decks-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .pc-workspace-scroll:has(.home-decks) {
     display: block;
     overflow: auto;
   }
 
-  .pc-split.home-split.pc-split--row {
+  .home-decks.pc-window--fill {
     height: auto;
-    flex: none;
-    flex-direction: column;
-  }
-
-  .home-split.pc-split > .pc-window--fill {
-    height: auto;
-    overflow: visible;
-    flex: 0 0 auto;
-  }
-
-  .home-split.pc-split > .pc-window--fill > .pc-window-content {
     overflow: visible;
     flex: none;
   }
 
-  .home-create {
-    height: auto;
-  }
-
-  .home-create-main {
+  .home-decks > .pc-window-content {
     overflow: visible;
     flex: none;
   }

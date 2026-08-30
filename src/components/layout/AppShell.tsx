@@ -198,7 +198,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 navigate(`/deck/${id}${suffix}`);
               }
             }}
-            className="pc-select max-w-[120px] sm:max-w-[160px] inline"
+            className="pc-select max-w-[120px] sm:max-w-[160px] hidden sm:inline"
             title="Active deck"
           >
             {decks.map((d) => (
