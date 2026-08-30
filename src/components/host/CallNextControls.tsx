@@ -1,9 +1,10 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, SlidersHorizontal, Music2 } from "lucide-react";
+import { Shuffle, SlidersHorizontal, Music2, ChevronDown } from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/youtube/player";
 import { Track } from "../../types/deck";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 
 function buildDisplayPlayerState(
   currentTrack: Track,
@@ -84,6 +85,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   gameStarted,
   disabled = false,
 }) => {
+  const isMobile = useIsMobile();
   const isDeckFinished = remainingCount === 0 && totalCount > 0;
   const calledCount = totalCount - remainingCount;
   const progressPercent = totalCount > 0 ? (calledCount / totalCount) * 100 : 0;
@@ -101,6 +103,67 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   };
 
   const hasPlayableTrack = Boolean(currentTrack?.youtubeVideoId);
+
+  const advancedOptions = (
+    <div className="flex flex-col gap-3 text-xs">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none flex-1 min-w-0">
+          <input
+            type="checkbox"
+            checked={autoCallNextOnEnd}
+            onChange={onToggleAutoCallNext}
+            disabled={disabled}
+          />
+          <span className="font-medium">
+            Auto-play next song when snippet ends
+            <span className="block text-[10px] font-normal opacity-80 mt-0.5">
+              Reveals the just-played call, then continues to the next song
+            </span>
+          </span>
+        </label>
+
+        <div
+          className={`shrink-0 w-full sm:w-40 ${gameStarted ? "opacity-60" : ""}`}
+          title="How long outgoing and incoming snippets overlap. Locked once the game starts."
+        >
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="font-medium">Crossfade</span>
+            <span className="font-mono text-[10px]">{crossfadeOverlapMs} ms</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={3000}
+            step={100}
+            value={crossfadeOverlapMs}
+            onChange={(e) => onCrossfadeOverlapChange(Number(e.target.value))}
+            disabled={disabled || gameStarted}
+            className="w-full cursor-pointer"
+            aria-label="Crossfade overlap duration in milliseconds"
+          />
+        </div>
+      </div>
+
+      <label
+        className={`inline-flex items-center gap-2.5 select-none ${
+          autoCallNextOnEnd ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={autoRevealOnEnd}
+          onChange={onToggleAutoReveal}
+          disabled={autoCallNextOnEnd}
+        />
+        <span className="font-medium">Auto-reveal answer when snippet finishes playing</span>
+      </label>
+
+      <div className="inline-flex items-center gap-2">
+        <SlidersHorizontal className="w-3.5 h-3.5" />
+        <span>Non-repeating randomized shuffle bag</span>
+      </div>
+    </div>
+  );
 
   return (
     <Window title="Host Controls" className="host-controls-window">
@@ -124,19 +187,21 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
+      <div className={isMobile ? "host-call-next-sticky" : "grid grid-cols-1 gap-3"}>
         <Button
           type="button"
           variant="primary"
           onClick={onCallNext}
           disabled={disabled || isDeckFinished}
-          className="py-3"
+          className="py-3 w-full"
         >
           <Shuffle className="w-5 h-5" />
           {isDeckFinished
             ? "All Songs Called!"
             : calledCount === 0
-              ? "Start Game & Call First Song"
+              ? isMobile
+                ? "Start & Call First"
+                : "Start Game & Call First Song"
               : "Call Next Song"}
           <kbd className="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs font-mono pc-bevel-inset">
             Space
@@ -144,8 +209,12 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </Button>
       </div>
 
-      <div className="host-now-playing-slot mt-4 pt-3 border-t border-[var(--pc-border)]">
-        <p className="text-xs font-semibold mb-2">Now Playing</p>
+      <div
+        className={`host-now-playing-slot mt-4 pt-3 border-t border-[var(--pc-border)] ${
+          isMobile ? "host-now-playing-slot--compact" : ""
+        }`}
+      >
+        {!isMobile && <p className="text-xs font-semibold mb-2">Now Playing</p>}
         {hasPlayableTrack && currentTrack ? (
           <NowPlayingControls
             playerState={buildDisplayPlayerState(currentTrack, playerState)}
@@ -155,6 +224,8 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
             onVolumeChange={onVolumeChange}
             onToggleVideo={onToggleVideo}
             showVideo={showVideo}
+            showVideoToggle={!isMobile}
+            compact={isMobile}
           />
         ) : currentTrack ? (
           <div className="host-now-playing-placeholder">
@@ -173,66 +244,18 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         )}
       </div>
 
-      <div className="mt-4 pt-3 flex flex-col gap-3 text-xs">
-        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-          <label className="inline-flex items-center gap-2.5 cursor-pointer select-none flex-1 min-w-0">
-            <input
-              type="checkbox"
-              checked={autoCallNextOnEnd}
-              onChange={onToggleAutoCallNext}
-              disabled={disabled}
-            />
-            <span className="font-medium">
-              Auto-play next song when snippet ends
-              <span className="block text-[10px] font-normal opacity-80 mt-0.5">
-                Reveals the just-played call, then continues to the next song
-              </span>
-            </span>
-          </label>
-
-          <div
-            className={`shrink-0 w-full sm:w-40 ${gameStarted ? "opacity-60" : ""}`}
-            title="How long outgoing and incoming snippets overlap. Locked once the game starts."
-          >
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="font-medium">Crossfade</span>
-              <span className="font-mono text-[10px]">{crossfadeOverlapMs} ms</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={3000}
-              step={100}
-              value={crossfadeOverlapMs}
-              onChange={(e) => onCrossfadeOverlapChange(Number(e.target.value))}
-              disabled={disabled || gameStarted}
-              className="w-full cursor-pointer"
-              aria-label="Crossfade overlap duration in milliseconds"
-            />
-          </div>
-        </div>
-
-        <label
-          className={`inline-flex items-center gap-2.5 select-none ${
-            autoCallNextOnEnd ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={autoRevealOnEnd}
-            onChange={onToggleAutoReveal}
-            disabled={autoCallNextOnEnd}
-          />
-          <span className="font-medium">
-            Auto-reveal answer when snippet finishes playing
-          </span>
-        </label>
-
-        <div className="inline-flex items-center gap-2">
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          <span>Non-repeating randomized shuffle bag</span>
-        </div>
-      </div>
+      {isMobile ? (
+        <details className="host-advanced-details mt-4 pt-3 border-t border-[var(--pc-border)]">
+          <summary className="host-advanced-details__summary">
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            Advanced
+            <ChevronDown className="w-3.5 h-3.5 host-advanced-details__chevron" aria-hidden="true" />
+          </summary>
+          <div className="host-advanced-details__body">{advancedOptions}</div>
+        </details>
+      ) : (
+        <div className="mt-4 pt-3 border-t border-[var(--pc-border)]">{advancedOptions}</div>
+      )}
     </Window>
   );
 };

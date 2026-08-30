@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button, Input, Window, Split } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
@@ -10,7 +10,11 @@ import { CallNextControls } from "../components/host/CallNextControls";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
 import { PcModal } from "../components/ui/PcModal";
+import { PageHeader } from "../components/layout/PageHeader";
+import { HostInlineVideoPanel } from "../components/player/DraggableVideoWindow";
+import { YoutubeVideoSlots } from "../components/player/YoutubeVideoSlots";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   playClip,
   pausePlayback,
@@ -27,7 +31,7 @@ import {
   Clip,
 } from "../lib/youtube/player";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
-import { ArrowLeft, History, Search, Sparkles, Music2, RotateCcw } from "lucide-react";
+import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -167,6 +171,7 @@ function clearHostSession(deckId: string): void {
 export const HostPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { decks, loadDeck, updateDeck } = useDeck();
   const { showVideo, toggleVideo } = usePlayerUI();
 
@@ -478,8 +483,123 @@ export const HostPage: React.FC = () => {
       item.track.artist.toLowerCase().includes(historySearch.toLowerCase())
   );
 
+  const answerCard = (
+    <AnswerCard
+      fill={!isMobile}
+      className="host-answer-card"
+      track={currentCall?.track || null}
+      isRevealed={isRevealed}
+      onReveal={() => setIsRevealed(true)}
+      onHide={() => setIsRevealed(false)}
+      isPlaying={isPlaying}
+      progress={playbackProgress}
+      remainingTime={remainingTime}
+      callNumber={currentCall?.callNumber || 0}
+      errorMessage={currentErrorMessage}
+    />
+  );
+
+  const hostControls = (
+    <CallNextControls
+      onCallNext={handleCallNext}
+      onReplayCurrent={handleReplayCurrent}
+      onTogglePlayPause={handleTogglePlayPause}
+      onStop={stopPlayback}
+      onToggleMute={toggleMute}
+      onVolumeChange={setVolume}
+      onToggleVideo={toggleVideo}
+      showVideo={showVideo}
+      playerState={playerState}
+      isPlaying={isPlaying}
+      currentTrack={currentCall?.track ?? null}
+      remainingCount={uncalledIds.length}
+      totalCount={deck.tracks.length}
+      autoRevealOnEnd={autoRevealOnEnd}
+      onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
+      autoCallNextOnEnd={autoCallNextOnEnd}
+      onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
+      crossfadeOverlapMs={crossfadeOverlapMs}
+      onCrossfadeOverlapChange={persistCrossfadeMs}
+      gameStarted={calledHistory.length > 0}
+      disabled={!isPlayable}
+    />
+  );
+
+  const calledSongsLogList = (
+    <div className="host-board-log-list pc-bevel-inset p-2 space-y-1">
+      {calledHistory.length === 0 ? (
+        <div className="h-full flex flex-col items-center justify-center text-center p-6 text-xs">
+          <Music2 className="w-10 h-10 mb-2" />
+          <p className="font-semibold">No songs called yet.</p>
+          <p className="mt-1">When you call a song, it will appear here with the most recent first.</p>
+        </div>
+      ) : filteredHistory.length === 0 ? (
+        <div className="py-12 text-center text-xs">
+          <p>No called songs match "{historySearch}".</p>
+        </div>
+      ) : (
+        filteredHistory.map((item) => {
+          const isCurrent = item.callNumber === currentCall?.callNumber;
+          const thumbUrl =
+            item.track.albumArtUrl ||
+            (item.track.youtubeVideoId
+              ? getYoutubeThumbnailUrl(item.track.youtubeVideoId, "hqdefault")
+              : "");
+          return (
+            <div
+              key={item.callNumber}
+              className={`flex items-center justify-between gap-3 p-2 ${
+                isCurrent ? "pc-bevel-inset" : ""
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="pc-bevel-outset w-7 h-7 text-xs font-bold flex items-center justify-center shrink-0">
+                  #{item.callNumber}
+                </span>
+                {thumbUrl ? (
+                  <img
+                    src={thumbUrl}
+                    alt=""
+                    className="w-9 h-9 object-cover pc-bevel-inset shrink-0"
+                  />
+                ) : (
+                  <div className="w-9 h-9 pc-bevel-inset flex items-center justify-center shrink-0">
+                    <Music2 className="w-4 h-4" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="font-bold text-xs truncate max-w-[180px] sm:max-w-xs">
+                    {item.track.title}
+                  </p>
+                  <p className="text-[11px] truncate max-w-[180px] sm:max-w-xs">{item.track.artist}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-mono hidden sm:inline">{item.calledAt}</span>
+                <ClipPreviewButton track={item.track} size="sm" />
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
+  const calledSongsLogSearch = (
+    <div className="relative mb-3 shrink-0">
+      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
+      <Input
+        type="text"
+        className="w-full pl-8"
+        value={historySearch}
+        onChange={(e) => setHistorySearch(e.target.value)}
+        placeholder="Verify song: type title or artist..."
+      />
+    </div>
+  );
+
   return (
-    <div className="host-board">
+    <div className={`host-board ${isMobile ? "host-board--mobile" : ""}`}>
       <PlayabilityGateOverlay
         deckId={deck.id}
         context="host"
@@ -489,154 +609,91 @@ export const HostPage: React.FC = () => {
         onRetry={() => void runCheck(true)}
       />
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-        <Link to={`/deck/${deck.id}`} className="pc-button">
-          <ArrowLeft className="w-4 h-4" />
-          Exit Host Mode (Back to Editor)
-        </Link>
-        {currentCall && (
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" onClick={triggerConfetti}>
-              <Sparkles className="w-3.5 h-3.5" />
-              Someone Called Bingo!
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setShowResetModal(true)}
-              title="Reset game and shuffle all songs"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset Bingo
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <Split direction="row" className="host-board-main">
-        <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "7" }}>
-          <AnswerCard
-            fill
-            className="host-answer-card"
-            track={currentCall?.track || null}
-            isRevealed={isRevealed}
-            onReveal={() => setIsRevealed(true)}
-            onHide={() => setIsRevealed(false)}
-            isPlaying={isPlaying}
-            progress={playbackProgress}
-            remainingTime={remainingTime}
-            callNumber={currentCall?.callNumber || 0}
-            errorMessage={currentErrorMessage}
-          />
-
-          <div className="host-controls">
-            <CallNextControls
-              onCallNext={handleCallNext}
-              onReplayCurrent={handleReplayCurrent}
-              onTogglePlayPause={handleTogglePlayPause}
-              onStop={stopPlayback}
-              onToggleMute={toggleMute}
-              onVolumeChange={setVolume}
-              onToggleVideo={toggleVideo}
-              showVideo={showVideo}
-              playerState={playerState}
-              isPlaying={isPlaying}
-              currentTrack={currentCall?.track ?? null}
-              remainingCount={uncalledIds.length}
-              totalCount={deck.tracks.length}
-              autoRevealOnEnd={autoRevealOnEnd}
-              onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
-              autoCallNextOnEnd={autoCallNextOnEnd}
-              onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
-              crossfadeOverlapMs={crossfadeOverlapMs}
-              onCrossfadeOverlapChange={persistCrossfadeMs}
-              gameStarted={calledHistory.length > 0}
-              disabled={!isPlayable}
-            />
-          </div>
-        </div>
-
-        <Window
-          fill
-          grow={5}
-          className="host-board-log"
-          title={
-            <span className="inline-flex items-center gap-2">
-              <History className="w-4 h-4" />
-              Called Songs Log ({calledHistory.length})
-            </span>
-          }
-        >
-          <div className="host-board-log-body">
-            <div className="relative mb-3 shrink-0">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
-              <Input
-                type="text"
-                className="w-full pl-8"
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Verify song: type title or artist..."
-              />
-            </div>
-            <div className="host-board-log-list pc-bevel-inset p-2 space-y-1">
-              {calledHistory.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-xs">
-                  <Music2 className="w-10 h-10 mb-2" />
-                  <p className="font-semibold">No songs called yet.</p>
-                  <p className="mt-1">When you call a song, it will appear here with the most recent first.</p>
-                </div>
-              ) : filteredHistory.length === 0 ? (
-                <div className="py-12 text-center text-xs">
-                  <p>No called songs match "{historySearch}".</p>
-                </div>
-              ) : (
-                filteredHistory.map((item) => {
-                  const isCurrent = item.callNumber === currentCall?.callNumber;
-                  const thumbUrl =
-                    item.track.albumArtUrl ||
-                    (item.track.youtubeVideoId
-                      ? getYoutubeThumbnailUrl(item.track.youtubeVideoId, "hqdefault")
-                      : "");
-                  return (
-                    <div
-                      key={item.callNumber}
-                      className={`flex items-center justify-between gap-3 p-2 ${
-                        isCurrent ? "pc-bevel-inset" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="pc-bevel-outset w-7 h-7 text-xs font-bold flex items-center justify-center shrink-0">
-                          #{item.callNumber}
-                        </span>
-                        {thumbUrl ? (
-                          <img
-                            src={thumbUrl}
-                            alt=""
-                            className="w-9 h-9 object-cover pc-bevel-inset shrink-0"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 pc-bevel-inset flex items-center justify-center shrink-0">
-                            <Music2 className="w-4 h-4" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="font-bold text-xs truncate max-w-[180px] sm:max-w-xs">
-                            {item.track.title}
-                          </p>
-                          <p className="text-[11px] truncate max-w-[180px] sm:max-w-xs">{item.track.artist}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] font-mono hidden sm:inline">{item.calledAt}</span>
-                        <ClipPreviewButton track={item.track} size="sm" />
-                      </div>
-                    </div>
-                  );
-                })
+      <PageHeader
+        backLink={{
+          to: `/deck/${deck.id}`,
+          label: isMobile ? "Exit host" : "Exit Host Mode (Back to Editor)",
+        }}
+        primaryAction={
+          currentCall ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" onClick={triggerConfetti}>
+                <Sparkles className="w-3.5 h-3.5" />
+                {isMobile ? "Bingo!" : "Someone Called Bingo!"}
+              </Button>
+              {!isMobile && (
+                <Button
+                  type="button"
+                  onClick={() => setShowResetModal(true)}
+                  title="Reset game and shuffle all songs"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset Bingo
+                </Button>
               )}
             </div>
+          ) : undefined
+        }
+        overflowItems={
+          isMobile && currentCall
+            ? [
+                {
+                  icon: <RotateCcw className="w-4 h-4" aria-hidden="true" />,
+                  label: "Reset Bingo",
+                  onClick: () => setShowResetModal(true),
+                },
+              ]
+            : undefined
+        }
+      />
+
+      {isMobile ? (
+        <div className="host-board-mobile-stack">
+          {answerCard}
+
+          <HostInlineVideoPanel visible={showVideo}>
+            <YoutubeVideoSlots />
+          </HostInlineVideoPanel>
+
+          <div className="host-controls">{hostControls}</div>
+
+          <details className="host-board-log-details">
+            <summary className="host-board-log-details__summary">
+              <History className="w-4 h-4" aria-hidden="true" />
+              Called Songs ({calledHistory.length})
+              <ChevronDown className="w-4 h-4 host-board-log-details__chevron" aria-hidden="true" />
+            </summary>
+            <div className="host-board-log-details__body">
+              {calledSongsLogSearch}
+              {calledSongsLogList}
+            </div>
+          </details>
+        </div>
+      ) : (
+        <Split direction="row" className="host-board-main">
+          <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "7" }}>
+            {answerCard}
+            <div className="host-controls">{hostControls}</div>
           </div>
-        </Window>
-      </Split>
+
+          <Window
+            fill
+            grow={5}
+            className="host-board-log"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <History className="w-4 h-4" />
+                Called Songs Log ({calledHistory.length})
+              </span>
+            }
+          >
+            <div className="host-board-log-body">
+              {calledSongsLogSearch}
+              {calledSongsLogList}
+            </div>
+          </Window>
+        </Split>
+      )}
 
       {showResetModal && (
         <PcModal title="Reset Game?" onClose={() => setShowResetModal(false)}>

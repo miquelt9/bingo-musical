@@ -1,8 +1,28 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { clampVideoWindowBounds, VideoWindowBounds } from "../../lib/videoWindow";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 
 const TITLEBAR_HEIGHT = 30;
 const MIN_CONTENT_HEIGHT = 135;
+
+interface HostInlineVideoPanelProps {
+  visible: boolean;
+  children: React.ReactNode;
+}
+
+/** Fixed 16:9 inline video panel for mobile host — no drag or resize. */
+export const HostInlineVideoPanel: React.FC<HostInlineVideoPanelProps> = ({
+  visible,
+  children,
+}) => {
+  if (!visible) return null;
+
+  return (
+    <div className="host-inline-video print:hidden">
+      <div className="host-inline-video__inner bg-black">{children}</div>
+    </div>
+  );
+};
 
 interface DraggableVideoWindowProps {
   visible: boolean;
@@ -19,6 +39,8 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
   onClose,
   children,
 }) => {
+  const isMobile = useIsMobile();
+
   const interactionRef = useRef<
     | {
         kind: "drag" | "resize";
@@ -103,6 +125,8 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
   };
 
   const contentHeight = Math.max(MIN_CONTENT_HEIGHT, bounds.height - TITLEBAR_HEIGHT);
+
+  if (isMobile) return null;
 
   return (
     <div

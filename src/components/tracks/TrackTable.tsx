@@ -4,6 +4,9 @@ import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { ClipTimestampModal } from "./ClipTimestampModal";
 import { ManualYoutubeModal } from "./ManualYoutubeModal";
+import { TrackListMobile } from "./TrackListMobile";
+import { OverflowMenu } from "../ui/OverflowMenu";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 import {
   getYoutubeThumbnailUrl,
   getYoutubeWatchUrl,
@@ -94,6 +97,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   onCancelMatching,
   onCancelValidation,
 }) => {
+  const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched" | "blocked">(
     initialStatusFilter
@@ -163,83 +167,153 @@ export const TrackTable: React.FC<TrackTableProps> = ({
         <div className="pc-titlebar-title">Tracks ({tracks.length})</div>
       </div>
       <div className="pc-window-content">
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 mb-4">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          <div className="relative min-w-[240px] flex-1 max-w-md">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Filter tracks by title, artist, or album..."
-              className="pc-input w-full pl-8"
-            />
-          </div>
-          <div className="flex items-center gap-1 text-xs">
-            <button type="button" onClick={() => setStatusFilter("all")} className={`pc-button ${statusFilter === "all" ? "active" : ""}`}>
-              All ({tracks.length})
-            </button>
-            <button type="button" onClick={() => setStatusFilter("matched")} className={`pc-button ${statusFilter === "matched" ? "active" : ""}`}>
-              Ready ({matchedCount})
-            </button>
-            {blockedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setStatusFilter("blocked")}
-                className={`pc-button text-pc-warning ${statusFilter === "blocked" ? "active" : ""}`}
-              >
-                Needs Attention ({blockedCount})
-              </button>
-            )}
-            {unmatchedCount > 0 && (
-              <button type="button" onClick={() => setStatusFilter("unmatched")} className={`pc-button ${statusFilter === "unmatched" ? "active" : ""}`}>
-                Unmatched ({unmatchedCount})
-              </button>
-            )}
-          </div>
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="relative w-full">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={isMobile ? "Search tracks..." : "Filter tracks by title, artist, or album..."}
+            className="pc-input w-full pl-8"
+          />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {onVerifyAllEmbeds && (
-            <button
-              type="button"
-              onClick={onVerifyAllEmbeds}
-              disabled={isValidating || isMatching || tracks.length === 0}
-              className="pc-button"
-              title="Test all song video links to ensure they play smoothly in game"
-            >
-              {isValidating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>
-                    Checking ({validationProgress?.completed || 0}/{validationProgress?.total || tracks.length})...
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Check Audio</span>
-                </>
+        {isMobile ? (
+          <>
+            <div className="flex items-center gap-1 text-xs overflow-x-auto pb-1 -mx-1 px-1">
+              <button type="button" onClick={() => setStatusFilter("all")} className={`pc-button shrink-0 ${statusFilter === "all" ? "active" : ""}`}>
+                All ({tracks.length})
+              </button>
+              <button type="button" onClick={() => setStatusFilter("matched")} className={`pc-button shrink-0 ${statusFilter === "matched" ? "active" : ""}`}>
+                Ready ({matchedCount})
+              </button>
+              {blockedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("blocked")}
+                  className={`pc-button shrink-0 text-pc-warning ${statusFilter === "blocked" ? "active" : ""}`}
+                >
+                  Attention ({blockedCount})
+                </button>
               )}
-            </button>
-          )}
+              {unmatchedCount > 0 && (
+                <button type="button" onClick={() => setStatusFilter("unmatched")} className={`pc-button shrink-0 ${statusFilter === "unmatched" ? "active" : ""}`}>
+                  Unmatched ({unmatchedCount})
+                </button>
+              )}
+            </div>
 
-          {onAutoMatchAll && (
-            <button
-              type="button"
-              onClick={onAutoMatchAll}
-              disabled={isMatching || isValidating || (unmatchedCount === 0 && blockedCount === 0)}
-              className="pc-button pc-button--primary"
-            >
-              <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
-              <span>
-                {isMatching
-                  ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
-                  : "Auto-Match All"}
-              </span>
-            </button>
-          )}
-        </div>
+            <div className="flex items-center gap-2">
+              {onAutoMatchAll && (
+                <button
+                  type="button"
+                  onClick={onAutoMatchAll}
+                  disabled={isMatching || isValidating || (unmatchedCount === 0 && blockedCount === 0)}
+                  className="pc-button pc-button--primary flex-1 min-h-[44px]"
+                >
+                  <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
+                  <span>
+                    {isMatching
+                      ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
+                      : "Auto-Match All"}
+                  </span>
+                </button>
+              )}
+              {onVerifyAllEmbeds && (
+                <OverflowMenu
+                  ariaLabel="More track actions"
+                  items={[
+                    {
+                      icon: isValidating ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-4 h-4" />
+                      ),
+                      label: isValidating
+                        ? `Checking (${validationProgress?.completed || 0}/${validationProgress?.total || tracks.length})...`
+                        : "Check Audio",
+                      onClick: () => {
+                        if (!isValidating && !isMatching && tracks.length > 0) {
+                          onVerifyAllEmbeds();
+                        }
+                      },
+                    },
+                  ]}
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 flex-1">
+              <div className="flex items-center gap-1 text-xs">
+                <button type="button" onClick={() => setStatusFilter("all")} className={`pc-button ${statusFilter === "all" ? "active" : ""}`}>
+                  All ({tracks.length})
+                </button>
+                <button type="button" onClick={() => setStatusFilter("matched")} className={`pc-button ${statusFilter === "matched" ? "active" : ""}`}>
+                  Ready ({matchedCount})
+                </button>
+                {blockedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("blocked")}
+                    className={`pc-button text-pc-warning ${statusFilter === "blocked" ? "active" : ""}`}
+                  >
+                    Needs Attention ({blockedCount})
+                  </button>
+                )}
+                {unmatchedCount > 0 && (
+                  <button type="button" onClick={() => setStatusFilter("unmatched")} className={`pc-button ${statusFilter === "unmatched" ? "active" : ""}`}>
+                    Unmatched ({unmatchedCount})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {onVerifyAllEmbeds && (
+                <button
+                  type="button"
+                  onClick={onVerifyAllEmbeds}
+                  disabled={isValidating || isMatching || tracks.length === 0}
+                  className="pc-button"
+                  title="Test all song video links to ensure they play smoothly in game"
+                >
+                  {isValidating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>
+                        Checking ({validationProgress?.completed || 0}/{validationProgress?.total || tracks.length})...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Check Audio</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {onAutoMatchAll && (
+                <button
+                  type="button"
+                  onClick={onAutoMatchAll}
+                  disabled={isMatching || isValidating || (unmatchedCount === 0 && blockedCount === 0)}
+                  className="pc-button pc-button--primary"
+                >
+                  <Sparkles className={`w-4 h-4 ${isMatching ? "animate-spin" : ""}`} />
+                  <span>
+                    {isMatching
+                      ? `Matching (${matchProgress?.completed || 0}/${matchProgress?.total || tracks.length})...`
+                      : "Auto-Match All"}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {isMatching && matchProgress && (
@@ -298,6 +372,25 @@ export const TrackTable: React.FC<TrackTableProps> = ({
         </div>
       )}
 
+      {isMobile ? (
+        filteredTracks.length === 0 ? (
+          <div className="py-12 text-center pc-bevel-inset">
+            <Music2 className="w-8 h-8 mx-auto mb-2" />
+            <p className="font-medium text-sm">
+              {tracks.length === 0
+                ? "No songs in this deck yet."
+                : "No tracks found matching your filter."}
+            </p>
+          </div>
+        ) : (
+          <TrackListMobile
+            tracks={filteredTracks}
+            onEditTrack={setEditingTrack}
+            isTrackBlocked={isTrackBlocked}
+            isBusy={isMatching || isValidating}
+          />
+        )
+      ) : (
       <div className="overflow-x-auto pc-bevel-inset">
         <table className="w-full text-left text-sm border-collapse">
           <thead>
@@ -528,6 +621,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
           </tbody>
         </table>
       </div>
+      )}
       </div>
 
       {/* Edit YouTube Modal */}

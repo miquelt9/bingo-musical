@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
@@ -27,6 +27,7 @@ import {
   toggleMute,
 } from "../../lib/youtube/player";
 import { BlockedSongsTaskbarNotice } from "./BlockedSongsTaskbarNotice";
+import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
 
 function formatClock(date: Date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -98,6 +99,39 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       resumePlayback();
     }
   };
+
+  const handleDeckChange = (deckId: string) => {
+    loadDeck(deckId);
+    if (location.pathname.startsWith("/deck/")) {
+      const suffix = location.pathname.includes("/cards")
+        ? "/cards"
+        : location.pathname.includes("/play")
+          ? "/play"
+          : "";
+      navigate(`/deck/${deckId}${suffix}`);
+    }
+  };
+
+  const mobileOverflowItems = useMemo((): OverflowMenuItem[] => {
+    const items: OverflowMenuItem[] = [
+      {
+        icon: <Settings className="w-4 h-4" aria-hidden="true" />,
+        label: "Settings",
+        onClick: () => navigate("/settings"),
+      },
+    ];
+
+    if (isAuthenticated) {
+      items.push({
+        icon: <LogOut className="w-4 h-4" aria-hidden="true" />,
+        label: "Disconnect Spotify",
+        onClick: logout,
+        destructive: true,
+      });
+    }
+
+    return items;
+  }, [isAuthenticated, logout, navigate]);
 
   return (
     <Desktop tiled theme={theme}>
@@ -177,7 +211,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           to="/settings"
           title="Settings"
           aria-label="Settings"
-          className={() => taskbarItemClass("settings")}
+          className={() => `${taskbarItemClass("settings")} hidden sm:inline-flex`}
         >
           <Settings className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
           <span className="hidden sm:inline">Settings</span>
@@ -186,20 +220,10 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         {decks.length > 0 && (
           <select
             value={activeDeck?.id || ""}
-            onChange={(e) => {
-              const id = e.target.value;
-              loadDeck(id);
-              if (location.pathname.startsWith("/deck/")) {
-                const suffix = location.pathname.includes("/cards")
-                  ? "/cards"
-                  : location.pathname.includes("/play")
-                    ? "/play"
-                    : "";
-                navigate(`/deck/${id}${suffix}`);
-              }
-            }}
-            className="pc-select max-w-[120px] sm:max-w-[160px] hidden sm:inline"
+            onChange={(e) => handleDeckChange(e.target.value)}
+            className="pc-select pc-taskbar-deck-select max-w-[88px] sm:max-w-[160px]"
             title="Active deck"
+            aria-label="Active deck"
           >
             {decks.map((d) => (
               <option key={d.id} value={d.id}>
@@ -208,6 +232,10 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             ))}
           </select>
         )}
+
+        <div className="sm:hidden">
+          <OverflowMenu items={mobileOverflowItems} ariaLabel="More options" align="left" />
+        </div>
 
         {isAuthenticated && (
           <button
@@ -223,7 +251,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         <div className="pc-taskbar-trailing">
           <BlockedSongsTaskbarNotice />
-          <div className="pc-taskbar-clock">{clock}</div>
+          <div className="pc-taskbar-clock hidden sm:block">{clock}</div>
         </div>
       </Taskbar>
     </Desktop>

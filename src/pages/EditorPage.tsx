@@ -18,8 +18,10 @@ import {
   InvalidTrackEntry,
 } from "../lib/youtube/playabilityGate";
 import { PcModal } from "../components/ui/PcModal";
+import { PageHeader } from "../components/layout/PageHeader";
 import { useToast } from "../state/ToastContext";
 import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Edit3,
   Printer,
@@ -56,6 +58,7 @@ export const EditorPage: React.FC = () => {
   const cancelValidationRef = useRef(false);
 
   const { showToast } = useToast();
+  const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
   const [hostGateOpen, setHostGateOpen] = useState(false);
@@ -336,31 +339,61 @@ export const EditorPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
-        <Link to="/" className="pc-button">
-          <ArrowLeft className="w-4 h-4" />
-          Back to All Decks
-        </Link>
-        <div className="flex items-center gap-2">
-          <Button type="button" onClick={() => shareDeck(deck)}>
-            <Share2 className="w-3.5 h-3.5" />
-            Share
-          </Button>
-          <Link to={`/deck/${deck.id}/cards`} className="pc-button">
-            <Printer className="w-4 h-4" />
-            Bingo Cards
+      {isMobile ? (
+        <PageHeader
+          backLink={{ to: "/", label: "Back" }}
+          title={deck.name}
+          primaryAction={
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleHostLiveGame}
+              disabled={isTrackBusy || isValidating || hostGateChecking}
+            >
+              <Radio className="w-4 h-4" />
+              {hostGateChecking ? "Verifying..." : "Host"}
+            </Button>
+          }
+          overflowItems={[
+            {
+              icon: <Share2 className="w-4 h-4" />,
+              label: "Share",
+              onClick: () => shareDeck(deck),
+            },
+            {
+              icon: <Printer className="w-4 h-4" />,
+              label: "Bingo Cards",
+              onClick: () => navigate(`/deck/${deck.id}/cards`),
+            },
+          ]}
+        />
+      ) : (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
+          <Link to="/" className="pc-button">
+            <ArrowLeft className="w-4 h-4" />
+            Back to All Decks
           </Link>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleHostLiveGame}
-            disabled={isTrackBusy || isValidating || hostGateChecking}
-          >
-            <Radio className="w-4 h-4" />
-            {hostGateChecking ? "Verifying..." : "Host Live Game"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" onClick={() => shareDeck(deck)}>
+              <Share2 className="w-3.5 h-3.5" />
+              Share
+            </Button>
+            <Link to={`/deck/${deck.id}/cards`} className="pc-button">
+              <Printer className="w-4 h-4" />
+              Bingo Cards
+            </Link>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleHostLiveGame}
+              disabled={isTrackBusy || isValidating || hostGateChecking}
+            >
+              <Radio className="w-4 h-4" />
+              {hostGateChecking ? "Verifying..." : "Host Live Game"}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       <Window title="Deck Properties">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">

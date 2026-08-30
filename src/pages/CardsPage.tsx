@@ -15,6 +15,8 @@ import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
+import { useIsMobile } from "../hooks/useMediaQuery";
+import { PageHeader } from "../components/layout/PageHeader";
 import {
   Printer,
   Download,
@@ -26,9 +28,12 @@ import {
   FileText,
   FileJson,
   Loader2,
+  ChevronDown,
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
+const CARD_COUNT_PRESETS = [5, 10, 20, 50, 100] as const;
+const BINGO_PERCENT_PRESETS = [25, 50, 75, 100] as const;
 
 interface CardSettings {
   cardCount: number;
@@ -58,6 +63,7 @@ export const CardsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { decks, loadDeck, updateDeck } = useDeck();
+  const isMobile = useIsMobile();
 
   const deck = useMemo(() => (id ? decks.find((d) => d.id === id) ?? null : null), [id, decks]);
 
@@ -65,6 +71,7 @@ export const CardsPage: React.FC = () => {
   const [cardCount, setCardCount] = useState<number>(10);
   const [gridSize, setGridSize] = useState<number>(5);
   const [bingoPercent, setBingoPercent] = useState<number>(100);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
@@ -176,7 +183,7 @@ export const CardsPage: React.FC = () => {
   };
 
   const handleDownloadPdf = async () => {
-    if (!deck || !cardOptions || cards.length === 0 || !isPlayable) return;
+    if (!deck || !cardOptions || cards.length === 0 || !isPlayable || isExportingPdf) return;
     setIsExportingPdf(true);
     setPdfProgress({ current: 0, total: cards.length });
 
@@ -209,6 +216,60 @@ export const CardsPage: React.FC = () => {
   const canGenerate = deck.tracks.length > 0 && isPlayable;
   const exportsDisabled = !isPlayable || cards.length === 0;
 
+  const bingoPercentSection = (
+    <div>
+      <p className="text-xs font-bold mb-1.5">
+        Songs expected for a bingo ({bingoPercent}% · {uniqueOnCard} of {deck.tracks.length || 0})
+      </p>
+      <input
+        type="range"
+        min={10}
+        max={100}
+        step={5}
+        value={bingoPercent}
+        onChange={(e) => setBingoPercent(Number(e.target.value))}
+        disabled={!canGenerate}
+        className="w-full"
+        aria-label="Percent of the deck used on each card"
+      />
+      {isMobile ? (
+        <select
+          className="pc-select w-full mt-2"
+          value={bingoPercent}
+          onChange={(e) => setBingoPercent(Number(e.target.value))}
+          disabled={!canGenerate}
+          aria-label="Bingo percent preset"
+        >
+          {BINGO_PERCENT_PRESETS.map((pct) => (
+            <option key={pct} value={pct}>
+              {pct}%
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="flex items-center gap-2 mt-2">
+          {BINGO_PERCENT_PRESETS.map((pct) => (
+            <Button
+              key={pct}
+              type="button"
+              active={bingoPercent === pct}
+              onClick={() => setBingoPercent(pct)}
+              className="flex-1"
+            >
+              {pct}%
+            </Button>
+          ))}
+        </div>
+      )}
+      <p className="text-xs mt-2">
+        Each card places a random {bingoPercent}% of this deck
+        {canGenerate ? ` (${uniqueOnCard} song${uniqueOnCard === 1 ? "" : "s"})` : ""} onto the{" "}
+        {gridSize}×{gridSize} grid. Leftover squares become dark blocked tiles, so you never need a full{" "}
+        {slots}-song deck. Lower % means fewer songs per card and more blank tiles.
+      </p>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <PlayabilityGateOverlay
@@ -220,40 +281,70 @@ export const CardsPage: React.FC = () => {
         onRetry={() => void runCheck(true)}
       />
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
-        <Link to={`/deck/${deck.id}`} className="pc-button">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Deck Editor
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
-            <Printer className="w-4 h-4" />
-            Print in Browser
-          </Button>
-          <Button type="button" onClick={handleDownloadJson} disabled={exportsDisabled}>
-            <FileJson className="w-4 h-4" />
-            Download JSON
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleDownloadPdf}
-            disabled={isExportingPdf || exportsDisabled}
-          >
-            {isExportingPdf ? (
-              <>
+      {isMobile ? (
+        <PageHeader
+          backLink={{ to: `/deck/${deck.id}`, label: "Back" }}
+          primaryAction={
+            <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
+              <Printer className="w-4 h-4" />
+              Print
+            </Button>
+          }
+          overflowItems={[
+            {
+              icon: isExportingPdf ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Generating PDF ({pdfProgress?.current}/{pdfProgress?.total})...
-              </>
-            ) : (
-              <>
+              ) : (
                 <Download className="w-4 h-4" />
-                Download {cards.length} Cards (Vector PDF)
-              </>
-            )}
-          </Button>
+              ),
+              label: isExportingPdf
+                ? `Generating PDF (${pdfProgress?.current ?? 0}/${pdfProgress?.total ?? cards.length})`
+                : `Download PDF (${cards.length} cards)`,
+              onClick: () => void handleDownloadPdf(),
+            },
+            {
+              icon: <FileJson className="w-4 h-4" />,
+              label: "Download JSON",
+              onClick: handleDownloadJson,
+            },
+          ]}
+        />
+      ) : (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
+          <Link to={`/deck/${deck.id}`} className="pc-button">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Deck Editor
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
+              <Printer className="w-4 h-4" />
+              Print in Browser
+            </Button>
+            <Button type="button" onClick={handleDownloadJson} disabled={exportsDisabled}>
+              <FileJson className="w-4 h-4" />
+              Download JSON
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleDownloadPdf()}
+              disabled={isExportingPdf || exportsDisabled}
+            >
+              {isExportingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating PDF ({pdfProgress?.current}/{pdfProgress?.total})...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download {cards.length} Cards (Vector PDF)
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 print:hidden">
         <div className="lg:col-span-5 space-y-4">
@@ -279,73 +370,86 @@ export const CardsPage: React.FC = () => {
 
               <div>
                 <p className="text-xs font-bold mb-1.5">Grid size ({gridSize}×{gridSize})</p>
-                <div className="flex items-center gap-2">
-                  {GRID_SIZES.map((size) => (
-                    <Button
-                      key={size}
-                      type="button"
-                      active={gridSize === size}
-                      onClick={() => setGridSize(size)}
-                      className="flex-1"
-                    >
-                      {size}×{size}
-                    </Button>
-                  ))}
-                </div>
+                {isMobile ? (
+                  <select
+                    className="pc-select w-full"
+                    value={gridSize}
+                    onChange={(e) => setGridSize(Number(e.target.value))}
+                    aria-label="Grid size"
+                  >
+                    {GRID_SIZES.map((size) => (
+                      <option key={size} value={size}>
+                        {size}×{size}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {GRID_SIZES.map((size) => (
+                      <Button
+                        key={size}
+                        type="button"
+                        active={gridSize === size}
+                        onClick={() => setGridSize(size)}
+                        className="flex-1"
+                      >
+                        {size}×{size}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
                 <p className="text-xs font-bold mb-1.5">Number of Cards ({cardCount})</p>
-                <div className="flex items-center gap-2">
-                  {[5, 10, 20, 50, 100].map((num) => (
-                    <Button
-                      key={num}
-                      type="button"
-                      active={cardCount === num}
-                      onClick={() => setCardCount(num)}
-                      className="flex-1"
-                    >
-                      {num}
-                    </Button>
-                  ))}
-                </div>
+                {isMobile ? (
+                  <select
+                    className="pc-select w-full"
+                    value={cardCount}
+                    onChange={(e) => setCardCount(Number(e.target.value))}
+                    aria-label="Number of cards"
+                  >
+                    {CARD_COUNT_PRESETS.map((num) => (
+                      <option key={num} value={num}>
+                        {num} cards
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {CARD_COUNT_PRESETS.map((num) => (
+                      <Button
+                        key={num}
+                        type="button"
+                        active={cardCount === num}
+                        onClick={() => setCardCount(num)}
+                        className="flex-1"
+                      >
+                        {num}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div>
-                <p className="text-xs font-bold mb-1.5">
-                  Songs expected for a bingo ({bingoPercent}% · {uniqueOnCard} of {deck.tracks.length || 0})
-                </p>
-                <input
-                  type="range"
-                  min={10}
-                  max={100}
-                  step={5}
-                  value={bingoPercent}
-                  onChange={(e) => setBingoPercent(Number(e.target.value))}
-                  disabled={!canGenerate}
-                  className="w-full"
-                  aria-label="Percent of the deck used on each card"
-                />
-                <div className="flex items-center gap-2 mt-2">
-                  {[25, 50, 75, 100].map((pct) => (
-                    <Button
-                      key={pct}
-                      type="button"
-                      active={bingoPercent === pct}
-                      onClick={() => setBingoPercent(pct)}
-                      className="flex-1"
-                    >
-                      {pct}%
-                    </Button>
-                  ))}
+              {isMobile ? (
+                <div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 text-xs font-bold bg-transparent border-0 p-0 text-inherit cursor-pointer w-full text-left"
+                    onClick={() => setShowMoreOptions((open) => !open)}
+                    aria-expanded={showMoreOptions}
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 shrink-0 transition-transform ${showMoreOptions ? "" : "-rotate-90"}`}
+                    />
+                    More options
+                  </button>
+                  {showMoreOptions && <div className="mt-3">{bingoPercentSection}</div>}
                 </div>
-                <p className="text-xs mt-2">
-                  Each card places a random {bingoPercent}% of this deck
-                  {canGenerate ? ` (${uniqueOnCard} song${uniqueOnCard === 1 ? "" : "s"})` : ""} onto the{" "}
-                  {gridSize}×{gridSize} grid. Leftover squares become dark blocked tiles, so you never need
-                  a full {slots}-song deck. Lower % means fewer songs per card and more blank tiles.
-                </p>
-              </div>
+              ) : (
+                bingoPercentSection
+              )}
 
               <Button type="button" className="w-full" onClick={handleRegenerate} disabled={!canGenerate}>
                 <Shuffle className="w-4 h-4" />

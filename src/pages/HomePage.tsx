@@ -10,6 +10,8 @@ import { getUnplayableTracks } from "../lib/youtube/validator";
 import { canStartGame } from "../lib/youtube/playabilityGate";
 import { useToast } from "../state/ToastContext";
 import { PcModal } from "../components/ui/PcModal";
+import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
   Plus,
@@ -27,6 +29,7 @@ export const HomePage: React.FC = () => {
   const { decks, createDeck, deleteDeck, duplicateDeck, shareDeck } = useDeck();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const isMobile = useIsMobile();
 
   const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
   const [showSpotifyModal, setShowSpotifyModal] = useState(false);
@@ -98,6 +101,31 @@ export const HomePage: React.FC = () => {
     </button>
   );
 
+  const importLinks = (
+    <>
+      <button
+        type="button"
+        className="pc-link text-xs bg-transparent border-0 p-0"
+        onClick={() => {
+          setIngestError(null);
+          setShowBulkPasteModal(true);
+        }}
+      >
+        Paste a song list
+      </button>
+      {isSpotifyConfigured() && (
+        <button
+          type="button"
+          className="pc-link text-xs bg-transparent border-0 p-0 inline-flex items-center gap-1"
+          onClick={() => setShowSpotifyModal(true)}
+        >
+          <ListMusic className="w-3.5 h-3.5" />
+          Import from Spotify
+        </button>
+      )}
+    </>
+  );
+
   return (
     <Window
       fill
@@ -105,20 +133,24 @@ export const HomePage: React.FC = () => {
       className="home-decks"
       titleBarProps={{ controls: newDeckButton }}
     >
-      <p className="text-sm mb-4">
-        Match YouTube clips, print bingo sheets, or launch the host board.
+      <p className="home-decks-intro text-sm mb-4">
+        {isMobile
+          ? "Match clips, print cards, and host bingo."
+          : "Match YouTube clips, print bingo sheets, or launch the host board."}
       </p>
 
       <div className="home-decks-grid">
-        <button
-          type="button"
-          className="home-deck-add"
-          onClick={handleCreateEmptyDeck}
-        >
-          <Plus className="w-7 h-7 shrink-0 opacity-70" aria-hidden />
-          <span className="font-semibold text-sm">+ Empty deck</span>
-          <span className="text-xs opacity-75">Add songs in the editor</span>
-        </button>
+        {!isMobile && (
+          <button
+            type="button"
+            className="home-deck-add"
+            onClick={handleCreateEmptyDeck}
+          >
+            <Plus className="w-7 h-7 shrink-0 opacity-70" aria-hidden />
+            <span className="font-semibold text-sm">+ Empty deck</span>
+            <span className="text-xs opacity-75">Add songs in the editor</span>
+          </button>
+        )}
 
         {decks.map((deck) => {
           const matchedCount = deck.tracks.filter(
@@ -127,22 +159,104 @@ export const HomePage: React.FC = () => {
           const attentionCount = getUnplayableTracks(deck.tracks).length;
           const playReady = canStartGame(deck.tracks);
 
-          return (
-            <Window key={deck.id} title={deck.name} className="home-deck-card">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2 min-w-0">
-                  <Music className="w-6 h-6 shrink-0" />
-                  <p className="text-xs">
-                    {deck.tracks.length} tracks · {matchedCount}/{deck.tracks.length} matched
-                    {attentionCount > 0 ? (
-                      <span className="text-pc-warning font-semibold">
-                        {" "}
-                        · {attentionCount} need attention
-                      </span>
-                    ) : null}
-                  </p>
+          const statsLine = (
+            <p className="home-deck-card-stats text-xs">
+              {deck.tracks.length} tracks · {matchedCount}/{deck.tracks.length} matched
+              {attentionCount > 0 ? (
+                <span className="text-pc-warning font-semibold">
+                  {" "}
+                  · {attentionCount} need attention
+                </span>
+              ) : null}
+            </p>
+          );
+
+          const overflowItems = [
+            {
+              icon: <Share2 className="w-4 h-4" />,
+              label: "Share",
+              onClick: () => shareDeck(deck),
+            },
+            {
+              icon: <Copy className="w-4 h-4" />,
+              label: "Duplicate",
+              onClick: () => duplicateDeck(deck.id),
+            },
+            {
+              icon: <Printer className="w-4 h-4" />,
+              label: "Cards",
+              onClick: () => navigate(`/deck/${deck.id}/cards`),
+            },
+            {
+              icon: <Trash2 className="w-4 h-4" />,
+              label: "Delete",
+              destructive: true,
+              onClick: () => setDeckToDelete(deck),
+            },
+          ];
+
+          if (isMobile) {
+            const mobileOverflowItems = playReady
+              ? [
+                  {
+                    icon: <Edit3 className="w-4 h-4" />,
+                    label: "Edit",
+                    onClick: () => navigate(`/deck/${deck.id}`),
+                  },
+                  ...overflowItems,
+                ]
+              : overflowItems;
+
+            return (
+              <article key={deck.id} className="home-deck-card">
+                <div className="home-deck-card-body">
+                  <Music className="home-deck-card-icon w-5 h-5 shrink-0" aria-hidden />
+                  <div className="home-deck-card-info min-w-0">
+                    <h3 className="home-deck-card-title text-sm font-semibold truncate">
+                      {deck.name}
+                    </h3>
+                    {statsLine}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="home-deck-card-actions home-deck-card-actions--mobile">
+                  {playReady ? (
+                    <Link
+                      to={`/deck/${deck.id}/play`}
+                      className="pc-button pc-button--primary home-deck-card-primary"
+                    >
+                      <Radio className="w-4 h-4" />
+                      Play
+                    </Link>
+                  ) : (
+                    <Link
+                      to={`/deck/${deck.id}`}
+                      className="pc-button pc-button--primary home-deck-card-primary"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      Edit
+                      {attentionCount > 0 ? " ⚠" : ""}
+                    </Link>
+                  )}
+                  <OverflowMenu
+                    items={mobileOverflowItems}
+                    ariaLabel={`More actions for ${deck.name}`}
+                  />
+                </div>
+              </article>
+            );
+          }
+
+          return (
+            <article key={deck.id} className="home-deck-card">
+              <div className="home-deck-card-body">
+                <Music className="home-deck-card-icon w-6 h-6 shrink-0" aria-hidden />
+                <div className="home-deck-card-info min-w-0 flex-1">
+                  <h3 className="home-deck-card-title text-sm font-semibold truncate">
+                    {deck.name}
+                  </h3>
+                  {statsLine}
+                </div>
+                <div className="home-deck-card-toolbar shrink-0">
                   <button
                     type="button"
                     className="pc-button"
@@ -169,7 +283,7 @@ export const HomePage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="home-deck-card-actions home-deck-card-actions--desktop">
                 <Link to={`/deck/${deck.id}`} className="pc-button">
                   <Edit3 className="w-3.5 h-3.5" />
                   Edit
@@ -194,33 +308,19 @@ export const HomePage: React.FC = () => {
                   {!playReady && attentionCount > 0 ? " ⚠" : ""}
                 </Link>
               </div>
-            </Window>
+            </article>
           );
         })}
       </div>
 
-      <div className="home-decks-import-links">
-        <button
-          type="button"
-          className="pc-link text-xs bg-transparent border-0 p-0"
-          onClick={() => {
-            setIngestError(null);
-            setShowBulkPasteModal(true);
-          }}
-        >
-          Paste a song list
-        </button>
-        {isSpotifyConfigured() && (
-          <button
-            type="button"
-            className="pc-link text-xs bg-transparent border-0 p-0 inline-flex items-center gap-1"
-            onClick={() => setShowSpotifyModal(true)}
-          >
-            <ListMusic className="w-3.5 h-3.5" />
-            Import from Spotify
-          </button>
-        )}
-      </div>
+      {isMobile ? (
+        <details className="home-decks-import-disclosure">
+          <summary className="home-decks-import-disclosure-summary">Import songs…</summary>
+          <div className="home-decks-import-disclosure-panel">{importLinks}</div>
+        </details>
+      ) : (
+        <div className="home-decks-import-links">{importLinks}</div>
+      )}
 
       {showBulkPasteModal && (
         <PcModal
