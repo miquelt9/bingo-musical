@@ -144,6 +144,26 @@
   min-width: 0;
 }
 
+@media (max-width: 639px) {
+  .pc-taskbar {
+    gap: 2px;
+    padding-left: 2px;
+    padding-right: 2px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pc-taskbar-item {
+    padding: 4px 6px;
+    max-width: none;
+    gap: 0;
+  }
+
+  .pc-taskbar-clock {
+    font-size: 0.7rem;
+    padding: 2px 4px;
+  }
+}
+
 .text-pc-warning {
   color: var(--pc-color-warning);
 }

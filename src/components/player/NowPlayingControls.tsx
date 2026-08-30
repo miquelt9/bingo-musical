@@ -10,6 +10,7 @@ interface NowPlayingControlsProps {
   onVolumeChange: (volume: number) => void;
   onToggleVideo: () => void;
   showVideo: boolean;
+  showVideoToggle?: boolean;
   compact?: boolean;
 }
 
@@ -21,6 +22,7 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   onVolumeChange,
   onToggleVideo,
   showVideo,
+  showVideoToggle = true,
   compact = false,
 }) => {
   const isPlaying = playerState?.state === "playing";
@@ -77,15 +79,17 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           className={`w-20 cursor-pointer hidden sm:block ${playerState?.isMuted ? "opacity-40" : ""}`}
           aria-label="Volume"
         />
-        <button
-          type="button"
-          className="pc-button"
-          onClick={onToggleVideo}
-          title="Toggle visual video preview"
-        >
-          <span>Video</span>
-          {showVideo ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-        </button>
+        {showVideoToggle && (
+          <button
+            type="button"
+            className="pc-button"
+            onClick={onToggleVideo}
+            title="Toggle visual video preview"
+          >
+            <span>Video</span>
+            {showVideo ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+          </button>
+        )}
       </div>
     </div>
   );

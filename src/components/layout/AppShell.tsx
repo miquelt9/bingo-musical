@@ -82,9 +82,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isHostRoute = activeTab === "host";
 
   useEffect(() => {
-    if (isHostRoute) {
-      setShowVideo(true);
-    }
+    setShowVideo(isHostRoute);
   }, [isHostRoute, setShowVideo]);
 
   const taskbarItemClass = (tab: string) =>
@@ -118,13 +116,14 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               onVolumeChange={setVolume}
               onToggleVideo={toggleVideo}
               showVideo={showVideo}
+              showVideoToggle={false}
             />
           </Window>
         </div>
       )}
 
       <DraggableVideoWindow
-        visible={showVideo}
+        visible={showVideo && isHostRoute}
         bounds={videoWindowBounds}
         onBoundsChange={setVideoWindowBounds}
         onClose={() => setShowVideo(false)}
@@ -133,38 +132,55 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </DraggableVideoWindow>
 
       <Taskbar className="print:hidden">
-        <Link to="/" className="pc-button pc-start-btn">
+        <Link to="/" className="pc-button pc-start-btn hidden sm:inline-flex">
           Start
         </Link>
-        <NavLink to="/" end className={() => taskbarItemClass("decks")}>
-          <FolderOpen className="w-3.5 h-3.5" />
-          Decks
+        <NavLink
+          to="/"
+          end
+          title="Decks"
+          aria-label="Decks"
+          className={() => taskbarItemClass("decks")}
+        >
+          <FolderOpen className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Decks</span>
         </NavLink>
         <NavLink
           to={currentDeckId ? `/deck/${currentDeckId}` : "/"}
           end
+          title="Editor"
+          aria-label="Editor"
           className={() => taskbarItemClass("editor")}
         >
-          <Edit3 className="w-3.5 h-3.5" />
-          Editor
+          <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Editor</span>
         </NavLink>
         <NavLink
           to={currentDeckId ? `/deck/${currentDeckId}/cards` : "/"}
+          title="Cards"
+          aria-label="Cards"
           className={() => taskbarItemClass("cards")}
         >
-          <Printer className="w-3.5 h-3.5" />
-          Cards
+          <Printer className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Cards</span>
         </NavLink>
         <NavLink
           to={currentDeckId ? `/deck/${currentDeckId}/play` : "/"}
+          title="Host"
+          aria-label="Host"
           className={() => taskbarItemClass("host")}
         >
-          <Radio className="w-3.5 h-3.5" />
-          Host
+          <Radio className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Host</span>
         </NavLink>
-        <NavLink to="/settings" className={() => taskbarItemClass("settings")}>
-          <Settings className="w-3.5 h-3.5" />
-          Settings
+        <NavLink
+          to="/settings"
+          title="Settings"
+          aria-label="Settings"
+          className={() => taskbarItemClass("settings")}
+        >
+          <Settings className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Settings</span>
         </NavLink>
 
         {decks.length > 0 && (
