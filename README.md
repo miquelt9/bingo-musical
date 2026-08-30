@@ -59,15 +59,11 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google o
 
 ### 1. Install Dependencies
 
-This project depends on [`@miquelt9/pc-ui`](https://github.com/miquelt9/pc-ui) as a local sibling package. Clone both repos side by side, then install:
-
 ```bash
-# expected layout:
-#   ../pc-ui
-#   ./bingo-musical
-
 npm install
 ```
+
+`@miquelt9/pc-ui` is installed from [GitHub](https://github.com/miquelt9/pc-ui) automatically. To develop against a local checkout of `pc-ui`, clone it elsewhere and run `npm link @miquelt9/pc-ui` from this project after linking in `pc-ui`.
 
 ### 2. Create a deck
 
