@@ -8,6 +8,7 @@ import {
   EmbedValidationResult,
 } from "../../lib/youtube/validator";
 import {
+  filterSearchHitsForDisplay,
   formatDuration,
   searchYoutubeVideos,
   YoutubeSearchHit,
@@ -123,6 +124,23 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
   }, [searchHits]);
 
   if (!isOpen) return null;
+
+  const getEmbedStatus = (videoId: string): EmbedValidationResult | null =>
+    embedStatuses.get(videoId) ?? null;
+
+  const { visible: visibleSearchHits, hiddenBlockedCount } = filterSearchHitsForDisplay(
+    searchHits,
+    getEmbedStatus,
+    isCheckingEmbeds
+  );
+
+  const allSearchResultsBlocked =
+    searchHits.length > 0 &&
+    !isCheckingEmbeds &&
+    searchHits.every((hit) => {
+      const status = getEmbedStatus(hit.videoId);
+      return status && !status.embeddable;
+    });
 
   const handleSearchYoutube = () => {
     const query = encodeURIComponent(defaultSearchQuery(track));
@@ -317,11 +335,19 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
           {searchHits.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-bold">
-                {searchHits.length} result{searchHits.length === 1 ? "" : "s"}
+                {visibleSearchHits.length} result{visibleSearchHits.length === 1 ? "" : "s"}
                 {isCheckingEmbeds ? " · checking embeds…" : ""}
+                {hiddenBlockedCount > 0
+                  ? ` · ${hiddenBlockedCount} blocked hidden`
+                  : ""}
               </p>
+              {allSearchResultsBlocked && (
+                <p className="text-xs pc-bevel-inset p-2">
+                  None of these results allow in-game playback. Try different keywords like &quot;official audio&quot;, or paste a YouTube link above.
+                </p>
+              )}
               <div className="space-y-2 pc-bevel-inset p-2 max-h-56 overflow-y-auto">
-                {searchHits.map((hit) => {
+                {visibleSearchHits.map((hit) => {
                   const embedStatus = embedStatuses.get(hit.videoId);
                   const isBlocked = embedStatus ? !embedStatus.embeddable : false;
                   const isCheckingThis = isCheckingEmbeds && !embedStatus;

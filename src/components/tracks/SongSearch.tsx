@@ -6,6 +6,7 @@ import {
   searchYoutubeVideos,
   hitToTrack,
   formatDuration,
+  filterSearchHitsForDisplay,
   ResolveKind,
 } from "../../lib/youtube/search";
 import { CatalogSong, catalogYoutubeQuery, filterCatalogSongs, searchCatalogSongs } from "../../lib/music/catalog";
@@ -307,6 +308,20 @@ export const SongSearch: React.FC<SongSearchProps> = ({
     }
   };
 
+  const { visible: visibleHits, hiddenBlockedCount } = filterSearchHitsForDisplay(
+    hits,
+    getEmbedStatus,
+    isCheckingEmbeds
+  );
+
+  const allResultsBlocked =
+    hits.length > 0 &&
+    !isCheckingEmbeds &&
+    hits.every((hit) => {
+      const status = getEmbedStatus(hit.videoId);
+      return status && !status.embeddable;
+    });
+
   const resultLabel =
     kind === "playlist"
       ? playlistName
@@ -435,10 +450,13 @@ export const SongSearch: React.FC<SongSearchProps> = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-bold">
-              {resultLabel} · {hits.length} result{hits.length === 1 ? "" : "s"}
+              {resultLabel} · {visibleHits.length} result{visibleHits.length === 1 ? "" : "s"}
               {isCheckingEmbeds ? " · checking embeds…" : ""}
+              {hiddenBlockedCount > 0
+                ? ` · ${hiddenBlockedCount} blocked hidden`
+                : ""}
             </p>
-            {hits.length > 1 && (
+            {visibleHits.length > 1 && (
               <button
                 type="button"
                 onClick={() => void addAllVisible()}
@@ -450,8 +468,14 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             )}
           </div>
 
+          {allResultsBlocked && (
+            <p className="text-xs pc-bevel-inset p-2">
+              None of these results allow in-game playback. Try searching for an official audio or lyric video, or paste a different YouTube link.
+            </p>
+          )}
+
           <div className="space-y-2 pc-bevel-inset p-2">
-            {hits.map((hit) => {
+            {visibleHits.map((hit) => {
               const added = alreadyInDeck.has(hit.videoId) || addedIds.has(hit.videoId);
               const embedStatus = getEmbedStatus(hit.videoId);
               const isBlocked = embedStatus ? !embedStatus.embeddable : false;

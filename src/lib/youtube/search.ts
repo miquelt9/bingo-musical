@@ -360,3 +360,37 @@ export async function resolveYoutubeQuery(
   const hits = await searchYoutubeVideos(query, 8, signal);
   return { kind: "search", query, hits };
 }
+
+export type EmbedStatusLookup = (videoId: string) => { embeddable: boolean } | null;
+
+/** Hide blocked hits from search UI; keep at most one blocked hit as a warning. */
+export function filterSearchHitsForDisplay(
+  hits: YoutubeSearchHit[],
+  getStatus: EmbedStatusLookup,
+  isChecking = false
+): { visible: YoutubeSearchHit[]; hiddenBlockedCount: number } {
+  if (isChecking) {
+    return { visible: hits, hiddenBlockedCount: 0 };
+  }
+
+  const visible: YoutubeSearchHit[] = [];
+  let firstBlocked: YoutubeSearchHit | null = null;
+  let hiddenBlockedCount = 0;
+
+  for (const hit of hits) {
+    const status = getStatus(hit.videoId);
+    if (!status || status.embeddable) {
+      visible.push(hit);
+    } else if (!firstBlocked) {
+      firstBlocked = hit;
+    } else {
+      hiddenBlockedCount += 1;
+    }
+  }
+
+  if (firstBlocked) {
+    visible.push(firstBlocked);
+  }
+
+  return { visible, hiddenBlockedCount };
+}
