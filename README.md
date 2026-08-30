@@ -79,7 +79,9 @@ Then open **Editor**, trim clips if needed, resolve any blocked songs, print car
 End users do **not** need a Spotify Developer account. The site maintainer configures Spotify once:
 
 1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Add your site redirect URI (e.g. `https://<user>.github.io/bingo-musical/` for GitHub Pages).
+2. Add redirect URIs (HTTPS only):
+   - Production: `https://miquelt9.github.io/bingo-musical/`
+   - Local dev: `https://127.0.0.1:5173/` (`npm run dev` serves HTTPS via a self-signed cert — accept the browser warning once)
 3. Set `VITE_SPOTIFY_CLIENT_ID` in `.env` locally or as a GitHub Actions secret for production builds.
 4. While the app is in Development Mode, add each user's Spotify email under **Users and Access**.
 
@@ -91,7 +93,7 @@ Users then click **Connect with Spotify** on the home page (or in **Settings**) 
 npm run dev
 ```
 
-Visit [http://localhost:5173](http://localhost:5173) in your desktop browser.
+Visit [https://127.0.0.1:5173](https://127.0.0.1:5173) in your desktop browser (self-signed cert — proceed past the warning). Use this exact URL for Spotify OAuth; `localhost` and plain `http://` are not accepted by Spotify.
 
 ### 5. Build for Production
 

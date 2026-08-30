@@ -1,12 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   base: process.env.NODE_ENV === "production" ? "/bingo-musical/" : "/",
   server: {
-    host: "localhost",
+    // Spotify requires HTTPS redirect URIs (and disallows "localhost").
+    host: "127.0.0.1",
     port: 5173,
   },
   build: {
@@ -20,4 +22,3 @@ export default defineConfig({
     },
   },
 });
-
