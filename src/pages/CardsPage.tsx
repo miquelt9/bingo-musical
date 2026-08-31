@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
@@ -11,11 +11,10 @@ import {
 } from "../lib/bingo/generateCards";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
-import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
+import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
-import { BackButton } from "../components/ui/BackButton";
 import { trackEvent } from "../lib/analytics/trackEvent";
 import {
   Printer,
@@ -27,6 +26,7 @@ import {
   FileText,
   Loader2,
   ChevronDown,
+  Edit3,
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
@@ -69,7 +69,7 @@ export const CardsPage: React.FC = () => {
   const [cardCount, setCardCount] = useState<number>(10);
   const [gridSize, setGridSize] = useState<number>(5);
   const [bingoPercent, setBingoPercent] = useState<number>(100);
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
@@ -87,11 +87,9 @@ export const CardsPage: React.FC = () => {
   );
 
   const {
-    isPlayable,
     isChecking,
     invalidTracks,
     progress: gateProgress,
-    runCheck,
   } = usePlayabilityGate(deck?.tracks ?? [], {
     autoRun: Boolean(deck),
     onTracksUpdated: handleTracksUpdated,
@@ -111,6 +109,8 @@ export const CardsPage: React.FC = () => {
       bingoPercent,
     };
   }, [deck, customTitle, cardCount, gridSize, bingoPercent]);
+
+  const layoutKeyRef = useRef("");
 
   useEffect(() => {
     if (id) loadDeck(id);
@@ -153,16 +153,17 @@ export const CardsPage: React.FC = () => {
   }, [cards.length]);
 
   useEffect(() => {
-    if (!deck || !isPlayable) {
+    if (!deck || deck.tracks.length === 0) {
       setCards([]);
       setActivePreviewIndex(0);
+      layoutKeyRef.current = "";
       return;
     }
-    if (deck.tracks.length === 0) {
-      setCards([]);
-      setActivePreviewIndex(0);
-      return;
-    }
+
+    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}:${bingoPercent}`;
+    const layoutChanged = layoutKey !== layoutKeyRef.current;
+    layoutKeyRef.current = layoutKey;
+
     setCards(
       generateBingoCards(deck.tracks, {
         deckName: deck.name,
@@ -172,18 +173,21 @@ export const CardsPage: React.FC = () => {
         bingoPercent,
       })
     );
-    setActivePreviewIndex(0);
-  }, [deck?.id, deck?.updatedAt, deck?.name, customTitle, cardCount, gridSize, bingoPercent, isPlayable]);
+
+    if (layoutChanged) {
+      setActivePreviewIndex(0);
+    }
+  }, [deck?.id, deck?.updatedAt, cardCount, gridSize, bingoPercent]);
 
   const handleRegenerate = () => {
-    if (!deck || !cardOptions || deck.tracks.length === 0 || !isPlayable) return;
+    if (!deck || !cardOptions || deck.tracks.length === 0) return;
     const generated = generateBingoCards(deck.tracks, cardOptions);
     setCards(generated);
     setActivePreviewIndex(0);
   };
 
   const handleDownloadPdf = async () => {
-    if (!deck || !cardOptions || cards.length === 0 || !isPlayable || isExportingPdf) return;
+    if (!deck || !cardOptions || cards.length === 0 || isExportingPdf) return;
     setIsExportingPdf(true);
     setPdfProgress({ current: 0, total: cards.length });
 
@@ -216,7 +220,7 @@ export const CardsPage: React.FC = () => {
   }, [pendingPrint, printCards]);
 
   const triggerBrowserPrint = (selection: BingoCard[]) => {
-    if (!isPlayable || cards.length === 0) return;
+    if (cards.length === 0) return;
     setPrintCards(selection);
     setPendingPrint(true);
   };
@@ -233,13 +237,18 @@ export const CardsPage: React.FC = () => {
 
   const currentCard = cards[activePreviewIndex] || cards[0];
   const cardsForPrint = printCards ?? cards;
-  const canGenerate = deck.tracks.length > 0 && isPlayable;
-  const exportsDisabled = !isPlayable || cards.length === 0;
+  const canGenerate = deck.tracks.length > 0;
+  const exportsDisabled = cards.length === 0;
+  const eventTitle = customTitle || deck.name;
+
+  const pdfButtonLabel = isExportingPdf
+    ? `Generating PDF (${pdfProgress?.current}/${pdfProgress?.total})...`
+    : `Download PDF (${cards.length} cards)`;
 
   const bingoPercentSection = (
     <div>
       <p className="text-xs font-bold mb-1.5">
-        Songs expected for a bingo ({bingoPercent}% · {uniqueOnCard} of {deck.tracks.length || 0})
+        Songs per card ({bingoPercent}%)
       </p>
       <input
         type="range"
@@ -252,58 +261,57 @@ export const CardsPage: React.FC = () => {
         className="w-full"
         aria-label="Percent of the deck used on each card"
       />
-      {isMobile ? (
-        <select
-          className="pc-select w-full mt-2"
-          value={bingoPercent}
-          onChange={(e) => setBingoPercent(Number(e.target.value))}
-          disabled={!canGenerate}
-          aria-label="Bingo percent preset"
-        >
-          {BINGO_PERCENT_PRESETS.map((pct) => (
-            <option key={pct} value={pct}>
-              {pct}%
-            </option>
-          ))}
-        </select>
-      ) : (
-        <div className="flex items-center gap-2 mt-2">
-          {BINGO_PERCENT_PRESETS.map((pct) => (
-            <Button
-              key={pct}
-              type="button"
-              active={bingoPercent === pct}
-              onClick={() => setBingoPercent(pct)}
-              className="flex-1"
-            >
-              {pct}%
-            </Button>
-          ))}
-        </div>
-      )}
-      <p className="text-xs mt-2">
-        Each card places a random {bingoPercent}% of this deck
-        {canGenerate ? ` (${uniqueOnCard} song${uniqueOnCard === 1 ? "" : "s"})` : ""} onto the{" "}
-        {gridSize}×{gridSize} grid. Leftover squares become dark blocked tiles, so you never need a full{" "}
-        {slots}-song deck. Lower % means fewer songs per card and more blank tiles.
+      <div className="flex items-center gap-2 mt-2">
+        {BINGO_PERCENT_PRESETS.map((pct) => (
+          <Button
+            key={pct}
+            type="button"
+            active={bingoPercent === pct}
+            onClick={() => setBingoPercent(pct)}
+            className="flex-1"
+          >
+            {pct}%
+          </Button>
+        ))}
+      </div>
+      <p className="text-xs mt-2 text-muted">
+        Each card uses {uniqueOnCard} song{uniqueOnCard === 1 ? "" : "s"};{" "}
+        {blankOnCard} square{blankOnCard === 1 ? "" : "s"} stay blank.
       </p>
     </div>
   );
 
+  const previewEmptyState = (
+    <Window title="Preview">
+      <div className="text-center py-8 space-y-3">
+        {deck.tracks.length === 0 ? (
+          <>
+            <p className="text-sm">Add songs in the Editor to generate cards.</p>
+            <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary inline-flex items-center gap-2">
+              <Edit3 className="w-4 h-4" />
+              Open Deck Editor
+            </Link>
+          </>
+        ) : (
+          <p className="text-sm text-muted">Adjust settings to preview cards.</p>
+        )}
+      </div>
+    </Window>
+  );
+
   return (
     <div className="space-y-4">
-      <PlayabilityGateOverlay
+      <CardsPlayabilityBanner
         deckId={deck.id}
-        context="cards"
         isChecking={isChecking}
         progress={gateProgress}
         invalidTracks={invalidTracks}
-        onRetry={() => void runCheck(true)}
       />
 
       {isMobile ? (
         <PageHeader
           back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
+          title={`Bingo cards`}
           primaryAction={
             <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
               <Printer className="w-4 h-4" />
@@ -321,17 +329,15 @@ export const CardsPage: React.FC = () => {
                 ? `Generating PDF (${pdfProgress?.current ?? 0}/${pdfProgress?.total ?? cards.length})`
                 : `Download PDF (${cards.length} cards)`,
               onClick: () => void handleDownloadPdf(),
+              disabled: exportsDisabled,
             },
           ]}
         />
       ) : (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
-          <BackButton fallbackTo={`/deck/${deck.id}`} fallbackLabel="Deck editor" />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
-              <Printer className="w-4 h-4" />
-              Print
-            </Button>
+        <PageHeader
+          back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
+          title={`Bingo cards — ${deck.name}`}
+          primaryAction={
             <Button
               type="button"
               variant="primary"
@@ -341,17 +347,25 @@ export const CardsPage: React.FC = () => {
               {isExportingPdf ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating PDF ({pdfProgress?.current}/{pdfProgress?.total})...
+                  {pdfButtonLabel}
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  Download {cards.length} Cards (Vector PDF)
+                  {pdfButtonLabel}
                 </>
               )}
             </Button>
-          </div>
-        </div>
+          }
+          overflowItems={[
+            {
+              icon: <Printer className="w-4 h-4" />,
+              label: "Print",
+              onClick: handleBrowserPrint,
+              disabled: exportsDisabled,
+            },
+          ]}
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 print:hidden">
@@ -360,7 +374,7 @@ export const CardsPage: React.FC = () => {
             title={
               <span className="inline-flex items-center gap-2">
                 <Settings2 className="w-4 h-4" />
-                Card Generator Settings
+                Print settings
               </span>
             }
           >
@@ -440,74 +454,59 @@ export const CardsPage: React.FC = () => {
                 )}
               </div>
 
-              {isMobile ? (
-                <div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 text-xs font-bold bg-transparent border-0 p-0 text-inherit cursor-pointer w-full text-left"
-                    onClick={() => setShowMoreOptions((open) => !open)}
-                    aria-expanded={showMoreOptions}
-                  >
-                    <ChevronDown
-                      className={`w-4 h-4 shrink-0 transition-transform ${showMoreOptions ? "" : "-rotate-90"}`}
-                    />
-                    More options
-                  </button>
-                  {showMoreOptions && <div className="mt-3">{bingoPercentSection}</div>}
-                </div>
-              ) : (
-                bingoPercentSection
-              )}
+              <div>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 text-xs font-bold bg-transparent border-0 p-0 text-inherit cursor-pointer w-full text-left"
+                  onClick={() => setShowAdvanced((open) => !open)}
+                  aria-expanded={showAdvanced}
+                >
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 transition-transform ${showAdvanced ? "" : "-rotate-90"}`}
+                  />
+                  Advanced
+                </button>
+                {showAdvanced && <div className="mt-3">{bingoPercentSection}</div>}
+              </div>
 
-              <Button type="button" className="w-full" onClick={handleRegenerate} disabled={!canGenerate}>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={handleRegenerate}
+                disabled={!canGenerate}
+              >
                 <Shuffle className="w-4 h-4" />
-                Reshuffle & Generate {cardCount} Cards
+                Shuffle again
               </Button>
-            </div>
-          </Window>
 
-          <Window title="Deck Song Pool">
-            <p className="text-xs mb-2">{deck.tracks.length} songs</p>
-            {canGenerate ? (
-              <p className="text-xs">
-                Each card randomly samples {uniqueOnCard} song{uniqueOnCard === 1 ? "" : "s"} from this
-                pool onto a {gridSize}×{gridSize} grid
-                {blankOnCard > 0
-                  ? ` · ${blankOnCard} dark tile${blankOnCard === 1 ? "" : "s"} fill the rest`
-                  : ""}
-                .
+              <p className="text-xs text-muted pt-1 border-t border-[var(--pc-border,#808080)]">
+                {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck · {slots} squares
+                per card
               </p>
-            ) : !isPlayable && !isChecking ? (
-              <p className="text-xs">
-                Fix unplayable songs in the Deck Editor before generating bingo cards.
-              </p>
-            ) : (
-              <p className="text-xs">Add songs to this deck to generate bingo cards.</p>
-            )}
+            </div>
           </Window>
         </div>
 
         <div className="lg:col-span-7 space-y-3">
-          {cards.length > 0 && currentCard && (
+          {cards.length > 0 && currentCard ? (
             <Window
               title={
                 <span className="inline-flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  Previewing Card #{currentCard.cardNumber} of {cards.length}
+                  Preview · card {currentCard.cardNumber} of {cards.length}
                 </span>
               }
             >
               <div className="flex items-center justify-between gap-2 mb-3">
-                <Button
+                <button
                   type="button"
                   onClick={handlePrintPreviewCard}
                   disabled={exportsDisabled}
-                  title={`Print card #${currentCard.cardNumber}`}
+                  className="text-xs text-muted hover:text-inherit underline-offset-2 hover:underline disabled:opacity-50 disabled:pointer-events-none"
+                  title={`Print card ${currentCard.cardNumber}`}
                 >
-                  <Printer className="w-4 h-4" />
-                  <span className="hidden sm:inline">Print this card</span>
-                  <span className="sm:hidden">Print</span>
-                </Button>
+                  Print this card
+                </button>
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
@@ -532,12 +531,10 @@ export const CardsPage: React.FC = () => {
                   </Button>
                 </div>
               </div>
-              <CardPreview
-                card={currentCard}
-                eventTitle={customTitle || deck.name}
-                interactiveMarks={true}
-              />
+              <CardPreview card={currentCard} eventTitle={eventTitle} interactiveMarks={false} />
             </Window>
+          ) : (
+            previewEmptyState
           )}
         </div>
       </div>
@@ -545,11 +542,7 @@ export const CardsPage: React.FC = () => {
       <div className="hidden print:block space-y-8">
         {cardsForPrint.map((c) => (
           <div key={c.id} className="page-break-after-always">
-            <CardPreview
-              card={c}
-              eventTitle={customTitle || deck.name}
-              interactiveMarks={false}
-            />
+            <CardPreview card={c} eventTitle={eventTitle} interactiveMarks={false} />
           </div>
         ))}
       </div>

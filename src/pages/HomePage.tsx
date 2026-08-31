@@ -85,9 +85,11 @@ export const HomePage: React.FC = () => {
           const attentionCount = getUnplayableTracks(deck.tracks).length;
           const emptyDeck = isEmptyDeck(deck);
           const playReady = canStartGame(deck.tracks);
-          const cardsDisabledTitle = emptyDeck
-            ? EMPTY_DECK_ACTION_TITLE
-            : "Fix song issues in Edit before printing cards";
+          const cardsDisabled = emptyDeck;
+          const cardsWarningTitle =
+            attentionCount > 0
+              ? `${attentionCount} song${attentionCount === 1 ? "" : "s"} may not play during hosting — you can still print cards`
+              : undefined;
 
           const statsLine = (
             <p className="home-deck-card-stats text-xs">
@@ -118,8 +120,8 @@ export const HomePage: React.FC = () => {
               icon: <Printer className="w-4 h-4" />,
               label: "Cards",
               onClick: () => navigate(`/deck/${deck.id}/cards`),
-              disabled: !playReady,
-              title: playReady ? undefined : cardsDisabledTitle,
+              disabled: cardsDisabled,
+              title: cardsDisabled ? EMPTY_DECK_ACTION_TITLE : cardsWarningTitle,
             },
             {
               icon: <Trash2 className="w-4 h-4" />,
@@ -226,17 +228,8 @@ export const HomePage: React.FC = () => {
                   <Edit3 className="w-3.5 h-3.5" />
                   Edit
                 </Link>
-                {playReady ? (
-                  <Link
-                    to={`/deck/${deck.id}/cards`}
-                    className="pc-button home-deck-card-action-cards"
-                    title="Print bingo cards"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Cards
-                  </Link>
-                ) : (
-                  <span title={cardsDisabledTitle} className="contents">
+                {cardsDisabled ? (
+                  <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
                     <Link
                       to="#"
                       className="pc-button home-deck-card-action-cards opacity-60 pointer-events-none"
@@ -246,9 +239,18 @@ export const HomePage: React.FC = () => {
                     >
                       <Printer className="w-3.5 h-3.5" />
                       Cards
-                      {attentionCount > 0 ? " ⚠" : ""}
                     </Link>
                   </span>
+                ) : (
+                  <Link
+                    to={`/deck/${deck.id}/cards`}
+                    className="pc-button home-deck-card-action-cards"
+                    title={cardsWarningTitle ?? "Print bingo cards"}
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Cards
+                    {attentionCount > 0 ? " ⚠" : ""}
+                  </Link>
                 )}
                 <Link
                   to={playReady ? `/deck/${deck.id}/play` : "#"}
