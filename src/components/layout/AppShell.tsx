@@ -115,7 +115,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </Workspace>
 
       {hasActiveClip && !isHostRoute && (
-        <div className="fixed bottom-12 left-3 right-3 z-40 max-w-3xl mx-auto print:hidden shadow-lg">
+        <div className="pc-now-playing-dock fixed left-3 right-3 z-40 max-w-3xl mx-auto print:hidden shadow-lg">
           <Window title="Now Playing" className="w-full" onClose={stopPlayback}>
             <NowPlayingControls
               playerState={playerState}
@@ -198,7 +198,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <select
             value={activeDeck?.id || ""}
             onChange={(e) => handleDeckChange(e.target.value)}
-            className="pc-select pc-taskbar-deck-select max-w-[88px] sm:max-w-[160px]"
+            className="pc-select pc-taskbar-deck-select min-w-0 flex-1 sm:max-w-[160px] sm:flex-none"
             title="Active deck"
             aria-label="Active deck"
           >

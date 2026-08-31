@@ -5,7 +5,6 @@ import { ClipPreviewButton } from "./ClipPreviewButton";
 import { ClipTimestampModal } from "./ClipTimestampModal";
 import { ManualYoutubeModal } from "./ManualYoutubeModal";
 import { TrackListMobile } from "./TrackListMobile";
-import { OverflowMenu } from "../ui/OverflowMenu";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import {
   getYoutubeThumbnailUrl,
@@ -25,8 +24,6 @@ import {
   Timer,
   Trash2,
   Music2,
-  ShieldCheck,
-  Loader2,
 } from "lucide-react";
 
 interface TrackTableProps {
@@ -38,12 +35,8 @@ interface TrackTableProps {
   onAutoFixBlocked?: () => void;
   isMatching?: boolean;
   matchProgress?: { total: number; completed: number; matched: number; failed: number } | null;
-  onVerifyAllEmbeds?: () => void;
-  isValidating?: boolean;
-  validationProgress?: { total: number; completed: number; valid: number; invalid: number; currentTrackTitle?: string } | null;
   initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
   onCancelMatching?: () => void;
-  onCancelValidation?: () => void;
 }
 
 function StatusIconBadge({
@@ -132,12 +125,8 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   onAutoFixBlocked,
   isMatching = false,
   matchProgress = null,
-  onVerifyAllEmbeds,
-  isValidating = false,
-  validationProgress = null,
   initialStatusFilter = "all",
   onCancelMatching,
-  onCancelValidation,
 }) => {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
@@ -264,33 +253,11 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                   showRainbow={showAutoMatchRainbow}
                   className="flex-1 min-h-[44px]"
                   fullWidth
-                  disabled={isMatching || isValidating || !needsAttention}
+                  disabled={isMatching || !needsAttention}
                   isMatching={isMatching}
                   matchProgress={matchProgress}
                   totalTracks={tracks.length}
                   onClick={handleAutoMatchClick}
-                />
-              )}
-              {onVerifyAllEmbeds && (
-                <OverflowMenu
-                  ariaLabel="More track actions"
-                  items={[
-                    {
-                      icon: isValidating ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="w-4 h-4" />
-                      ),
-                      label: isValidating
-                        ? `Checking (${validationProgress?.completed || 0}/${validationProgress?.total || tracks.length})...`
-                        : "Check Audio",
-                      onClick: () => {
-                        if (!isValidating && !isMatching && tracks.length > 0) {
-                          onVerifyAllEmbeds();
-                        }
-                      },
-                    },
-                  ]}
                 />
               )}
             </div>
@@ -323,34 +290,10 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {onVerifyAllEmbeds && (
-                <button
-                  type="button"
-                  onClick={onVerifyAllEmbeds}
-                  disabled={isValidating || isMatching || tracks.length === 0}
-                  className="pc-button"
-                  title="Test all song video links to ensure they play smoothly in game"
-                >
-                  {isValidating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>
-                        Checking ({validationProgress?.completed || 0}/{validationProgress?.total || tracks.length})...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Check Audio</span>
-                    </>
-                  )}
-                </button>
-              )}
-
               {onAutoMatchAll && (
                 <AutoMatchButton
                   showRainbow={showAutoMatchRainbow}
-                  disabled={isMatching || isValidating || !needsAttention}
+                  disabled={isMatching || !needsAttention}
                   isMatching={isMatching}
                   matchProgress={matchProgress}
                   totalTracks={tracks.length}
@@ -389,35 +332,6 @@ export const TrackTable: React.FC<TrackTableProps> = ({
         </div>
       )}
 
-      {isValidating && validationProgress && (
-        <div className="mb-4 p-3 pc-bevel-inset text-xs">
-          <div className="flex items-center justify-between mb-2 font-medium">
-            <span className="flex items-center gap-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>
-                Checking audio compatibility: {validationProgress.currentTrackTitle || "Testing songs..."}
-              </span>
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="font-mono">
-                {validationProgress.completed} / {validationProgress.total} ({Math.round((validationProgress.completed / validationProgress.total) * 100)}%)
-              </span>
-              {onCancelValidation && (
-                <button type="button" onClick={onCancelValidation} className="pc-button text-[11px]">
-                  Cancel
-                </button>
-              )}
-            </span>
-          </div>
-          <div className="w-full h-2 pc-bevel-inset overflow-hidden">
-            <div
-              className="h-full bg-green-600"
-              style={{ width: `${(validationProgress.completed / validationProgress.total) * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
-
       {isMobile ? (
         filteredTracks.length === 0 ? (
           <div className="py-12 text-center pc-bevel-inset">
@@ -433,7 +347,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             tracks={filteredTracks}
             onEditTrack={setEditingTrack}
             isTrackBlocked={isTrackBlocked}
-            isBusy={isMatching || isValidating}
+            isBusy={isMatching}
           />
         )
       ) : (
@@ -536,7 +450,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                                     <button
                                       type="button"
                                       className="pc-button pc-button--primary w-full text-[11px]"
-                                      disabled={isMatching || isValidating}
+                                      disabled={isMatching}
                                       onClick={() => {
                                         setActiveCoachmarkId(null);
                                         onAutoFixBlocked();

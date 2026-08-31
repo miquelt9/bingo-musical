@@ -640,10 +640,10 @@ export const HostPage: React.FC = () => {
                   </div>
                 )}
                 <div className="min-w-0">
-                  <p className="font-bold text-xs truncate max-w-[180px] sm:max-w-xs">
+                  <p className="font-bold text-xs truncate">
                     {item.track.title}
                   </p>
-                  <p className="text-[11px] truncate max-w-[180px] sm:max-w-xs">{item.track.artist}</p>
+                  <p className="text-[11px] truncate">{item.track.artist}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -661,8 +661,10 @@ export const HostPage: React.FC = () => {
     <div className="relative mb-3 shrink-0">
       <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
       <Input
-        type="text"
-        className="w-full pl-8"
+        type="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        className={`w-full pl-8 ${isMobile ? "text-base" : ""}`}
         value={historySearch}
         onChange={(e) => setHistorySearch(e.target.value)}
         placeholder="Verify song: type title or artist..."
@@ -690,29 +692,16 @@ export const HostPage: React.FC = () => {
                 <Sparkles className="w-3.5 h-3.5" />
                 {isMobile ? "Bingo!" : "Someone Called Bingo!"}
               </Button>
-              {!isMobile && (
-                <Button
-                  type="button"
-                  onClick={() => setShowResetModal(true)}
-                  title="Reset game and shuffle all songs"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reset Bingo
-                </Button>
-              )}
+              <Button
+                type="button"
+                onClick={() => setShowResetModal(true)}
+                title="Reset game and shuffle all songs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {isMobile ? "Reset" : "Reset Bingo"}
+              </Button>
             </div>
           ) : undefined
-        }
-        overflowItems={
-          isMobile && currentCall
-            ? [
-                {
-                  icon: <RotateCcw className="w-4 h-4" aria-hidden="true" />,
-                  label: "Reset Bingo",
-                  onClick: () => setShowResetModal(true),
-                },
-              ]
-            : undefined
         }
       />
 
@@ -724,7 +713,7 @@ export const HostPage: React.FC = () => {
 
           <div className="host-controls">{hostControls}</div>
 
-          <details className="host-board-log-details">
+          <details className="host-board-log-details" open>
             <summary className="host-board-log-details__summary">
               <History className="w-4 h-4" aria-hidden="true" />
               Called Songs ({calledHistory.length})

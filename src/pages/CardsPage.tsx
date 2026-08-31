@@ -73,6 +73,8 @@ export const CardsPage: React.FC = () => {
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
+  const [printCards, setPrintCards] = useState<BingoCard[] | null>(null);
+  const [pendingPrint, setPendingPrint] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -200,15 +202,37 @@ export const CardsPage: React.FC = () => {
     }
   };
 
-  const handleBrowserPrint = () => {
-    if (!isPlayable) return;
+  useEffect(() => {
+    const resetPrintCards = () => setPrintCards(null);
+    window.addEventListener("afterprint", resetPrintCards);
+    return () => window.removeEventListener("afterprint", resetPrintCards);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingPrint || printCards === null) return;
+    setPendingPrint(false);
     trackEvent("cards_printed");
     window.print();
+  }, [pendingPrint, printCards]);
+
+  const triggerBrowserPrint = (selection: BingoCard[]) => {
+    if (!isPlayable || cards.length === 0) return;
+    setPrintCards(selection);
+    setPendingPrint(true);
+  };
+
+  const handleBrowserPrint = () => triggerBrowserPrint(cards);
+
+  const handlePrintPreviewCard = () => {
+    const card = cards[activePreviewIndex];
+    if (!card) return;
+    triggerBrowserPrint([card]);
   };
 
   if (!deck) return null;
 
   const currentCard = cards[activePreviewIndex] || cards[0];
+  const cardsForPrint = printCards ?? cards;
   const canGenerate = deck.tracks.length > 0 && isPlayable;
   const exportsDisabled = !isPlayable || cards.length === 0;
 
@@ -306,7 +330,7 @@ export const CardsPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
               <Printer className="w-4 h-4" />
-              Print in Browser
+              Print
             </Button>
             <Button
               type="button"
@@ -473,26 +497,40 @@ export const CardsPage: React.FC = () => {
                 </span>
               }
             >
-              <div className="flex items-center justify-end gap-2 mb-3">
+              <div className="flex items-center justify-between gap-2 mb-3">
                 <Button
                   type="button"
-                  onClick={() => setActivePreviewIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1))}
-                  title="Previous card"
+                  onClick={handlePrintPreviewCard}
+                  disabled={exportsDisabled}
+                  title={`Print card #${currentCard.cardNumber}`}
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <Printer className="w-4 h-4" />
+                  <span className="hidden sm:inline">Print this card</span>
+                  <span className="sm:hidden">Print</span>
                 </Button>
-                <span className="text-xs font-mono px-1">
-                  {activePreviewIndex + 1} / {cards.length}
-                </span>
-                <Button
-                  type="button"
-                  onClick={() =>
-                    setActivePreviewIndex((prev) => (prev < cards.length - 1 ? prev + 1 : 0))
-                  }
-                  title="Next card"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      setActivePreviewIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1))
+                    }
+                    title="Previous card"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-xs font-mono px-1">
+                    {activePreviewIndex + 1} / {cards.length}
+                  </span>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      setActivePreviewIndex((prev) => (prev < cards.length - 1 ? prev + 1 : 0))
+                    }
+                    title="Next card"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               <CardPreview
                 card={currentCard}
@@ -505,7 +543,7 @@ export const CardsPage: React.FC = () => {
       </div>
 
       <div className="hidden print:block space-y-8">
-        {cards.map((c) => (
+        {cardsForPrint.map((c) => (
           <div key={c.id} className="page-break-after-always">
             <CardPreview
               card={c}

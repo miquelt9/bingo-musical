@@ -8,6 +8,7 @@
     --pc-safe-area-bottom: env(safe-area-inset-bottom, 0px);
     --pc-toast-offset-y: calc(var(--pc-taskbar-height) + var(--pc-safe-area-bottom));
     --pc-workspace-padding: 12px;
+    --pc-now-playing-dock-bottom: var(--pc-taskbar-height);
     /* Space below scroll area when the Now Playing dock is visible (taskbar + player window) */
     --pc-workspace-player-inset: 140px;
   }
@@ -44,6 +45,10 @@
   padding-bottom: var(--pc-workspace-player-inset);
 }
 
+.pc-now-playing-dock {
+  bottom: var(--pc-now-playing-dock-bottom);
+}
+
 /*
  * Mobile foundation — max-width 639px matches useIsMobile() / Tailwind sm (640px).
  * Desktop layouts start at min-width 640px and are unchanged below.
@@ -51,7 +56,8 @@
 @media (max-width: 639px) {
   :root {
     --pc-workspace-padding: 8px;
-    --pc-workspace-player-inset: 176px;
+    --pc-now-playing-dock-bottom: calc(var(--pc-taskbar-height) + var(--pc-safe-area-bottom) + 8px);
+    --pc-workspace-player-inset: calc(176px + var(--pc-safe-area-bottom) + 8px);
   }
 
   .pc-button:not(.pc-taskbar-item) {
@@ -66,23 +72,24 @@
   }
 
   .pc-taskbar-item {
-    flex: 1 1 0;
-    min-width: 0;
-    padding: 6px 4px;
+    flex: 0 0 auto;
+    width: 36px;
+    min-width: 36px;
+    padding: 6px 2px;
     min-height: 44px;
-    max-width: none;
+    max-width: 36px;
     gap: 0;
     justify-content: center;
   }
 
   .pc-taskbar-deck-select {
-    flex: 0 0 auto;
+    flex: 1 1 0;
     min-width: 0;
-    max-width: 88px;
+    max-width: none;
     font-size: 11px;
-    padding: 4px 4px;
+    padding: 4px 6px;
     min-height: 44px;
-    margin-left: 2px;
+    margin-left: 4px;
   }
 
   .pc-taskbar-trailing {
@@ -549,16 +556,25 @@
 }
 
 @media (max-width: 639px) {
+  .pc-workspace-scroll:has(.host-board--mobile) {
+    display: block;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .host-board--mobile {
     gap: 8px;
+    flex: none;
+    height: auto;
+    min-height: 0;
   }
 
   .host-board-mobile-stack {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    flex: 1 1 0;
-    min-height: 0;
+    flex: none;
+    min-height: auto;
   }
 
   .host-board--mobile .host-answer-card {
@@ -580,14 +596,6 @@
 
   .host-inline-video__inner .video-window-players {
     height: 100%;
-  }
-
-  .host-call-next-sticky {
-    position: sticky;
-    bottom: calc(var(--pc-taskbar-height) + var(--pc-safe-area-bottom) + 8px);
-    z-index: 10;
-    padding: 4px 0;
-    background: var(--pc-window-bg, #c0c0c0);
   }
 
   .host-now-playing-slot--compact {
@@ -670,11 +678,18 @@
     padding: 0.75rem;
     display: flex;
     flex-direction: column;
+    gap: 0.75rem;
     min-height: 0;
   }
 
   .host-board--mobile .host-board-log-list {
-    max-height: 240px;
+    flex: 1 1 auto;
+    min-height: 8rem;
+    max-height: min(50dvh, 320px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 }
 

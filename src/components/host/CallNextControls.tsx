@@ -187,7 +187,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      <div className={isMobile ? "host-call-next-sticky" : "grid grid-cols-1 gap-3"}>
+      <div className="grid grid-cols-1 gap-3">
         <Button
           type="button"
           variant="primary"

@@ -33,7 +33,6 @@ import {
   Check,
   AlertTriangle,
   Sparkles,
-  ShieldCheck,
 } from "lucide-react";
 
 export const EditorPage: React.FC = () => {
@@ -53,10 +52,6 @@ export const EditorPage: React.FC = () => {
   const [isMatching, setIsMatching] = useState(false);
   const [matchProgress, setMatchProgress] = useState<BatchMatchProgress | null>(null);
   const cancelMatchingRef = useRef(false);
-
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationProgress, setValidationProgress] = useState<BatchValidationProgress | null>(null);
-  const cancelValidationRef = useRef(false);
 
   const { showToast } = useToast();
   const isMobile = useIsMobile();
@@ -131,7 +126,7 @@ export const EditorPage: React.FC = () => {
 
   // Silently verify uncached YouTube links when a deck is opened
   useEffect(() => {
-    if (!deck || isValidating || isMatching || isAutoFixing) return;
+    if (!deck || isMatching || isAutoFixing) return;
     if (backgroundVerifyRef.current === deck.id) return;
 
     const uncached = deck.tracks.filter(
@@ -163,7 +158,7 @@ export const EditorPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [deck?.id, deck?.tracks.length, isValidating, isMatching, isAutoFixing, updateDeck]);
+  }, [deck?.id, deck?.tracks.length, isMatching, isAutoFixing, updateDeck]);
 
   const handleAutoMatchAll = useCallback(async () => {
     if (!deck) return;
@@ -204,7 +199,7 @@ export const EditorPage: React.FC = () => {
 
   useEffect(() => {
     if (!deck || !autostartMatch || autostartMatchRef.current) return;
-    if (isMatching || isAutoFixing || isValidating) return;
+    if (isMatching || isAutoFixing) return;
 
     const hasPending = deck.tracks.some((track) => track.matchStatus === "pending");
     if (!hasPending) {
@@ -222,7 +217,7 @@ export const EditorPage: React.FC = () => {
       return params;
     }, { replace: true });
     void handleAutoMatchAll();
-  }, [deck, autostartMatch, isMatching, isAutoFixing, isValidating, setSearchParams, handleAutoMatchAll]);
+  }, [deck, autostartMatch, isMatching, isAutoFixing, setSearchParams, handleAutoMatchAll]);
 
   if (!deck) {
     return (
@@ -277,63 +272,12 @@ export const EditorPage: React.FC = () => {
     updateDeck(newDeck);
   };
 
-  const handleVerifyAllAudio = async () => {
-    setIsValidating(true);
-    cancelValidationRef.current = false;
-
-    try {
-      const { invalidTracks } = await validateTracksEmbeddability(
-        deck.tracks,
-        3,
-        (prog) => setValidationProgress(prog),
-        () => cancelValidationRef.current
-      );
-
-      if (invalidTracks.length > 0) {
-        const invalidMap = new Map(invalidTracks.map((i) => [i.track.id, i.validation]));
-        const updatedTracks = deck.tracks.map((track) => {
-          if (invalidMap.has(track.id)) {
-            return {
-              ...track,
-              matchStatus: "failed" as const,
-            };
-          }
-          return track;
-        });
-        const updatedDeck = { ...deck, tracks: updatedTracks };
-        setDeck(updatedDeck);
-        updateDeck(updatedDeck);
-        showToast({
-          title: "Audio Check",
-          icon: <AlertTriangle className="w-3.5 h-3.5" />,
-          message: `Checked ${deck.tracks.length} songs. Found ${invalidTracks.length} song${
-            invalidTracks.length > 1 ? "s" : ""
-          } with playback restrictions.`,
-          duration: 12000,
-          actions: [
-            {
-              id: "auto-fix",
-              label: "Auto-Fix",
-              variant: "primary",
-              onClick: () => handleAutoFixBlocked(),
-            },
-          ],
-        });
-      } else {
-        showToast({
-          title: "Audio Check",
-          icon: <ShieldCheck className="w-3.5 h-3.5" />,
-          message: `All ${deck.tracks.length} songs verified! Audio is ready for all tracks.`,
-          duration: 8000,
-        });
-      }
-    } catch (err) {
-      console.error("Audio verification error:", err);
-    } finally {
-      setIsValidating(false);
-      setValidationProgress(null);
-    }
-  };
+  const blockedCount = getUnplayableTracks(deck.tracks).length;
+  const playableCount = deck.tracks.length - blockedCount;
+  const isTrackBusy = isMatching || isAutoFixing;
+  const emptyDeck = isEmptyDeck(deck);
+  const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
+  const hostDisabled = isTrackBusy || hostGateChecking || emptyDeck;
 
   const handleHostLiveGame = async () => {
     if (!deck) return;
@@ -373,13 +317,6 @@ export const EditorPage: React.FC = () => {
       setHostGateProgress(null);
     }
   };
-
-  const blockedCount = getUnplayableTracks(deck.tracks).length;
-  const playableCount = deck.tracks.length - blockedCount;
-  const isTrackBusy = isMatching || isAutoFixing;
-  const emptyDeck = isEmptyDeck(deck);
-  const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
-  const hostDisabled = isTrackBusy || isValidating || hostGateChecking || emptyDeck;
 
   const handleOpenAddTrack = () => {
     setAddSongRainbowDismissed(true);
@@ -527,15 +464,9 @@ export const EditorPage: React.FC = () => {
         onAutoFixBlocked={handleAutoFixBlocked}
         isMatching={isTrackBusy}
         matchProgress={matchProgress}
-        onVerifyAllEmbeds={handleVerifyAllAudio}
-        isValidating={isValidating}
-        validationProgress={validationProgress}
         initialStatusFilter={initialStatusFilter}
         onCancelMatching={() => {
           cancelMatchingRef.current = true;
-        }}
-        onCancelValidation={() => {
-          cancelValidationRef.current = true;
         }}
       />
 
@@ -575,7 +506,7 @@ export const EditorPage: React.FC = () => {
                   type="button"
                   variant="primary"
                   onClick={handleAutoFixBlocked}
-                  disabled={isTrackBusy || isValidating}
+                  disabled={isTrackBusy}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   Auto-Fix Songs
