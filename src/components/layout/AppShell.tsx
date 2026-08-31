@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
@@ -25,8 +25,6 @@ import {
   setVolume,
   toggleMute,
 } from "../../lib/youtube/player";
-import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
-
 function formatClock(date: Date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -110,16 +108,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
-  const mobileOverflowItems = useMemo((): OverflowMenuItem[] => {
-    return [
-      {
-        icon: <Settings className="w-4 h-4" aria-hidden="true" />,
-        label: "Settings",
-        onClick: () => navigate("/settings"),
-      },
-    ];
-  }, [navigate]);
-
   return (
     <Desktop tiled theme={theme}>
       <Workspace>
@@ -200,7 +188,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           to="/settings"
           title="Settings"
           aria-label="Settings"
-          className={() => `${taskbarItemClass("settings")} hidden sm:inline-flex`}
+          className={() => taskbarItemClass("settings")}
         >
           <Settings className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
           <span className="hidden sm:inline">Settings</span>
@@ -221,10 +209,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             ))}
           </select>
         )}
-
-        <div className="sm:hidden">
-          <OverflowMenu items={mobileOverflowItems} ariaLabel="More options" align="left" />
-        </div>
 
         <div className="pc-taskbar-trailing">
           <div className="pc-taskbar-clock hidden sm:block">{clock}</div>

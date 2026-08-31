@@ -59,15 +59,16 @@
   }
 
   .pc-taskbar {
-    gap: 2px;
-    padding-left: 2px;
-    padding-right: 2px;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
     padding-bottom: var(--pc-safe-area-bottom);
   }
 
   .pc-taskbar-item {
-    padding: 6px 8px;
-    min-width: 44px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 4px;
     min-height: 44px;
     max-width: none;
     gap: 0;
@@ -75,12 +76,17 @@
   }
 
   .pc-taskbar-deck-select {
-    flex: 1 1 0;
+    flex: 0 0 auto;
     min-width: 0;
-    max-width: 96px;
+    max-width: 88px;
     font-size: 11px;
     padding: 4px 4px;
     min-height: 44px;
+    margin-left: 2px;
+  }
+
+  .pc-taskbar-trailing {
+    display: none;
   }
 }
 
