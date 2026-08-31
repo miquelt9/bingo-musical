@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { Copy, Loader2, Mail, MessageCircle, Send } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
@@ -123,13 +123,27 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
               </Button>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <a href={getPlatformShareUrls(deck, shareUrl).whatsapp} target="_blank" rel="noopener noreferrer" className="pc-button">
+              <a
+                href={getPlatformShareUrls(deck, shareUrl).whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pc-button inline-flex items-center gap-1.5"
+                title="Opens in a new tab"
+              >
                 <MessageCircle className="w-4 h-4" />
                 WhatsApp
+                <ExternalLink className="w-3 h-3 opacity-75" />
               </a>
-              <a href={getPlatformShareUrls(deck, shareUrl).telegram} target="_blank" rel="noopener noreferrer" className="pc-button">
+              <a
+                href={getPlatformShareUrls(deck, shareUrl).telegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pc-button inline-flex items-center gap-1.5"
+                title="Opens in a new tab"
+              >
                 <Send className="w-4 h-4" />
                 Telegram
+                <ExternalLink className="w-3 h-3 opacity-75" />
               </a>
               <a href={getPlatformShareUrls(deck, shareUrl).email} className="pc-button">
                 <Mail className="w-4 h-4" />

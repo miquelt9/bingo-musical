@@ -14,7 +14,7 @@ import {
   YoutubeSearchHit,
 } from "../../lib/youtube/search";
 import { PcModal } from "../ui/PcModal";
-import { Check, AlertCircle, PlaySquare, Loader2, AlertTriangle, Search } from "lucide-react";
+import { Check, AlertCircle, ExternalLink, Loader2, AlertTriangle, Search } from "lucide-react";
 
 interface ManualYoutubeModalProps {
   track: Track;
@@ -142,10 +142,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
       return status && !status.embeddable;
     });
 
-  const handleSearchYoutube = () => {
-    const query = encodeURIComponent(defaultSearchQuery(track));
-    window.open(`https://www.youtube.com/results?search_query=${query}`, "_blank");
-  };
+  const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(defaultSearchQuery(track))}`;
 
   const runYoutubeSearch = async () => {
     const nextQuery = searchQuery.trim();
@@ -232,12 +229,19 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
               }}
               placeholder="e.g. https://www.youtube.com/watch?v=dQw4w9WgXcQ"
             />
-            <Button type="button" onClick={handleSearchYoutube} className="shrink-0">
-              <PlaySquare className="w-3.5 h-3.5" />
-              Search YouTube
-            </Button>
+            <a
+              href={youtubeSearchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pc-button shrink-0 inline-flex items-center gap-1.5"
+              title="Opens YouTube in a new tab"
+              aria-label="Open on YouTube in a new tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Open on YouTube
+            </a>
           </div>
-          <p className="text-[11px] mt-1 opacity-75">Or paste a link directly, or open YouTube in a new tab.</p>
+          <p className="text-[11px] mt-1 opacity-75">Paste a link directly, or open YouTube in a new tab to browse manually.</p>
         </div>
         {error && (
           <p className="flex items-center gap-1.5 text-xs text-red-500 font-semibold">
@@ -284,7 +288,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
         )}
 
         <div className="pt-2 border-t border-[var(--pc-border)]">
-          <p className="text-xs font-bold mb-2">Search YouTube without leaving this page</p>
+          <p className="text-xs font-bold mb-2">Find clips here</p>
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" />
@@ -295,7 +299,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
                   setSearchQuery(e.target.value);
                   setSearchError(null);
                 }}
-                placeholder="Search YouTube for this song…"
+                placeholder="Artist, title, official audio…"
                 disabled={isSearching}
                 autoComplete="off"
                 className="pc-input w-full pl-8"
@@ -310,16 +314,17 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
               disabled={isSearching || !searchQuery.trim()}
               className="shrink-0"
               onClick={handleYoutubeSearch}
+              aria-label="Find clips on this page"
             >
               {isSearching ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Searching…
+                  Finding clips…
                 </>
               ) : (
                 <>
                   <Search className="w-3.5 h-3.5" />
-                  Search
+                  Find clips
                 </>
               )}
             </Button>

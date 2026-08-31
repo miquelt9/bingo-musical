@@ -120,9 +120,10 @@ export const SettingsPage: React.FC = () => {
           href={`${GITHUB_REPO_URL}/blob/main/LICENSE`}
           target="_blank"
           rel="noreferrer"
-          className="pc-link"
+          className="pc-link inline-flex items-center gap-0.5"
         >
           MIT license
+          <ExternalLink className="w-3 h-3" />
         </a>
         . View the source, report issues, or contribute on GitHub.
       </p>

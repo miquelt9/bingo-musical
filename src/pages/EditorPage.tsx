@@ -533,7 +533,7 @@ export const EditorPage: React.FC = () => {
           onClose={() => setShowAddTrackModal(false)}
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
         >
-          <p className="text-xs mb-3">Search by name or paste a YouTube link, then pick the match.</p>
+          <p className="text-xs mb-3">Find clips by song name or paste a YouTube link — results appear here.</p>
           <SongSearch
             existingVideoIds={deck.tracks.map((t) => t.youtubeVideoId)}
             onAddTrack={handleAddTrack}

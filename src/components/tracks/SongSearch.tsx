@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Track } from "../../types/deck";
 import {
   YoutubeSearchHit,
@@ -23,6 +24,44 @@ interface SongSearchProps {
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void;
   onAddTracks?: (tracks: Track[]) => void;
+}
+
+const VIEWPORT_MARGIN = 8;
+const SUGGESTION_GAP = 4;
+const SUGGESTION_MAX_HEIGHT = 256;
+
+function computeSuggestionPosition(anchorRect: DOMRect): {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+} {
+  const width = anchorRect.width;
+  const left = Math.max(
+    VIEWPORT_MARGIN,
+    Math.min(anchorRect.left, window.innerWidth - width - VIEWPORT_MARGIN),
+  );
+
+  const spaceBelow = window.innerHeight - anchorRect.bottom - VIEWPORT_MARGIN;
+  const spaceAbove = anchorRect.top - VIEWPORT_MARGIN;
+
+  if (spaceBelow >= spaceAbove) {
+    const maxHeight = Math.min(SUGGESTION_MAX_HEIGHT, Math.max(spaceBelow - SUGGESTION_GAP, 80));
+    return {
+      top: anchorRect.bottom + SUGGESTION_GAP,
+      left,
+      width,
+      maxHeight,
+    };
+  }
+
+  const maxHeight = Math.min(SUGGESTION_MAX_HEIGHT, Math.max(spaceAbove - SUGGESTION_GAP, 80));
+  return {
+    top: Math.max(VIEWPORT_MARGIN, anchorRect.top - maxHeight - SUGGESTION_GAP),
+    left,
+    width,
+    maxHeight,
+  };
 }
 
 function looksLikeYoutubeInput(value: string): boolean {
@@ -55,16 +94,47 @@ export const SongSearch: React.FC<SongSearchProps> = ({
   const blurTimer = useRef<number | null>(null);
   const skipCatalogQuery = useRef<string | null>(null);
   const youtubeAbort = useRef<AbortController | null>(null);
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const usingKeyboardNav = useRef(false);
+  const [suggestionPosition, setSuggestionPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   const alreadyInDeck = new Set(
     existingVideoIds.filter((id): id is string => Boolean(id))
   );
 
   const visibleSuggestions = filterCatalogSongs(suggestions, query);
+  const suggestionsOpen = showSuggestions && (visibleSuggestions.length > 0 || isCatalogLoading);
   const highlightedIndexRef = useRef(-1);
   highlightedIndexRef.current = highlightedIndex;
+
+  useLayoutEffect(() => {
+    if (!suggestionsOpen || !inputContainerRef.current) {
+      setSuggestionPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      if (!inputContainerRef.current) return;
+      const anchorRect = inputContainerRef.current.getBoundingClientRect();
+      setSuggestionPosition(computeSuggestionPosition(anchorRect));
+    };
+
+    updatePosition();
+
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [suggestionsOpen, visibleSuggestions.length, isCatalogLoading]);
 
   useEffect(() => {
     setHighlightedIndex(-1);
@@ -335,16 +405,70 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             : "Best matches"
           : null;
 
+  const suggestionPanel = suggestionsOpen ? (
+    <div
+      id="song-suggestion-list"
+      ref={suggestionListRef}
+      role="listbox"
+      className="pc-window overflow-y-auto z-[100]"
+      style={{
+        position: "fixed",
+        top: suggestionPosition?.top ?? -9999,
+        left: suggestionPosition?.left ?? -9999,
+        width: suggestionPosition?.width,
+        maxHeight: suggestionPosition?.maxHeight,
+        visibility: suggestionPosition ? "visible" : "hidden",
+      }}
+    >
+      {isCatalogLoading && visibleSuggestions.length === 0 && (
+        <div className="px-3 py-2 text-xs flex items-center gap-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Looking up songs…
+        </div>
+      )}
+      {visibleSuggestions.map((song, index) => {
+        const active = index === highlightedIndex;
+        return (
+          <button
+            key={song.id}
+            id={`song-suggestion-${index}`}
+            data-suggestion-index={index}
+            type="button"
+            role="option"
+            aria-selected={active}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseMove={() => {
+              usingKeyboardNav.current = false;
+            }}
+            onMouseEnter={() => {
+              if (!usingKeyboardNav.current) setHighlightedIndex(index);
+            }}
+            onClick={() => handlePickCatalogSong(song)}
+            className={`w-full px-3 py-2 text-left ${
+              active ? "bg-[var(--pc-titlebar-bg)] text-white" : "hover:bg-[var(--pc-titlebar-bg)] hover:text-white"
+            }`}
+          >
+            <p className="text-sm font-semibold truncate">{song.title}</p>
+            <p className="text-xs truncate">
+              {song.artist}
+              {song.album ? ` · ${song.album}` : ""}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-3">
       <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
+        <div ref={inputContainerRef} className="relative flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
           <input
             type="text"
             role="combobox"
             aria-autocomplete="list"
-            aria-expanded={showSuggestions && visibleSuggestions.length > 0}
+            aria-expanded={suggestionsOpen}
             aria-controls="song-suggestion-list"
             aria-activedescendant={
               highlightedIndex >= 0 ? `song-suggestion-${highlightedIndex}` : undefined
@@ -370,73 +494,30 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             className="pc-input w-full pl-8"
           />
 
-          {showSuggestions && (visibleSuggestions.length > 0 || isCatalogLoading) && (
-            <div
-              id="song-suggestion-list"
-              ref={suggestionListRef}
-              role="listbox"
-              className="absolute z-20 left-0 right-0 mt-1 pc-window max-h-64 overflow-y-auto"
-            >
-              {isCatalogLoading && visibleSuggestions.length === 0 && (
-                <div className="px-3 py-2 text-xs flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Looking up songs…
-                </div>
-              )}
-              {visibleSuggestions.map((song, index) => {
-                const active = index === highlightedIndex;
-                return (
-                  <button
-                    key={song.id}
-                    id={`song-suggestion-${index}`}
-                    data-suggestion-index={index}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseMove={() => {
-                      usingKeyboardNav.current = false;
-                    }}
-                    onMouseEnter={() => {
-                      if (!usingKeyboardNav.current) setHighlightedIndex(index);
-                    }}
-                    onClick={() => handlePickCatalogSong(song)}
-                    className={`w-full px-3 py-2 text-left ${
-                      active ? "bg-[var(--pc-titlebar-bg)] text-white" : "hover:bg-[var(--pc-titlebar-bg)] hover:text-white"
-                    }`}
-                  >
-                    <p className="text-sm font-semibold truncate">{song.title}</p>
-                    <p className="text-xs truncate">
-                      {song.artist}
-                      {song.album ? ` · ${song.album}` : ""}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {suggestionPanel && createPortal(suggestionPanel, document.body)}
         </div>
         <button
           type="submit"
           disabled={isSearching || !query.trim()}
           className="pc-button pc-button--primary shrink-0"
+          aria-label="Find clips on this page"
         >
           {isSearching ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Searching…
+              Finding clips…
             </>
           ) : (
             <>
               <Search className="w-4 h-4" />
-              Search YouTube
+              Find clips
             </>
           )}
         </button>
       </form>
 
       <p className="text-xs">
-        Type a song or artist, pick a match if you want, then search YouTube. Results are checked for embeddable playback before you add them.
+        Type a song or artist, pick a match if you want, then find clips below — you stay on this page. Results are checked for embeddable playback before you add them.
       </p>
 
       {error && (
