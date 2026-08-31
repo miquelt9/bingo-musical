@@ -138,7 +138,7 @@ This project is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-Musical Bingo Creator is a free personal hobby project. It is **not affiliated** with YouTube, Google, Spotify, Apple, Deezer, or MusicBrainz. Playback uses the YouTube embedded player only — the app does not host or download music. It is intended for private or social games at home; bars, ticketed events, or commercial venues may require music performance licenses in your country (e.g. SGAE in Spain), which is the organizer's responsibility.
+Playback uses the YouTube embedded player only — the app does not host or download music. **YouTube may show ads before or during embedded clips**; this app cannot remove them. Hosts signed in with YouTube Premium in the same browser may see fewer or no ads, but ad-free playback is not guaranteed. It is intended for private or social games at home; bars, ticketed events, or commercial venues may require music performance licenses in your country, which is the organizer's responsibility.
 
 ## Privacy
 
@@ -146,7 +146,7 @@ Decks, theme, and embed cache stay in your browser (`localStorage`). Active host
 
 ## Third-party services
 
-- **YouTube** — embedded playback via the IFrame Player API
+- **YouTube** — embedded playback via the IFrame Player API (ads may appear during clips)
 - **Invidious / Piped** — public instances for YouTube search and metadata (no official YouTube API key)
 - **iTunes, Deezer, MusicBrainz** — song title autocomplete
 - **noembed.com** — YouTube embed permission checks

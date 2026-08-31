@@ -497,11 +497,18 @@ export const HostPage: React.FC = () => {
   };
 
   const triggerConfetti = () => {
-    confetti({
-      particleCount: 150,
-      spread: 90,
-      origin: { y: 0.5 },
-    });
+    const defaults = {
+      particleCount: 80,
+      spread: 55,
+      startVelocity: 50,
+      ticks: 200,
+      gravity: 1,
+      decay: 0.92,
+      origin: { y: 0.55 },
+    };
+
+    confetti({ ...defaults, angle: 60, origin: { x: 0, y: 0.55 } });
+    confetti({ ...defaults, angle: 120, origin: { x: 1, y: 0.55 } });
   };
 
   useEffect(() => {

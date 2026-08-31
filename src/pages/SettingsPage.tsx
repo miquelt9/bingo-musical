@@ -145,6 +145,11 @@ export const SettingsPage: React.FC = () => {
         Playback uses the YouTube embedded player only. This app does not host, download, or
         redistribute music.
       </li>
+      <li>
+        YouTube may show ads before or during embedded clips. This app cannot remove them. For
+        smoother hosting, sign in with YouTube Premium in this browser (ad-free playback is not
+        guaranteed).
+      </li>
       <li>Intended for private or social games at home with family and friends.</li>
       <li>
         Bars, ticketed events, or commercial venues may require music performance licenses (e.g. SGAE
@@ -165,7 +170,8 @@ export const SettingsPage: React.FC = () => {
       <p>When you use certain features, your browser may contact third parties directly:</p>
       <ul className="list-disc list-inside space-y-1 pl-1">
         <li>
-          <strong>YouTube</strong> — iframe playback (may set cookies when you play a video)
+          <strong>YouTube</strong> — iframe playback (may set cookies and show ads when you play a
+          video)
         </li>
         <li>
           <strong>Invidious / Piped</strong> — public instances used for YouTube search and metadata
