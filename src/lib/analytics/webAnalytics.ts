@@ -10,7 +10,7 @@ export function initWebAnalytics(): void {
 
   const script = document.createElement("script");
   script.type = "module";
-  script.defer = true;
-  script.src = `https://static.cloudflareinsights.com/beacon.min.js?token=${encodeURIComponent(token)}`;
+  script.src = "https://static.cloudflareinsights.com/beacon.min.js";
+  script.setAttribute("data-cf-beacon", JSON.stringify({ token }));
   document.head.appendChild(script);
 }
