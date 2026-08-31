@@ -47,7 +47,7 @@ export function ClipTimeline({
   const clipWidth = Math.max(0, endPct - startPct);
 
   return (
-    <div className={`pc-bevel-inset p-3 ${isTouch ? "mb-4" : "mb-3"}`}>
+    <div className={`pc-bevel-inset ${isTouch ? "p-2 mb-2" : "p-3 mb-3"}`}>
       <div className="flex items-center justify-between text-[10px] uppercase font-bold mb-2">
         <span>Clip timeline</span>
         <span className="font-mono normal-case font-normal text-muted">
@@ -71,7 +71,7 @@ export function ClipTimeline({
           if (e.key === "ArrowRight") onSeek(Math.min(timelineDuration, current + 1));
         }}
         className={`relative pc-bevel-inset bg-[var(--pc-surface)] overflow-visible ${
-          isTouch ? "h-12 min-h-[48px]" : "h-10"
+          isTouch ? "h-10 min-h-[40px]" : "h-10"
         } ${onSeek ? "cursor-pointer touch-manipulation" : ""}`}
       >
         <div
@@ -109,7 +109,7 @@ export function ClipTimeline({
         </div>
       </div>
 
-      <div className={`flex flex-wrap gap-x-4 gap-y-1 text-[10px] ${isTouch ? "mt-6" : "mt-5"}`}>
+      <div className={`flex flex-wrap gap-x-3 gap-y-1 text-[10px] ${isTouch ? "mt-4" : "mt-5"}`}>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 bg-emerald-600 shrink-0" />
           <span>
@@ -136,9 +136,9 @@ export function ClipTimeline({
         </span>
       </div>
 
-      {onSeek && (
+      {onSeek && !isTouch && (
         <p className="text-[10px] text-muted mt-2">
-          {isTouch ? "Tap the timeline to jump the video to that point." : "Click the timeline to jump the video to that point."}
+          Click the timeline to jump the video to that point.
         </p>
       )}
     </div>

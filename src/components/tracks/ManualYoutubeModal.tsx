@@ -14,7 +14,7 @@ import {
   YoutubeSearchHit,
 } from "../../lib/youtube/search";
 import { PcModal } from "../ui/PcModal";
-import { Check, AlertCircle, ExternalLink, Loader2, AlertTriangle, Search } from "lucide-react";
+import { Check, AlertCircle, Loader2, AlertTriangle, Search } from "lucide-react";
 
 interface ManualYoutubeModalProps {
   track: Track;
@@ -142,7 +142,14 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
       return status && !status.embeddable;
     });
 
-  const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(defaultSearchQuery(track))}`;
+  const openYoutubeSearch = () => {
+    const query = searchQuery.trim() || defaultSearchQuery(track);
+    window.open(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
 
   const runYoutubeSearch = async () => {
     const nextQuery = searchQuery.trim();
@@ -209,10 +216,11 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
 
   return (
     <PcModal
-      title={`Manual YouTube Link — ${track.title}`}
+      title="Manual YouTube Link"
       onClose={onClose}
       className="max-w-2xl"
     >
+      <p className="text-sm font-semibold mb-1">{track.title}</p>
       <p className="text-sm mb-4">{track.artist}</p>
 
       <form onSubmit={handleSave} className="space-y-3">
@@ -229,19 +237,20 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
               }}
               placeholder="e.g. https://www.youtube.com/watch?v=dQw4w9WgXcQ"
             />
-            <a
-              href={youtubeSearchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="pc-button shrink-0 inline-flex items-center gap-1.5"
-              title="Opens YouTube in a new tab"
-              aria-label="Open on YouTube in a new tab"
+            <Button
+              type="button"
+              onClick={openYoutubeSearch}
+              className="shrink-0 inline-flex items-center gap-1.5"
+              title="Search YouTube for this song in a new tab"
+              aria-label="Search on YouTube in a new tab"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Open on YouTube
-            </a>
+              <Search className="w-3.5 h-3.5" />
+              Search on YouTube
+            </Button>
           </div>
-          <p className="text-[11px] mt-1 text-muted">Paste a link directly, or open YouTube in a new tab to browse manually.</p>
+          <p className="text-[11px] mt-1 text-muted">
+            Paste a link directly, or search on YouTube to find an alternative clip.
+          </p>
         </div>
         {error && (
           <p className="flex items-center gap-1.5 text-xs text-pc-error font-semibold">

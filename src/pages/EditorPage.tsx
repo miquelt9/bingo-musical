@@ -330,33 +330,49 @@ export const EditorPage: React.FC = () => {
           back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
           title={deck.name}
           primaryAction={
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleHostLiveGame}
-              disabled={hostDisabled}
-              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
-            >
-              <Radio className="w-4 h-4" />
-              {hostGateChecking ? "Verifying..." : "Host"}
-            </Button>
+            <div className="flex w-full items-center justify-end gap-2">
+              <Button
+                type="button"
+                onClick={() => shareDeck(deck)}
+                disabled={emptyDeck}
+                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Share"}
+                aria-label="Share"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+              {emptyDeck ? (
+                <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
+                  <span
+                    className="pc-button opacity-60 pointer-events-none"
+                    aria-disabled
+                    aria-label="Bingo Cards"
+                    tabIndex={-1}
+                  >
+                    <Printer className="w-4 h-4" />
+                  </span>
+                </span>
+              ) : (
+                <Link
+                  to={`/deck/${deck.id}/cards`}
+                  className="pc-button"
+                  aria-label="Bingo Cards"
+                  title="Bingo Cards"
+                >
+                  <Printer className="w-4 h-4" />
+                </Link>
+              )}
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleHostLiveGame}
+                disabled={hostDisabled}
+                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Host live game"}
+                aria-label={hostGateChecking ? "Verifying deck…" : "Host live game"}
+              >
+                <Radio className="w-4 h-4" />
+              </Button>
+            </div>
           }
-          overflowItems={[
-            {
-              icon: <Share2 className="w-4 h-4" />,
-              label: "Share",
-              onClick: () => shareDeck(deck),
-              disabled: emptyDeck,
-              title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
-            },
-            {
-              icon: <Printer className="w-4 h-4" />,
-              label: "Bingo Cards",
-              onClick: () => navigate(`/deck/${deck.id}/cards`),
-              disabled: emptyDeck,
-              title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
-            },
-          ]}
         />
       ) : (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">

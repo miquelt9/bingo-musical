@@ -71,6 +71,16 @@ function looksLikeYoutubeInput(value: string): boolean {
   return Boolean(parseYoutubeVideoId(trimmed) || parseYoutubePlaylistId(trimmed));
 }
 
+function queryHasLyricsSuffix(query: string): boolean {
+  return /\blyrics?\b/i.test(query.trim());
+}
+
+function withLyricsSuffix(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed || queryHasLyricsSuffix(trimmed)) return trimmed;
+  return `${trimmed} lyrics`;
+}
+
 export const SongSearch: React.FC<SongSearchProps> = ({
   existingVideoIds = [],
   onAddTrack,
@@ -91,9 +101,12 @@ export const SongSearch: React.FC<SongSearchProps> = ({
   const [embedStatuses, setEmbedStatuses] = useState<Map<string, EmbedValidationResult>>(new Map());
   const [isCheckingEmbeds, setIsCheckingEmbeds] = useState(false);
   const [addingVideoId, setAddingVideoId] = useState<string | null>(null);
+  const [lyricsFallbackUsed, setLyricsFallbackUsed] = useState(false);
   const blurTimer = useRef<number | null>(null);
   const skipCatalogQuery = useRef<string | null>(null);
   const youtubeAbort = useRef<AbortController | null>(null);
+  const lastYoutubeSearchQueryRef = useRef("");
+  const lyricsFallbackAttemptedRef = useRef(false);
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const usingKeyboardNav = useRef(false);
@@ -163,6 +176,23 @@ export const SongSearch: React.FC<SongSearchProps> = ({
   }, [hits]);
 
   useEffect(() => {
+    if (isCheckingEmbeds || isSearching || hits.length === 0) return;
+    if (lyricsFallbackAttemptedRef.current) return;
+    if (kind !== "search") return;
+
+    const baseQuery = lastYoutubeSearchQueryRef.current;
+    if (!baseQuery || queryHasLyricsSuffix(baseQuery)) return;
+
+    const allBlocked = hits.every((hit) => {
+      const status = embedStatuses.get(hit.videoId);
+      return status && !status.embeddable;
+    });
+    if (!allBlocked) return;
+
+    void runLyricsFallbackSearch(baseQuery);
+  }, [hits, embedStatuses, isCheckingEmbeds, isSearching, kind]);
+
+  useEffect(() => {
     if (highlightedIndex < 0) return;
     const option = suggestionListRef.current?.querySelector<HTMLElement>(
       `[data-suggestion-index="${highlightedIndex}"]`
@@ -205,10 +235,20 @@ export const SongSearch: React.FC<SongSearchProps> = ({
     };
   }, [query]);
 
-  const runYoutubeSearch = async (nextQuery: string, catalog?: CatalogSong | null) => {
+  const runYoutubeSearch = async (
+    nextQuery: string,
+    catalog?: CatalogSong | null,
+    options?: { isLyricsFallback?: boolean }
+  ) => {
     youtubeAbort.current?.abort();
     const controller = new AbortController();
     youtubeAbort.current = controller;
+
+    if (!options?.isLyricsFallback) {
+      lyricsFallbackAttemptedRef.current = false;
+      setLyricsFallbackUsed(false);
+      lastYoutubeSearchQueryRef.current = (catalog ? catalogYoutubeQuery(catalog) : nextQuery).trim();
+    }
 
     setIsSearching(true);
     setError(null);
@@ -244,6 +284,16 @@ export const SongSearch: React.FC<SongSearchProps> = ({
     } finally {
       if (!controller.signal.aborted) setIsSearching(false);
     }
+  };
+
+  const runLyricsFallbackSearch = async (baseQuery: string) => {
+    const lyricsQuery = withLyricsSuffix(baseQuery);
+    if (!lyricsQuery || lyricsQuery === baseQuery) return;
+
+    lyricsFallbackAttemptedRef.current = true;
+    setLyricsFallbackUsed(true);
+    // Search by lyrics query directly; keep selectedCatalog in state for track metadata.
+    await runYoutubeSearch(lyricsQuery, null, { isLyricsFallback: true });
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -401,8 +451,12 @@ export const SongSearch: React.FC<SongSearchProps> = ({
         ? "This video"
         : kind === "search"
           ? selectedCatalog
-            ? `YouTube clips for ${selectedCatalog.artist} — ${selectedCatalog.title}`
-            : "Best matches"
+            ? lyricsFallbackUsed
+              ? `YouTube clips for ${selectedCatalog.artist} — ${selectedCatalog.title} (lyric videos)`
+              : `YouTube clips for ${selectedCatalog.artist} — ${selectedCatalog.title}`
+            : lyricsFallbackUsed
+              ? "Lyric video matches"
+              : "Best matches"
           : null;
 
   const suggestionPanel = suggestionsOpen ? (
@@ -517,7 +571,7 @@ export const SongSearch: React.FC<SongSearchProps> = ({
       </form>
 
       <p className="text-xs">
-        Type a song or artist, pick a match if you want, then find clips below — you stay on this page. Results are checked for embeddable playback before you add them.
+        Search a song or artist, or paste a YouTube link.
       </p>
 
       {error && (
@@ -549,9 +603,18 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             )}
           </div>
 
-          {allResultsBlocked && (
+          {allResultsBlocked && !isSearching && (
             <p className="text-xs pc-bevel-inset p-2">
-              None of these results allow in-game playback. Try searching for an official audio or lyric video, or paste a different YouTube link.
+              {lyricsFallbackUsed
+                ? "None of these lyric videos allow in-game playback. Try pasting a different YouTube link."
+                : "None of these results allow in-game playback. Try searching for an official audio or lyric video, or paste a different YouTube link."}
+            </p>
+          )}
+
+          {isSearching && lyricsFallbackUsed && hits.length === 0 && (
+            <p className="text-xs pc-bevel-inset p-2 flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Trying lyric video search…
             </p>
           )}
 

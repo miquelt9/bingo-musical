@@ -148,6 +148,24 @@
     border-top: 1px solid var(--pc-border);
     background: var(--pc-window-bg);
   }
+
+  .pc-modal-mobile-sheet--clip-editor {
+    height: auto;
+    max-height: 100dvh;
+  }
+
+  .pc-clip-editor-video {
+    position: relative;
+    width: min(100%, calc(min(28dvh, 200px) * 16 / 9));
+    aspect-ratio: 16 / 9;
+    margin-inline: auto;
+  }
+
+  @media (max-height: 640px) {
+    .pc-clip-editor-video {
+      width: min(100%, calc(min(22dvh, 160px) * 16 / 9));
+    }
+  }
 }
 
 /* Draggable YouTube video window */

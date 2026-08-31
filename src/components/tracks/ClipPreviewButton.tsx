@@ -31,7 +31,9 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
 
   const isCurrentTrack = playerState?.currentClip?.trackId === track.id;
   const isPlaying = isCurrentTrack && playerState?.state === "playing";
-  const isBuffering = isCurrentTrack && playerState?.state === "buffering";
+  const isLoading =
+    isCurrentTrack &&
+    (playerState?.state === "buffering" || playerState?.state === "cued");
   const hasError = isCurrentTrack && playerState?.state === "error";
 
   const durationSec = Math.max(1, track.endTime - track.startTime);
@@ -41,7 +43,7 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
     e.stopPropagation();
     if (!track.youtubeVideoId) return;
 
-    if (isPlaying || isBuffering) {
+    if (isPlaying || isLoading) {
       stopPlayback();
     } else {
       playClip({
@@ -94,7 +96,7 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
       )}
 
       <span className="relative z-10 inline-flex items-center gap-1.5">
-        {isBuffering ? (
+        {isLoading ? (
           <Loader2 className={`${iconSizes[size]} animate-spin`} />
         ) : hasError ? (
           <AlertCircle className={iconSizes[size]} />

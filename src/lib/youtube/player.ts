@@ -1011,6 +1011,12 @@ export function playClip(
   const active = getActiveSlot();
   if (!active?.player || !currentState.isReady) {
     pendingPlay = { clip, handleEnd, options };
+    currentState.currentClip = clip;
+    currentState.errorMessage = null;
+    currentState.progress = 0;
+    currentState.remainingTime = Math.max(0, clip.endTime - clip.startTime);
+    currentState.state = "buffering";
+    notifyListeners();
     return;
   }
 
@@ -1043,6 +1049,7 @@ export function playClip(
   currentState.errorMessage = null;
   currentState.progress = 0;
   currentState.remainingTime = Math.max(0, clip.endTime - clip.startTime);
+  currentState.state = "buffering";
   updateActiveElementId();
   setVisibleSlot(activeSlotIndex);
 
@@ -1053,6 +1060,8 @@ export function playClip(
   } else {
     applyVolumeToBothSlots();
   }
+
+  notifyListeners();
 
   try {
     loadClipOnPlayer(active.player, clip);
