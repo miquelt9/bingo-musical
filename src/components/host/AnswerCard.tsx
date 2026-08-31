@@ -101,10 +101,10 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         {errorMessage && (
           <div className="p-2 pc-bevel-inset border-l-4 border-red-500 bg-red-500/10 text-xs flex flex-col gap-2 shrink-0">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-4 h-4 text-pc-error shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-red-700 dark:text-red-400">Audio Playback Restricted</p>
-                <p className="text-[11px] text-red-600 dark:text-red-300 mt-0.5">
+                <p className="font-bold text-pc-error">Audio Playback Restricted</p>
+                <p className="text-[11px] text-pc-error mt-0.5">
                   The video owner restricted this song from playing outside YouTube. You can play it directly in a new tab:
                 </p>
               </div>

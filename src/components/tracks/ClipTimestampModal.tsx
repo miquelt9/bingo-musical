@@ -51,7 +51,7 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
               </div>
             )}
             {editor.playerError && (
-              <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-red-400">
+              <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-pc-error">
                 {editor.playerError}
               </div>
             )}
@@ -67,19 +67,19 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3 pc-bevel-inset p-2">
             <div>
-              <span className="block text-[10px] uppercase opacity-75">Current</span>
+              <span className="block text-[10px] uppercase text-muted">Current</span>
               <span className="font-mono font-semibold">{formatDuration(editor.currentTime)}</span>
             </div>
             <div>
-              <span className="block text-[10px] uppercase opacity-75">Start</span>
+              <span className="block text-[10px] uppercase text-muted">Start</span>
               <span className="font-mono font-semibold">{editor.draftStart}s ({formatDuration(editor.draftStart)})</span>
             </div>
             <div>
-              <span className="block text-[10px] uppercase opacity-75">End</span>
+              <span className="block text-[10px] uppercase text-muted">End</span>
               <span className="font-mono font-semibold">{editor.draftEnd}s ({formatDuration(editor.draftEnd)})</span>
             </div>
             <div>
-              <span className="block text-[10px] uppercase opacity-75">Clip</span>
+              <span className="block text-[10px] uppercase text-muted">Clip</span>
               <span className="font-mono font-semibold">{editor.clipDuration}s</span>
             </div>
           </div>

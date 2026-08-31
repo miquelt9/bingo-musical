@@ -53,7 +53,7 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
                   </div>
                 )}
                 {editor.playerError && (
-                  <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-red-400">
+                  <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-pc-error">
                     {editor.playerError}
                   </div>
                 )}
@@ -70,17 +70,17 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
 
               <div className="flex items-center justify-between gap-2 text-xs mb-4 pc-bevel-inset p-2 font-mono">
                 <span>
-                  <span className="text-[10px] uppercase opacity-75 block">Start</span>
+                  <span className="text-[10px] uppercase text-muted block">Start</span>
                   {formatDuration(editor.draftStart)}
                 </span>
                 <span className="opacity-50">→</span>
                 <span>
-                  <span className="text-[10px] uppercase opacity-75 block">End</span>
+                  <span className="text-[10px] uppercase text-muted block">End</span>
                   {formatDuration(editor.draftEnd)}
                 </span>
                 <span className="opacity-50">·</span>
                 <span>
-                  <span className="text-[10px] uppercase opacity-75 block">Clip</span>
+                  <span className="text-[10px] uppercase text-muted block">Clip</span>
                   {formatDuration(editor.clipDuration)}
                 </span>
               </div>

@@ -53,9 +53,9 @@ function StatusIconBadge({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-green-700 dark:text-green-400"
+      ? "text-pc-success"
       : tone === "danger"
-        ? "text-red-600 dark:text-red-400"
+        ? "text-pc-error"
         : tone === "warning"
           ? "text-pc-warning"
           : "text-muted";
@@ -432,7 +432,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
                                 } left-1/2 -translate-x-1/2 w-64 p-3 pc-window z-50 shadow-2xl text-left text-xs`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-start justify-between gap-1 mb-1 text-red-600 dark:text-red-400">
+                                <div className="flex items-start justify-between gap-1 mb-1 text-pc-error">
                                   <span className="flex items-center gap-1.5 font-extrabold">
                                     <AlertTriangle className="w-4 h-4 shrink-0" />
                                     <span>Audio Unavailable</span>

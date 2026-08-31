@@ -17,6 +17,34 @@
   .pc-theme-light,
   [data-pc-theme="light"] {
     --pc-titlebar-bg: #2B6CB0;
+    --pc-window-bg: var(--pc-chrome-bg);
+    --pc-border: var(--pc-bevel-dark);
+    --pc-surface: var(--pc-window-body-bg);
+    --pc-selection-bg: var(--pc-titlebar-bg);
+    --pc-selection-fg: var(--pc-titlebar-text);
+    --pc-color-danger: var(--pc-color-error);
+  }
+
+  .pc-theme-dark,
+  [data-pc-theme="dark"] {
+    --pc-window-bg: var(--pc-chrome-bg);
+    --pc-border: var(--pc-bevel-dark);
+    --pc-surface: var(--pc-window-body-bg);
+    --pc-selection-bg: var(--pc-titlebar-bg);
+    --pc-selection-fg: var(--pc-titlebar-text);
+    --pc-color-danger: var(--pc-color-error);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .pc-theme-system,
+    [data-pc-theme="system"] {
+      --pc-window-bg: var(--pc-chrome-bg);
+      --pc-border: var(--pc-bevel-dark);
+      --pc-surface: var(--pc-window-body-bg);
+      --pc-selection-bg: var(--pc-titlebar-bg);
+      --pc-selection-fg: var(--pc-titlebar-text);
+      --pc-color-danger: var(--pc-color-error);
+    }
   }
 
   html,
@@ -117,8 +145,8 @@
     flex-shrink: 0;
     padding-top: 12px;
     padding-bottom: var(--pc-safe-area-bottom);
-    border-top: 1px solid var(--pc-border, #808080);
-    background: var(--pc-window-bg, #c0c0c0);
+    border-top: 1px solid var(--pc-border);
+    background: var(--pc-window-bg);
   }
 }
 
@@ -242,6 +270,38 @@
   color: var(--pc-color-warning);
 }
 
+.text-muted {
+  color: var(--pc-text-muted);
+}
+
+.text-pc-success {
+  color: var(--pc-color-success);
+}
+
+.text-pc-error {
+  color: var(--pc-color-error);
+}
+
+.text-pc-info {
+  color: var(--pc-color-info);
+}
+
+.clip-timeline-label--start {
+  color: var(--pc-color-success);
+}
+
+.clip-timeline-label--end {
+  color: var(--pc-color-warning);
+}
+
+.clip-timeline-label--now {
+  color: var(--pc-color-info);
+}
+
+.bg-pc-info {
+  background-color: var(--pc-color-info-bg);
+}
+
 .bg-pc-warning {
   background-color: var(--pc-color-warning-bg);
 }
@@ -268,11 +328,12 @@
   max-height: min(60vh, calc(100dvh - 16px));
   overflow-y: auto;
   padding: 4px;
-  border: 2px solid var(--pc-border, #808080);
-  background: var(--pc-window-bg, #c0c0c0);
+  color: var(--pc-text-main);
+  border: 2px solid var(--pc-border);
+  background: var(--pc-chrome-bg);
   box-shadow:
-    inset 1px 1px 0 color-mix(in srgb, var(--pc-window-bg, #c0c0c0) 80%, white),
-    inset -1px -1px 0 color-mix(in srgb, var(--pc-border, #808080) 70%, black),
+    inset 1px 1px 0 color-mix(in srgb, var(--pc-chrome-bg) 80%, white),
+    inset -1px -1px 0 color-mix(in srgb, var(--pc-border) 70%, black),
     2px 2px 0 rgba(0, 0, 0, 0.25);
 }
 
@@ -289,7 +350,7 @@
   padding: 8px 12px;
   border: none;
   background: transparent;
-  color: inherit;
+  color: var(--pc-text-main);
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -298,18 +359,19 @@
 
 .pc-overflow-menu-item:hover,
 .pc-overflow-menu-item:focus-visible {
-  background: var(--pc-selection-bg, #000080);
-  color: var(--pc-selection-fg, #ffffff);
-  outline: none;
+  background: var(--pc-button-hover-bg);
+  color: var(--pc-text-main);
+  outline: var(--pc-focus-ring);
+  outline-offset: var(--pc-focus-ring-offset);
 }
 
 .pc-overflow-menu-item--destructive {
-  color: var(--pc-color-danger, #cc0000);
+  color: var(--pc-color-error);
 }
 
 .pc-overflow-menu-item--destructive:hover,
 .pc-overflow-menu-item--destructive:focus-visible {
-  background: var(--pc-color-danger, #cc0000);
+  background: var(--pc-color-error);
   color: #ffffff;
 }
 
@@ -319,7 +381,8 @@
   opacity: 0.6;
   cursor: not-allowed;
   background: transparent;
-  color: inherit;
+  color: var(--pc-text-muted);
+  outline: none;
 }
 
 .pc-overflow-menu-item-icon {
@@ -660,11 +723,11 @@
   }
 
   .host-board-log-details {
-    border: 2px solid var(--pc-border, #808080);
-    background: var(--pc-window-bg, #c0c0c0);
+    border: 2px solid var(--pc-border);
+    background: var(--pc-window-bg);
     box-shadow:
-      inset 1px 1px 0 color-mix(in srgb, var(--pc-window-bg, #c0c0c0) 80%, white),
-      inset -1px -1px 0 color-mix(in srgb, var(--pc-border, #808080) 70%, black);
+      inset 1px 1px 0 color-mix(in srgb, var(--pc-window-bg) 80%, white),
+      inset -1px -1px 0 color-mix(in srgb, var(--pc-border) 70%, black);
   }
 
   .host-board-log-details__summary {
@@ -851,14 +914,14 @@
   gap: 12px 16px;
   margin-top: 20px;
   padding-top: 12px;
-  border-top: 1px solid var(--pc-border, #808080);
+  border-top: 1px solid var(--pc-border);
 }
 
 .home-decks-import-disclosure {
   flex-shrink: 0;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--pc-border, #808080);
+  border-top: 1px solid var(--pc-border);
 }
 
 .home-decks-import-disclosure-summary {

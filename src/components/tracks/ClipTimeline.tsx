@@ -50,7 +50,7 @@ export function ClipTimeline({
     <div className={`pc-bevel-inset p-3 ${isTouch ? "mb-4" : "mb-3"}`}>
       <div className="flex items-center justify-between text-[10px] uppercase font-bold mb-2">
         <span>Clip timeline</span>
-        <span className="font-mono normal-case font-normal opacity-75">
+        <span className="font-mono normal-case font-normal text-muted">
           {formatDuration(timelineDuration)} total
         </span>
       </div>
@@ -83,7 +83,7 @@ export function ClipTimeline({
           className="absolute inset-y-0 w-0.5 -translate-x-px bg-emerald-700 pointer-events-none z-10"
           style={{ left: `${startPct}%` }}
         >
-          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase clip-timeline-label--start whitespace-nowrap">
             Start
           </span>
         </div>
@@ -92,7 +92,7 @@ export function ClipTimeline({
           className="absolute inset-y-0 w-0.5 -translate-x-px bg-amber-600 pointer-events-none z-10"
           style={{ left: `${endPct}%` }}
         >
-          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase text-amber-700 dark:text-amber-400 whitespace-nowrap">
+          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase clip-timeline-label--end whitespace-nowrap">
             End
           </span>
         </div>
@@ -103,7 +103,7 @@ export function ClipTimeline({
           }`}
           style={{ left: `${currentPct}%` }}
         >
-          <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase text-blue-700 dark:text-blue-400 whitespace-nowrap">
+          <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase clip-timeline-label--now whitespace-nowrap">
             Now
           </span>
         </div>
@@ -137,7 +137,7 @@ export function ClipTimeline({
       </div>
 
       {onSeek && (
-        <p className="text-[10px] opacity-60 mt-2">
+        <p className="text-[10px] text-muted mt-2">
           {isTouch ? "Tap the timeline to jump the video to that point." : "Click the timeline to jump the video to that point."}
         </p>
       )}

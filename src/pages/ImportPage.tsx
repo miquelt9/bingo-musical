@@ -57,7 +57,7 @@ export const ImportPage: React.FC = () => {
 
         <div
           className={`pc-bevel-inset p-8 text-center transition-colors ${
-            isDragging ? "bg-blue-50 dark:bg-blue-950/30" : ""
+            isDragging ? "bg-pc-info" : ""
           }`}
           onDragOver={(e) => {
             e.preventDefault();

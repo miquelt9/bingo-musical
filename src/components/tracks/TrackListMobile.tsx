@@ -43,7 +43,7 @@ function StatusChip({
 
   if (track.matchStatus === "matched" || track.matchStatus === "manual") {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-pc-success">
         <CheckCircle2 className="w-3 h-3 shrink-0" />
         Ready
       </span>

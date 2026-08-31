@@ -580,13 +580,13 @@ export const SongSearch: React.FC<SongSearchProps> = ({
                       {hit.lengthSeconds > 0 ? ` · ${formatDuration(hit.lengthSeconds)}` : ""}
                     </p>
                     {isCheckingThis && (
-                      <p className="text-[11px] mt-1 flex items-center gap-1 opacity-75">
+                      <p className="text-[11px] mt-1 flex items-center gap-1 text-muted">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         Checking embed permission…
                       </p>
                     )}
                     {embedStatus?.embeddable && (
-                      <p className="text-[11px] mt-1 text-green-600 dark:text-green-400 flex items-center gap-1">
+                      <p className="text-[11px] mt-1 text-pc-success flex items-center gap-1">
                         <Check className="w-3 h-3" />
                         Playable in game
                       </p>

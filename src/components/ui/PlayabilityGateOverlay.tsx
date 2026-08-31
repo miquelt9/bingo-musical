@@ -87,7 +87,7 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
               <AlertTriangle className="w-5 h-5 text-pc-warning shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-pc-warning">{subtitle}</p>
-                <p className="text-pc-warning mt-1 opacity-90">
+                <p className="text-pc-warning mt-1">
                   {invalidTracks.length} song{invalidTracks.length === 1 ? "" : "s"} cannot be played
                   in the app. Fix them in the Deck Editor before continuing.
                 </p>

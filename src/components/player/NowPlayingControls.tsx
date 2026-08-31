@@ -38,7 +38,7 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
           {!compact && (
             <p className="text-xs truncate max-w-xs sm:max-w-md">
               {playerState?.errorMessage ? (
-                <span className="text-red-500 font-semibold">{playerState.errorMessage}</span>
+                <span className="text-pc-error font-semibold">{playerState.errorMessage}</span>
               ) : (
                 <>
                   {playerState?.currentClip?.artist || "Audio snippet"} •{" "}

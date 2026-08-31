@@ -74,7 +74,7 @@ export const HomePage: React.FC = () => {
             onClick={handleCreateEmptyDeck}
           >
             <span className="font-semibold text-sm">+ Empty deck</span>
-            <span className="text-xs opacity-75">Add songs in the editor</span>
+            <span className="text-xs text-muted">Add songs in the editor</span>
           </button>
         )}
 

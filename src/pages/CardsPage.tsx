@@ -479,7 +479,7 @@ export const CardsPage: React.FC = () => {
                 Shuffle again
               </Button>
 
-              <p className="text-xs text-muted pt-1 border-t border-[var(--pc-border,#808080)]">
+              <p className="text-xs text-muted pt-1 border-t border-[var(--pc-border)]">
                 {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck · {slots} squares
                 per card
               </p>

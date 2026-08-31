@@ -241,10 +241,10 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
               Open on YouTube
             </a>
           </div>
-          <p className="text-[11px] mt-1 opacity-75">Paste a link directly, or open YouTube in a new tab to browse manually.</p>
+          <p className="text-[11px] mt-1 text-muted">Paste a link directly, or open YouTube in a new tab to browse manually.</p>
         </div>
         {error && (
-          <p className="flex items-center gap-1.5 text-xs text-red-500 font-semibold">
+          <p className="flex items-center gap-1.5 text-xs text-pc-error font-semibold">
             <AlertCircle className="w-3.5 h-3.5" />
             <span>{error}</span>
           </p>
@@ -259,14 +259,14 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
               </span>
 
               {isCheckingAudio && (
-                <p className="flex items-center gap-1.5 text-xs opacity-75">
+                <p className="flex items-center gap-1.5 text-xs text-muted">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   <span>Testing video playback...</span>
                 </p>
               )}
 
               {audioStatus && audioStatus.embeddable && (
-                <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                <p className="flex items-center gap-1.5 text-xs text-pc-success font-medium">
                   <Check className="w-3.5 h-3.5" />
                   <span>Audio verified (playable in game)</span>
                 </p>
@@ -375,13 +375,13 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
                           {hit.lengthSeconds > 0 ? ` · ${formatDuration(hit.lengthSeconds)}` : ""}
                         </p>
                         {isCheckingThis && (
-                          <p className="text-[11px] mt-1 flex items-center gap-1 opacity-75">
+                          <p className="text-[11px] mt-1 flex items-center gap-1 text-muted">
                             <Loader2 className="w-3 h-3 animate-spin" />
                             Checking embed permission…
                           </p>
                         )}
                         {embedStatus?.embeddable && (
-                          <p className="text-[11px] mt-1 text-green-600 dark:text-green-400 flex items-center gap-1">
+                          <p className="text-[11px] mt-1 text-pc-success flex items-center gap-1">
                             <Check className="w-3 h-3" />
                             Playable in game
                           </p>

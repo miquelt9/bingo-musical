@@ -4,6 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: ["selector", '[data-pc-theme="dark"], .pc-theme-dark'],
   theme: {
     extend: {
       fontFamily: {
@@ -11,6 +12,10 @@ export default {
         mono: ["var(--pc-font-family)", "monospace"],
       },
       colors: {
+        muted: "var(--pc-text-muted)",
+        success: "var(--pc-color-success)",
+        error: "var(--pc-color-error)",
+        info: "var(--pc-color-info)",
         pc: {
           desktop: "var(--pc-desktop-bg)",
           chrome: "var(--pc-chrome-bg)",
@@ -18,6 +23,9 @@ export default {
           text: "var(--pc-text-main)",
           muted: "var(--pc-text-muted)",
           link: "var(--pc-link)",
+          success: "var(--pc-color-success)",
+          error: "var(--pc-color-error)",
+          info: "var(--pc-color-info)",
         },
         brand: {
           50: '#f0fdf4',
