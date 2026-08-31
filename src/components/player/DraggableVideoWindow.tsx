@@ -103,13 +103,14 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
   }, [bounds, onBoundsChange]);
 
   useEffect(() => {
-    if (isMobile || !visible) {
+    if (isMobile) {
       attachPlayersToViewport(null);
       return;
     }
+    // Keep players mounted while hidden — moving the iframe DOM stops playback.
     attachPlayersToViewport(contentRef.current);
     return () => attachPlayersToViewport(null);
-  }, [visible, isMobile, bounds.width, bounds.height]);
+  }, [isMobile, bounds.width, bounds.height]);
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button")) return;

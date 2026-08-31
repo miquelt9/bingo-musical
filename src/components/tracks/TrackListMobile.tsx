@@ -1,6 +1,7 @@
 import React from "react";
 import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
+import { OverflowMenu } from "../ui/OverflowMenu";
 import {
   getYoutubeThumbnailUrl,
 } from "../../lib/youtube/parseUrl";
@@ -11,11 +12,15 @@ import {
   AlertTriangle,
   Clock,
   AlertCircle,
+  Timer,
+  Trash2,
 } from "lucide-react";
 
 interface TrackListMobileProps {
   tracks: Track[];
-  onEditTrack: (track: Track) => void;
+  onEditVideo: (track: Track) => void;
+  onEditClip: (track: Track) => void;
+  onDeleteTrack?: (track: Track) => void;
   isTrackBlocked: (track: Track) => boolean;
   isBusy?: boolean;
 }
@@ -64,7 +69,9 @@ function StatusChip({
 
 export const TrackListMobile: React.FC<TrackListMobileProps> = ({
   tracks,
-  onEditTrack,
+  onEditVideo,
+  onEditClip,
+  onDeleteTrack,
   isTrackBlocked,
   isBusy = false,
 }) => {
@@ -86,6 +93,37 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
         const isBlocked = isTrackBlocked(track);
         const isReady =
           (track.matchStatus === "matched" || track.matchStatus === "manual") && !isBlocked;
+        const hasVideo = Boolean(track.youtubeVideoId);
+
+        const overflowItems = [
+          {
+            icon: <Edit2 className="w-4 h-4" />,
+            label: isBlocked ? "Fix video" : "Change video",
+            onClick: () => onEditVideo(track),
+            disabled: isBusy,
+          },
+          ...(hasVideo
+            ? [
+                {
+                  icon: <Timer className="w-4 h-4" />,
+                  label: "Edit clip",
+                  onClick: () => onEditClip(track),
+                  disabled: isBusy,
+                },
+              ]
+            : []),
+          ...(onDeleteTrack
+            ? [
+                {
+                  icon: <Trash2 className="w-4 h-4" />,
+                  label: "Delete",
+                  onClick: () => onDeleteTrack(track),
+                  destructive: true,
+                  disabled: isBusy,
+                },
+              ]
+            : []),
+        ];
 
         return (
           <li
@@ -114,7 +152,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
               </div>
             </div>
 
-            <div className="shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {isReady ? (
                 <ClipPreviewButton track={track} size="sm" showLabel />
               ) : (
@@ -122,13 +160,17 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                   type="button"
                   className="pc-button pc-button--primary min-h-[44px] px-3"
                   disabled={isBusy}
-                  onClick={() => onEditTrack(track)}
+                  onClick={() => onEditVideo(track)}
                   title={isBlocked ? "Fix unavailable video" : "Link or change YouTube video"}
                 >
                   <Edit2 className="w-4 h-4" />
                   <span>Fix</span>
                 </button>
               )}
+              <OverflowMenu
+                ariaLabel={`Edit ${track.title}`}
+                items={overflowItems}
+              />
             </div>
           </li>
         );

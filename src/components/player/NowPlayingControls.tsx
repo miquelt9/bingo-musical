@@ -28,11 +28,11 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
   const isPlaying = playerState?.state === "playing";
 
   return (
-    <div className={`flex ${compact ? "flex-row items-center gap-2" : "flex-col sm:flex-row items-center justify-between gap-3"}`}>
-      <div className={`flex items-center gap-3 min-w-0 ${compact ? "" : "w-full sm:w-auto"}`}>
+    <div className={`flex w-full ${compact ? "flex-row items-center justify-between gap-2" : "flex-col sm:flex-row items-center justify-between gap-3"}`}>
+      <div className={`flex items-center gap-3 min-w-0 ${compact ? "flex-1" : "w-full sm:w-auto"}`}>
         <Music className={`w-5 h-5 shrink-0 ${isPlaying ? "animate-bounce" : ""}`} />
-        <div className="min-w-0">
-          <p className={`font-bold truncate ${compact ? "text-xs max-w-[140px]" : "text-sm max-w-xs sm:max-w-md"}`}>
+        <div className="min-w-0 flex-1">
+          <p className={`font-bold truncate ${compact ? "text-xs" : "text-sm max-w-xs sm:max-w-md"}`}>
             {playerState?.currentClip?.title || "Playing YouTube Snippet"}
           </p>
           {!compact && (

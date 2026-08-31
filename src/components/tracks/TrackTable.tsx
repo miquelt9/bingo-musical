@@ -3,6 +3,7 @@ import { Modal } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { ClipTimestampModal } from "./ClipTimestampModal";
+import { ClipTimestampModalMobile } from "./ClipTimestampModalMobile";
 import { ManualYoutubeModal } from "./ManualYoutubeModal";
 import { TrackListMobile } from "./TrackListMobile";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -345,7 +346,9 @@ export const TrackTable: React.FC<TrackTableProps> = ({
         ) : (
           <TrackListMobile
             tracks={filteredTracks}
-            onEditTrack={setEditingTrack}
+            onEditVideo={setEditingTrack}
+            onEditClip={setTimestampEditingTrack}
+            onDeleteTrack={onDeleteTrack ? setTrackPendingDelete : undefined}
             isTrackBlocked={isTrackBlocked}
             isBusy={isMatching}
           />
@@ -597,7 +600,17 @@ export const TrackTable: React.FC<TrackTableProps> = ({
         />
       )}
 
-      {timestampEditingTrack && (
+      {timestampEditingTrack && (isMobile ? (
+        <ClipTimestampModalMobile
+          track={timestampEditingTrack}
+          isOpen
+          onClose={() => setTimestampEditingTrack(null)}
+          onSave={(updated) => {
+            onUpdateTrack(updated);
+            setTimestampEditingTrack(null);
+          }}
+        />
+      ) : (
         <ClipTimestampModal
           track={timestampEditingTrack}
           isOpen
@@ -607,7 +620,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             setTimestampEditingTrack(null);
           }}
         />
-      )}
+      ))}
 
       {trackPendingDelete && onDeleteTrack && (
         <Modal

@@ -451,7 +451,8 @@ export const HostPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (!isMobile || !showVideo) {
+    if (!isMobile) return;
+    if (!showVideo) {
       attachPlayersToViewport(null);
       return;
     }
