@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, SlidersHorizontal, Music2, ChevronDown } from "lucide-react";
+import { Shuffle, SlidersHorizontal, Music2, ChevronDown, Monitor } from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/youtube/player";
 import { Track } from "../../types/deck";
@@ -58,6 +58,7 @@ interface CallNextControlsProps {
   onToggleAutoCallNext: () => void;
   crossfadeOverlapMs: number;
   onCrossfadeOverlapChange: (ms: number) => void;
+  onOpenDisplay: () => void;
   gameStarted: boolean;
   disabled?: boolean;
 }
@@ -82,6 +83,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   onToggleAutoCallNext,
   crossfadeOverlapMs,
   onCrossfadeOverlapChange,
+  onOpenDisplay,
   gameStarted,
   disabled = false,
 }) => {
@@ -141,6 +143,11 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
             className="w-full cursor-pointer"
             aria-label="Crossfade overlap duration in milliseconds"
           />
+          {gameStarted ? (
+            <p className="text-[10px] opacity-80 mt-1">Locks when game starts</p>
+          ) : (
+            <p className="text-[10px] opacity-80 mt-1">Locks once the first song is called</p>
+          )}
         </div>
       </div>
 
@@ -206,6 +213,10 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
           <kbd className="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs font-mono pc-bevel-inset">
             Space
           </kbd>
+        </Button>
+        <Button type="button" onClick={onOpenDisplay} className="w-full">
+          <Monitor className="w-4 h-4" />
+          Open display window
         </Button>
       </div>
 

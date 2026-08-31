@@ -1,6 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Loader2 } from "lucide-react";
+import {
+  DeckReadiness,
+  formatReadinessPrimary,
+  formatReadinessSecondary,
+} from "../../lib/decks/readiness";
 import { InvalidTrackEntry } from "../../lib/youtube/playabilityGate";
 import { BatchValidationProgress } from "../../lib/youtube/validator";
 
@@ -9,6 +14,7 @@ interface CardsPlayabilityBannerProps {
   isChecking: boolean;
   progress: BatchValidationProgress | null;
   invalidTracks: InvalidTrackEntry[];
+  readiness?: DeckReadiness;
 }
 
 export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
@@ -16,6 +22,7 @@ export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
   isChecking,
   progress,
   invalidTracks,
+  readiness,
 }) => {
   const showChecking = isChecking && invalidTracks.length === 0;
   const showWarning = invalidTracks.length > 0;
@@ -29,9 +36,7 @@ export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
           <span>
             Checking song compatibility
-            {progress
-              ? ` (${progress.completed} / ${progress.total})`
-              : "..."}
+            {progress ? ` (${progress.completed} / ${progress.total})` : "..."}
           </span>
         </div>
       )}
@@ -41,18 +46,30 @@ export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
           <div className="flex items-start gap-2 min-w-0">
             <AlertTriangle className="w-4 h-4 text-pc-warning shrink-0 mt-0.5" />
             <p className="text-pc-warning">
-              <span className="font-bold">
-                {invalidTracks.length} song{invalidTracks.length === 1 ? "" : "s"} may not play
-                during hosting.
-              </span>{" "}
-              You can still print cards — fix them in the Editor before starting a game.
+              {readiness ? (
+                <>
+                  <span className="font-bold">{formatReadinessPrimary(readiness)}</span>
+                  {formatReadinessSecondary(readiness) ? (
+                    <> · {formatReadinessSecondary(readiness)}</>
+                  ) : null}
+                  {" "}You can still print cards — fix songs in the deck before hosting.
+                </>
+              ) : (
+                <>
+                  <span className="font-bold">
+                    {invalidTracks.length} song{invalidTracks.length === 1 ? "" : "s"} may not play
+                    during hosting.
+                  </span>{" "}
+                  You can still print cards — fix them in the deck before starting a game.
+                </>
+              )}
             </p>
           </div>
           <Link
             to={`/deck/${deckId}?filter=blocked`}
             className="pc-button pc-button--primary shrink-0 self-start sm:self-center"
           >
-            Fix in Deck Editor
+            Fix all songs
           </Link>
         </div>
       )}

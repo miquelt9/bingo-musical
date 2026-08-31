@@ -3,12 +3,12 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
+import { generateBingoCards, GRID_SIZES, cellCount } from "../lib/bingo/generateCards";
 import {
-  generateBingoCards,
-  GRID_SIZES,
-  cellCount,
-  uniqueSongCount,
-} from "../lib/bingo/generateCards";
+  getDeckReadiness,
+  getLargestValidGridSize,
+  isGridSizeValidForDeck,
+} from "../lib/decks/readiness";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
 import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
@@ -25,18 +25,16 @@ import {
   Settings2,
   FileText,
   Loader2,
-  ChevronDown,
   Edit3,
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
 const CARD_COUNT_PRESETS = [5, 10, 20, 50, 100] as const;
-const BINGO_PERCENT_PRESETS = [25, 50, 75, 100] as const;
+const BINGO_PERCENT = 100;
 
 interface CardSettings {
   cardCount: number;
   gridSize: number;
-  bingoPercent: number;
 }
 
 function readCardSettings(deckId: string): CardSettings | null {
@@ -44,11 +42,7 @@ function readCardSettings(deckId: string): CardSettings | null {
     const raw = sessionStorage.getItem(`${CARD_SETTINGS_KEY}.${deckId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CardSettings;
-    if (
-      typeof parsed.cardCount === "number" &&
-      typeof parsed.gridSize === "number" &&
-      typeof parsed.bingoPercent === "number"
-    ) {
+    if (typeof parsed.cardCount === "number" && typeof parsed.gridSize === "number") {
       return parsed;
     }
     return null;
@@ -68,8 +62,6 @@ export const CardsPage: React.FC = () => {
   const [customTitle, setCustomTitle] = useState("");
   const [cardCount, setCardCount] = useState<number>(10);
   const [gridSize, setGridSize] = useState<number>(5);
-  const [bingoPercent, setBingoPercent] = useState<number>(100);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
@@ -96,8 +88,6 @@ export const CardsPage: React.FC = () => {
   });
 
   const slots = cellCount(gridSize);
-  const uniqueOnCard = deck ? uniqueSongCount(deck.tracks.length, slots, bingoPercent) : 0;
-  const blankOnCard = Math.max(0, slots - uniqueOnCard);
 
   const cardOptions = useMemo(() => {
     if (!deck) return null;
@@ -106,9 +96,9 @@ export const CardsPage: React.FC = () => {
       customTitle: customTitle || deck.name,
       cardCount,
       gridSize,
-      bingoPercent,
+      bingoPercent: BINGO_PERCENT,
     };
-  }, [deck, customTitle, cardCount, gridSize, bingoPercent]);
+  }, [deck, customTitle, cardCount, gridSize]);
 
   const layoutKeyRef = useRef("");
 
@@ -129,24 +119,29 @@ export const CardsPage: React.FC = () => {
     if (!deck) return;
     setCustomTitle(deck.name);
     const stored = readCardSettings(deck.id);
+    const trackCount = deck.tracks.length;
     if (stored) {
       setCardCount(stored.cardCount);
-      setGridSize(stored.gridSize);
-      setBingoPercent(stored.bingoPercent);
+      const size = isGridSizeValidForDeck(trackCount, stored.gridSize)
+        ? stored.gridSize
+        : getLargestValidGridSize(trackCount);
+      setGridSize(size);
+    } else if (trackCount > 0) {
+      setGridSize(getLargestValidGridSize(trackCount));
     }
-  }, [deck?.id, deck?.name]);
+  }, [deck?.id, deck?.name, deck?.tracks.length]);
 
   useEffect(() => {
     if (!deck) return;
     try {
       sessionStorage.setItem(
         `${CARD_SETTINGS_KEY}.${deck.id}`,
-        JSON.stringify({ cardCount, gridSize, bingoPercent })
+        JSON.stringify({ cardCount, gridSize })
       );
     } catch {
       // ignore
     }
-  }, [deck?.id, cardCount, gridSize, bingoPercent]);
+  }, [deck?.id, cardCount, gridSize]);
 
   useEffect(() => {
     setActivePreviewIndex((prev) => (cards.length === 0 ? 0 : Math.min(prev, cards.length - 1)));
@@ -160,7 +155,7 @@ export const CardsPage: React.FC = () => {
       return;
     }
 
-    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}:${bingoPercent}`;
+    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}`;
     const layoutChanged = layoutKey !== layoutKeyRef.current;
     layoutKeyRef.current = layoutKey;
 
@@ -170,14 +165,14 @@ export const CardsPage: React.FC = () => {
         customTitle: customTitle || deck.name,
         cardCount,
         gridSize,
-        bingoPercent,
+        bingoPercent: BINGO_PERCENT,
       })
     );
 
     if (layoutChanged) {
       setActivePreviewIndex(0);
     }
-  }, [deck?.id, deck?.updatedAt, cardCount, gridSize, bingoPercent]);
+  }, [deck?.id, deck?.updatedAt, cardCount, gridSize]);
 
   const handleRegenerate = () => {
     if (!deck || !cardOptions || deck.tracks.length === 0) return;
@@ -235,61 +230,26 @@ export const CardsPage: React.FC = () => {
 
   if (!deck) return null;
 
+  const readiness = getDeckReadiness(deck.tracks, gridSize);
   const currentCard = cards[activePreviewIndex] || cards[0];
   const cardsForPrint = printCards ?? cards;
-  const canGenerate = deck.tracks.length > 0;
-  const exportsDisabled = cards.length === 0;
+  const canGenerate = deck.tracks.length > 0 && isGridSizeValidForDeck(deck.tracks.length, gridSize);
+  const exportsDisabled = cards.length === 0 || !canGenerate;
   const eventTitle = customTitle || deck.name;
 
   const pdfButtonLabel = isExportingPdf
     ? `Generating PDF (${pdfProgress?.current}/${pdfProgress?.total})...`
     : `Download PDF (${cards.length} cards)`;
 
-  const bingoPercentSection = (
-    <div>
-      <p className="text-xs font-bold mb-1.5">
-        Songs per card ({bingoPercent}%)
-      </p>
-      <input
-        type="range"
-        min={10}
-        max={100}
-        step={5}
-        value={bingoPercent}
-        onChange={(e) => setBingoPercent(Number(e.target.value))}
-        disabled={!canGenerate}
-        className="w-full"
-        aria-label="Percent of the deck used on each card"
-      />
-      <div className="flex items-center gap-2 mt-2">
-        {BINGO_PERCENT_PRESETS.map((pct) => (
-          <Button
-            key={pct}
-            type="button"
-            active={bingoPercent === pct}
-            onClick={() => setBingoPercent(pct)}
-            className="flex-1"
-          >
-            {pct}%
-          </Button>
-        ))}
-      </div>
-      <p className="text-xs mt-2 text-muted">
-        Each card uses {uniqueOnCard} song{uniqueOnCard === 1 ? "" : "s"};{" "}
-        {blankOnCard} square{blankOnCard === 1 ? "" : "s"} stay blank.
-      </p>
-    </div>
-  );
-
   const previewEmptyState = (
     <Window title="Preview">
       <div className="text-center py-8 space-y-3">
         {deck.tracks.length === 0 ? (
           <>
-            <p className="text-sm">Add songs in the Editor to generate cards.</p>
+            <p className="text-sm">Add songs in the deck to generate cards.</p>
             <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary inline-flex items-center gap-2">
               <Edit3 className="w-4 h-4" />
-              Open Deck Editor
+              Open deck
             </Link>
           </>
         ) : (
@@ -306,12 +266,13 @@ export const CardsPage: React.FC = () => {
         isChecking={isChecking}
         progress={gateProgress}
         invalidTracks={invalidTracks}
+        readiness={readiness}
       />
 
       {isMobile ? (
         <PageHeader
           back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
-          title={`Bingo cards`}
+          title={`Cards`}
           primaryAction={
             <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
               <Printer className="w-4 h-4" />
@@ -338,33 +299,31 @@ export const CardsPage: React.FC = () => {
           back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
           title={`Bingo cards — ${deck.name}`}
           primaryAction={
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => void handleDownloadPdf()}
-              disabled={isExportingPdf || exportsDisabled}
-            >
-              {isExportingPdf ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {pdfButtonLabel}
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  {pdfButtonLabel}
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
+                <Printer className="w-4 h-4" />
+                Print
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleDownloadPdf()}
+                disabled={isExportingPdf || exportsDisabled}
+              >
+                {isExportingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {pdfButtonLabel}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    {pdfButtonLabel}
+                  </>
+                )}
+              </Button>
+            </div>
           }
-          overflowItems={[
-            {
-              icon: <Printer className="w-4 h-4" />,
-              label: "Print",
-              onClick: handleBrowserPrint,
-              disabled: exportsDisabled,
-            },
-          ]}
         />
       )}
 
@@ -399,25 +358,31 @@ export const CardsPage: React.FC = () => {
                     onChange={(e) => setGridSize(Number(e.target.value))}
                     aria-label="Grid size"
                   >
-                    {GRID_SIZES.map((size) => (
-                      <option key={size} value={size}>
-                        {size}×{size}
+                    {GRID_SIZES.map((size) => {
+                      const valid = isGridSizeValidForDeck(deck.tracks.length, size);
+                      return (
+                      <option key={size} value={size} disabled={!valid}>
+                        {size}×{size}{!valid ? ` (need ${cellCount(size)}+ songs)` : ""}
                       </option>
-                    ))}
+                    );})}
                   </select>
                 ) : (
                   <div className="flex items-center gap-2">
-                    {GRID_SIZES.map((size) => (
+                    {GRID_SIZES.map((size) => {
+                      const valid = isGridSizeValidForDeck(deck.tracks.length, size);
+                      return (
                       <Button
                         key={size}
                         type="button"
                         active={gridSize === size}
+                        disabled={!valid}
+                        title={valid ? undefined : `Need at least ${cellCount(size)} songs for ${size}×${size}`}
                         onClick={() => setGridSize(size)}
                         className="flex-1"
                       >
                         {size}×{size}
                       </Button>
-                    ))}
+                    );})}
                   </div>
                 )}
               </div>
@@ -454,21 +419,6 @@ export const CardsPage: React.FC = () => {
                 )}
               </div>
 
-              <div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 text-xs font-bold bg-transparent border-0 p-0 text-inherit cursor-pointer w-full text-left"
-                  onClick={() => setShowAdvanced((open) => !open)}
-                  aria-expanded={showAdvanced}
-                >
-                  <ChevronDown
-                    className={`w-4 h-4 shrink-0 transition-transform ${showAdvanced ? "" : "-rotate-90"}`}
-                  />
-                  Advanced
-                </button>
-                {showAdvanced && <div className="mt-3">{bingoPercentSection}</div>}
-              </div>
-
               <Button
                 type="button"
                 className="w-full"
@@ -482,6 +432,9 @@ export const CardsPage: React.FC = () => {
               <p className="text-xs text-muted pt-1 border-t border-[var(--pc-border)]">
                 {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck · {slots} squares
                 per card
+                {!isGridSizeValidForDeck(deck.tracks.length, gridSize)
+                  ? ` · Need ${cellCount(gridSize)}+ songs for this grid`
+                  : ""}
               </p>
             </div>
           </Window>

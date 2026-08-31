@@ -19,7 +19,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Automated fallback search across public Invidious & Piped instances (no YouTube API token required).
   - Direct 1-click manual YouTube link or Video ID override with instant thumbnail validation.
   - Cancellable batch auto-match and embed validation.
-  - **Auto-Fix** for blocked videos — finds and replaces restricted clips from the editor or taskbar notice.
+  - **Fix all songs** for blocked videos — finds and replaces restricted clips from the deck or taskbar notice.
 - 🛡️ **Playability gating:**
   - Verifies YouTube embed permissions (via noembed.com) before hosting or printing cards.
   - Surfaces blocked or unmatched tracks with a filterable list in the editor.
@@ -44,7 +44,8 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - "Call Next Song" randomized non-repeating shuffle bag.
   - Snippet playback controller (auto-pauses when clip ends).
   - Inline video panel with optional draggable floating window.
-  - Crossfade overlap between songs, auto-reveal answers, and auto-call-next chaining.
+  - Crossfade overlap between songs, hide-answer mode (default), and auto-call-next chaining.
+  - **Display mode** (`#/deck/:id/display`) — audience-facing progress view for a projector; syncs with the host via BroadcastChannel. Mirror the display window, not the full host UI.
   - Answer reveal card with countdown/clip-finished trigger or manual toggle.
   - Live searchable history log of called songs, verification, and celebratory Bingo confetti.
   - **Space** toggles play/pause or calls the next song during a live game.
@@ -70,7 +71,7 @@ npm install
 2. Paste a bulk song list (`Artist - Title`, one per line), or
 3. Import a previously exported JSON deck / use the sample deck.
 
-Then open **Editor**, trim clips if needed, resolve any blocked songs, print cards, and host the game.
+Then open **Deck**, trim clips if needed, resolve any blocked songs, print cards, and host the game.
 
 ### 3. Run Development Server
 
@@ -111,7 +112,7 @@ The beacon loads only in production builds and does not use cookies.
 
 ## 📤 Sharing a deck
 
-1. Open a deck in the **Editor** (or use the share button on the home page deck list).
+1. Open a deck (or use the share button on the home page deck list).
 2. Click **Share** — the app uploads a snapshot and gives you a short link like `…/bingo-musical/#/share/Ab12Cd34`.
 3. Send the link on WhatsApp, Telegram, or email (no JSON file required).
 4. Recipients open the link, preview the songs, and click **Add to my decks** to copy it locally.

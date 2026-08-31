@@ -17,6 +17,11 @@ import {
   ensureDeckPlayable,
   InvalidTrackEntry,
 } from "../lib/youtube/playabilityGate";
+import {
+  formatReadinessPrimary,
+  formatReadinessSecondary,
+  getDeckReadiness,
+} from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -111,18 +116,33 @@ export const EditorPage: React.FC = () => {
       title: `${count} song${count > 1 ? "s" : ""} cannot play audio in the game`,
       icon: <AlertTriangle className="w-3.5 h-3.5" />,
       message:
-        "Some videos have playback restrictions outside YouTube. Use Auto-Fix to automatically find and replace them with working versions.",
+        "Some videos have playback restrictions outside YouTube. Use Fix all songs to find and replace them with working versions.",
       duration: 12000,
       actions: [
         {
           id: "auto-fix",
-          label: "Auto-Fix",
+          label: "Fix all songs",
           variant: "primary",
           onClick: () => handleAutoFixBlocked(),
         },
       ],
     });
   }, [deck, showToast, handleAutoFixBlocked]);
+
+  useEffect(() => {
+    if (!deck || statusFilterParam !== "blocked") return;
+    if (getUnplayableTracks(deck.tracks).length > 0) return;
+    setSearchParams((params) => {
+      params.delete("filter");
+      return params;
+    }, { replace: true });
+    showToast({
+      title: "All songs are ready to play",
+      message: "Every track in this deck can be played during hosting.",
+      icon: <Check className="w-3.5 h-3.5" />,
+      duration: 5000,
+    });
+  }, [deck, statusFilterParam, setSearchParams, showToast]);
 
   // Silently verify uncached YouTube links when a deck is opened
   useEffect(() => {
@@ -221,7 +241,7 @@ export const EditorPage: React.FC = () => {
 
   if (!deck) {
     return (
-      <Window title="Deck Editor">
+      <Window title="Deck">
         <p>Loading deck...</p>
       </Window>
     );
@@ -256,6 +276,11 @@ export const EditorPage: React.FC = () => {
     const newDeck = { ...deck, tracks: [track, ...deck.tracks] };
     setDeck(newDeck);
     updateDeck(newDeck);
+    showToast({
+      title: `Added ${track.title}`,
+      message: `${track.artist} is now in your deck.`,
+      duration: 4000,
+    });
   };
 
   const handleAddTracks = (tracks: Track[]) => {
@@ -272,17 +297,16 @@ export const EditorPage: React.FC = () => {
     updateDeck(newDeck);
   };
 
-  const blockedCount = getUnplayableTracks(deck.tracks).length;
-  const playableCount = deck.tracks.length - blockedCount;
+  const readiness = getDeckReadiness(deck.tracks);
   const isTrackBusy = isMatching || isAutoFixing;
   const emptyDeck = isEmptyDeck(deck);
   const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
-  const hostDisabled = isTrackBusy || hostGateChecking || emptyDeck;
+  const hostDisabled = isTrackBusy || hostGateChecking || emptyDeck || !readiness.canHost;
 
   const handleHostLiveGame = async () => {
     if (!deck) return;
 
-    if (canStartGame(deck.tracks)) {
+    if (readiness.canHost && canStartGame(deck.tracks)) {
       navigate(`/deck/${deck.id}/play`);
       return;
     }
@@ -345,7 +369,7 @@ export const EditorPage: React.FC = () => {
                   <span
                     className="pc-button opacity-60 pointer-events-none"
                     aria-disabled
-                    aria-label="Bingo Cards"
+                    aria-label="Cards"
                     tabIndex={-1}
                   >
                     <Printer className="w-4 h-4" />
@@ -355,8 +379,8 @@ export const EditorPage: React.FC = () => {
                 <Link
                   to={`/deck/${deck.id}/cards`}
                   className="pc-button"
-                  aria-label="Bingo Cards"
-                  title="Bingo Cards"
+                    aria-label="Cards"
+                    title="Cards"
                 >
                   <Printer className="w-4 h-4" />
                 </Link>
@@ -366,8 +390,8 @@ export const EditorPage: React.FC = () => {
                 variant="primary"
                 onClick={handleHostLiveGame}
                 disabled={hostDisabled}
-                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Host live game"}
-                aria-label={hostGateChecking ? "Verifying deck…" : "Host live game"}
+                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Host"}
+                aria-label={hostGateChecking ? "Verifying deck…" : "Host"}
               >
                 <Radio className="w-4 h-4" />
               </Button>
@@ -391,13 +415,13 @@ export const EditorPage: React.FC = () => {
               <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
                 <span className="pc-button opacity-60 pointer-events-none" aria-disabled tabIndex={-1}>
                   <Printer className="w-4 h-4" />
-                  Bingo Cards
+                  Cards
                 </span>
               </span>
             ) : (
               <Link to={`/deck/${deck.id}/cards`} className="pc-button">
                 <Printer className="w-4 h-4" />
-                Bingo Cards
+                Cards
               </Link>
             )}
             <Button
@@ -405,16 +429,16 @@ export const EditorPage: React.FC = () => {
               variant="primary"
               onClick={handleHostLiveGame}
               disabled={hostDisabled}
-              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : readiness.tooFewForHost ? `Need ${readiness.minHostTracks}+ playable songs` : undefined}
             >
               <Radio className="w-4 h-4" />
-              {hostGateChecking ? "Verifying..." : "Host Live Game"}
+              {hostGateChecking ? "Verifying..." : "Host"}
             </Button>
           </div>
         </div>
       )}
 
-      <Window title="Deck Properties">
+      <Window title={isMobile ? "Deck" : "Deck Properties"}>
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             {isEditingName ? (
@@ -438,6 +462,7 @@ export const EditorPage: React.FC = () => {
                 </Button>
               </div>
             ) : (
+              !isMobile && (
               <div className="flex items-center gap-3">
                 <h1 className="text-xl font-bold truncate">{deck.name}</h1>
                 <button
@@ -449,13 +474,16 @@ export const EditorPage: React.FC = () => {
                   <Edit3 className="w-4 h-4" />
                 </button>
               </div>
+              )
             )}
             <p className="mt-2 text-xs flex flex-wrap items-center gap-2">
-              <span>{deck.tracks.length} Total Tracks</span>
-              <span>·</span>
-              <span className={blockedCount > 0 ? "text-pc-warning font-semibold" : "text-pc-success font-semibold"}>
-                {playableCount} Ready / {blockedCount} Need Attention
-              </span>
+              <span>{formatReadinessPrimary(readiness)}</span>
+              {formatReadinessSecondary(readiness) ? (
+                <>
+                  <span>·</span>
+                  <span className="text-pc-warning font-semibold">{formatReadinessSecondary(readiness)}</span>
+                </>
+              ) : null}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -514,7 +542,7 @@ export const EditorPage: React.FC = () => {
                 </p>
                 <p className="mt-2">
                   {hostGateInvalid.length} song{hostGateInvalid.length > 1 ? "s" : ""} cannot be played.
-                  Use Auto-Fix or fix them manually, then try again.
+                  Use Fix all songs or fix them manually, then try again.
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2 pt-2">
@@ -525,7 +553,7 @@ export const EditorPage: React.FC = () => {
                   disabled={isTrackBusy}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  Auto-Fix Songs
+                  Fix all songs
                 </Button>
                 <Link
                   to={`/deck/${deck.id}?filter=blocked`}
@@ -545,7 +573,7 @@ export const EditorPage: React.FC = () => {
 
       {showAddTrackModal && (
         <PcModal
-          title="Add a song"
+          title={`Add a song (${deck.tracks.length} in deck)`}
           onClose={() => setShowAddTrackModal(false)}
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
         >

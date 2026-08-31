@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 import { Button, Overlay, Window } from "@miquelt9/pc-ui";
 import { AlertTriangle, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
 import { BackButton } from "./BackButton";
+import {
+  DeckReadiness,
+  formatReadinessPrimary,
+  formatReadinessSecondary,
+} from "../../lib/decks/readiness";
 import { InvalidTrackEntry } from "../../lib/youtube/playabilityGate";
 import { BatchValidationProgress } from "../../lib/youtube/validator";
 
@@ -12,6 +17,7 @@ interface PlayabilityGateOverlayProps {
   isChecking: boolean;
   progress: BatchValidationProgress | null;
   invalidTracks: InvalidTrackEntry[];
+  readiness?: DeckReadiness;
   onRetry?: () => void;
 }
 
@@ -21,6 +27,7 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
   isChecking,
   progress,
   invalidTracks,
+  readiness,
   onRetry,
 }) => {
   const isBlocked = isChecking || invalidTracks.length > 0;
@@ -29,11 +36,11 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
 
   const showCheckingOnly = isChecking && invalidTracks.length === 0;
 
-  const title = context === "host" ? "Cannot Start Game" : "Cannot Print Cards";
+  const title = context === "host" ? "Cannot start game" : "Cannot print cards";
   const subtitle =
     context === "host"
-      ? "All songs must be playable before starting the game."
-      : "All songs must be playable before printing or exporting bingo cards.";
+      ? "All songs must be ready to play before hosting."
+      : "All songs must be ready to play before printing cards.";
 
   return (
     <Overlay className="print:hidden">
@@ -87,10 +94,19 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
               <AlertTriangle className="w-5 h-5 text-pc-warning shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-pc-warning">{subtitle}</p>
-                <p className="text-pc-warning mt-1">
-                  {invalidTracks.length} song{invalidTracks.length === 1 ? "" : "s"} cannot be played
-                  in the app. Fix them in the Deck Editor before continuing.
-                </p>
+                {readiness ? (
+                  <p className="text-pc-warning mt-1">
+                    {formatReadinessPrimary(readiness)}
+                    {formatReadinessSecondary(readiness)
+                      ? ` · ${formatReadinessSecondary(readiness)}`
+                      : ""}
+                  </p>
+                ) : (
+                  <p className="text-pc-warning mt-1">
+                    {invalidTracks.length} song{invalidTracks.length === 1 ? "" : "s"} cannot be played
+                    in the app.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -117,18 +133,15 @@ export const PlayabilityGateOverlay: React.FC<PlayabilityGateOverlayProps> = ({
                 to={`/deck/${deckId}?filter=blocked`}
                 className="pc-button pc-button--primary"
               >
-                Fix in Deck Editor
+                Fix all songs
               </Link>
               {onRetry && (
                 <Button type="button" onClick={onRetry}>
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Re-check All Songs
+                  Re-check all songs
                 </Button>
               )}
-              <BackButton
-                fallbackTo={`/deck/${deckId}`}
-                fallbackLabel="Deck editor"
-              />
+              <BackButton fallbackTo={`/deck/${deckId}`} fallbackLabel="Deck" />
             </div>
           </div>
         )}

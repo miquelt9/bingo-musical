@@ -30,8 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate sample deck embeds
+        run: npm run validate:sample-deck
+
       - name: Build
-        run: npm run build
+        run: tsc && vite build
         env:
           VITE_SHARE_API_URL: ${{ secrets.VITE_SHARE_API_URL }}
           VITE_CF_WEB_ANALYTICS_TOKEN: ${{ secrets.VITE_CF_WEB_ANALYTICS_TOKEN }}

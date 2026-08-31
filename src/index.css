@@ -226,6 +226,133 @@
   height: 100%;
 }
 
+.youtube-player--privacy iframe {
+  pointer-events: none;
+}
+
+.youtube-player--privacy .youtube-player-mount {
+  overflow: hidden;
+}
+
+.display-page {
+  min-height: 100dvh;
+  background: var(--pc-desktop-bg, #008080);
+  color: var(--pc-text, #000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.display-page__inner {
+  width: min(100%, 56rem);
+  text-align: center;
+}
+
+.display-page__header {
+  margin-bottom: 2rem;
+}
+
+.display-page__deck-name {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 800;
+  margin: 0;
+}
+
+.display-page__call-count {
+  margin: 0.5rem 0 0;
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-weight: 600;
+}
+
+.display-page__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 20rem;
+}
+
+.display-page__waiting,
+.display-page__listening,
+.display-page__revealed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.display-page__icon {
+  width: 4rem;
+  height: 4rem;
+  opacity: 0.5;
+}
+
+.display-page__status {
+  font-size: clamp(1.75rem, 5vw, 3rem);
+  font-weight: 800;
+  margin: 0;
+}
+
+.display-page__mystery {
+  width: min(16rem, 60vw);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.display-page__question {
+  font-size: clamp(4rem, 15vw, 8rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.display-page__progress {
+  width: min(100%, 28rem);
+  height: 1rem;
+  overflow: hidden;
+}
+
+.display-page__progress-fill {
+  height: 100%;
+  background: var(--pc-titlebar-bg, #000080);
+  transition: width 100ms linear;
+}
+
+.display-page__art {
+  width: min(16rem, 50vw);
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+
+.display-page__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.display-page__art--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.display-page__title {
+  font-size: clamp(1.5rem, 4vw, 2.75rem);
+  font-weight: 800;
+  margin: 0;
+  max-width: 100%;
+}
+
+.display-page__artist {
+  font-size: clamp(1rem, 2.5vw, 1.75rem);
+  margin: 0;
+  opacity: 0.85;
+}
+
+
 .video-window-player-slot--active {
   z-index: 2;
   pointer-events: auto;
@@ -865,6 +992,41 @@
 .home-deck-card-stats {
   margin: 0;
   opacity: 0.9;
+}
+
+.home-deck-health {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+
+.home-deck-health--ready {
+  color: var(--pc-success);
+  background: color-mix(in srgb, var(--pc-success) 12%, transparent);
+}
+
+.home-deck-health--warn {
+  color: var(--pc-warning);
+  background: color-mix(in srgb, var(--pc-warning) 12%, transparent);
+}
+
+.home-deck-health--muted {
+  color: var(--pc-muted);
+}
+
+.home-deck-recommended {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pc-titlebar-bg);
+  background: color-mix(in srgb, var(--pc-titlebar-bg) 15%, transparent);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
 }
 
 .home-deck-card-actions {

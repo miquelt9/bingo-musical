@@ -26,12 +26,21 @@ import {
   preloadClip,
   setCrossfadeConfig,
   setPlaybackFadeConfig,
+  setPlayerPrivacyMode,
   continueClipPlayback,
   activatePreloadedClip,
   PlayerPlaybackState,
   Clip,
 } from "../lib/youtube/player";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
+import { getDeckReadiness } from "../lib/decks/readiness";
+import {
+  HOST_SESSION_KEY,
+  getDisplayChannelName,
+  HostDisplayState,
+  HostSessionData,
+  SerializedCalledEntry,
+} from "../lib/host/session";
 import { trackEvent } from "../lib/analytics/trackEvent";
 import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -45,22 +54,6 @@ export interface CalledEntry {
 const REVEAL_BEFORE_CHAIN_MS = 3000;
 const DEFAULT_CROSSFADE_MS = 1500;
 const CROSSFADE_SESSION_KEY = "bingo.host.crossfadeOverlapMs";
-const HOST_SESSION_KEY = "bingo.host.session";
-
-interface SerializedCalledEntry {
-  callNumber: number;
-  trackId: string;
-  calledAt: string;
-}
-
-interface HostSessionData {
-  uncalledIds: string[];
-  calledHistory: SerializedCalledEntry[];
-  currentCall: SerializedCalledEntry | null;
-  isRevealed: boolean;
-  autoRevealOnEnd: boolean;
-  autoCallNextOnEnd: boolean;
-}
 
 function trackToClip(track: Track): Clip | null {
   if (!track.youtubeVideoId) return null;
@@ -128,7 +121,7 @@ function readHostSession(
       calledHistory,
       currentCall,
       isRevealed: data.isRevealed ?? false,
-      autoRevealOnEnd: data.autoRevealOnEnd ?? true,
+      autoRevealOnEnd: data.autoRevealOnEnd ?? false,
       autoCallNextOnEnd: data.autoCallNextOnEnd ?? true,
     };
   } catch {
@@ -190,12 +183,14 @@ export const HostPage: React.FC = () => {
   const [calledHistory, setCalledHistory] = useState<CalledEntry[]>([]);
   const [currentCall, setCurrentCall] = useState<CalledEntry | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
-  const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(true);
+  const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(false);
   const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
   const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [historySearch, setHistorySearch] = useState<string>("");
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showContinueModal, setShowContinueModal] = useState(false);
+  const [showBingoModal, setShowBingoModal] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
 
   const chainTimeoutRef = useRef<number | null>(null);
@@ -205,6 +200,8 @@ export const HostPage: React.FC = () => {
   const autoRevealOnEndRef = useRef(autoRevealOnEnd);
   const crossfadeOverlapMsRef = useRef(crossfadeOverlapMs);
   const handleCallNextRef = useRef<() => void>(() => {});
+  const pendingRestoreRef = useRef<ReturnType<typeof readHostSession> | null>(null);
+  const displayChannelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
     uncalledIdsRef.current = uncalledIds;
@@ -273,6 +270,12 @@ export const HostPage: React.FC = () => {
     onTracksUpdated: handleTracksUpdated,
   });
 
+  const readiness = useMemo(
+    () => getDeckReadiness(deck?.tracks ?? []),
+    [deck?.tracks]
+  );
+  const canHost = isPlayable && readiness.canHost;
+
   const clearChainTimeout = useCallback(() => {
     if (chainTimeoutRef.current !== null) {
       window.clearTimeout(chainTimeoutRef.current);
@@ -307,7 +310,7 @@ export const HostPage: React.FC = () => {
   }, []);
 
   const handleCallNext = useCallback(() => {
-    if (!deck || !isPlayable || uncalledIds.length === 0) return;
+    if (!deck || !canHost || uncalledIds.length === 0) return;
 
     clearChainTimeout();
 
@@ -332,7 +335,7 @@ export const HostPage: React.FC = () => {
     setUncalledIds(remaining);
     setCurrentCall(newEntry);
     setCalledHistory((prev) => [newEntry, ...prev]);
-    setIsRevealed(true);
+    setIsRevealed(false);
 
     if (clip) {
       if (
@@ -350,7 +353,7 @@ export const HostPage: React.FC = () => {
         }
       }, REVEAL_BEFORE_CHAIN_MS);
     }
-  }, [deck, isPlayable, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout, autoCallNextOnEnd, preloadNextTrack]);
+  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout, autoCallNextOnEnd, preloadNextTrack]);
 
   useEffect(() => {
     handleCallNextRef.current = handleCallNext;
@@ -389,12 +392,8 @@ export const HostPage: React.FC = () => {
       (restored.calledHistory.length > 0 || restored.uncalledIds.length > 0);
 
     if (hasRestorableSession) {
-      setUncalledIds(restored.uncalledIds);
-      setCalledHistory(restored.calledHistory);
-      setCurrentCall(restored.currentCall);
-      setIsRevealed(restored.isRevealed);
-      setAutoRevealOnEnd(restored.autoRevealOnEnd);
-      setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
+      pendingRestoreRef.current = restored;
+      setShowContinueModal(true);
     } else {
       clearChainTimeout();
       const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
@@ -408,7 +407,7 @@ export const HostPage: React.FC = () => {
         calledHistory: [],
         currentCall: null,
         isRevealed: false,
-        autoRevealOnEnd: true,
+        autoRevealOnEnd: false,
         autoCallNextOnEnd: true,
       });
       setSessionReady(true);
@@ -417,6 +416,7 @@ export const HostPage: React.FC = () => {
 
   useEffect(() => {
     if (!deck || sessionReady || initializedDeckIdRef.current !== deck.id) return;
+    if (pendingRestoreRef.current) return;
     setSessionReady(true);
   }, [
     deck,
@@ -496,7 +496,101 @@ export const HostPage: React.FC = () => {
     initGame();
   };
 
+  const applyRestoredSession = useCallback(() => {
+    const restored = pendingRestoreRef.current;
+    if (!restored) return;
+    setUncalledIds(restored.uncalledIds);
+    setCalledHistory(restored.calledHistory);
+    setCurrentCall(restored.currentCall);
+    setIsRevealed(restored.isRevealed);
+    setAutoRevealOnEnd(restored.autoRevealOnEnd);
+    setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
+    pendingRestoreRef.current = null;
+    setSessionReady(true);
+  }, []);
+
+  const handleContinueGame = () => {
+    setShowContinueModal(false);
+    applyRestoredSession();
+  };
+
+  const handleStartNewGame = () => {
+    setShowContinueModal(false);
+    pendingRestoreRef.current = null;
+    if (!deck) return;
+    clearChainTimeout();
+    const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
+    setUncalledIds(shuffled);
+    setCalledHistory([]);
+    setCurrentCall(null);
+    setIsRevealed(false);
+    stopPlayback();
+    writeHostSession(deck.id, {
+      uncalledIds: shuffled,
+      calledHistory: [],
+      currentCall: null,
+      isRevealed: false,
+      autoRevealOnEnd: false,
+      autoCallNextOnEnd: true,
+    });
+    setSessionReady(true);
+  };
+
+  const openDisplayWindow = useCallback(() => {
+    if (!deck) return;
+    const url = `${window.location.origin}${window.location.pathname}#/deck/${deck.id}/display`;
+    window.open(url, `bingo-display-${deck.id}`, "noopener,noreferrer,width=1024,height=768");
+  }, [deck]);
+
+  const buildDisplayState = useCallback((): HostDisplayState | null => {
+    if (!deck) return null;
+    const isPlayingNow =
+      playerState?.state === "playing" &&
+      playerState?.currentClip?.trackId === currentCall?.track.id;
+    return {
+      callNumber: currentCall?.callNumber ?? 0,
+      totalCount: deck.tracks.length,
+      calledCount: calledHistory.length,
+      isRevealed,
+      isPlaying: Boolean(isPlayingNow),
+      progress: isPlayingNow ? playerState?.progress ?? 0 : 0,
+      title: isRevealed && currentCall ? currentCall.track.title : null,
+      artist: isRevealed && currentCall ? currentCall.track.artist : null,
+      albumArtUrl: isRevealed && currentCall ? currentCall.track.albumArtUrl : null,
+    };
+  }, [deck, playerState, currentCall, calledHistory.length, isRevealed]);
+
+  const broadcastDisplayState = useCallback(() => {
+    const payload = buildDisplayState();
+    if (!payload || !displayChannelRef.current) return;
+    displayChannelRef.current.postMessage({ type: "display-state", payload });
+  }, [buildDisplayState]);
+
+  useEffect(() => {
+    if (!deck) return;
+    try {
+      displayChannelRef.current = new BroadcastChannel(getDisplayChannelName(deck.id));
+    } catch {
+      displayChannelRef.current = null;
+    }
+    return () => {
+      displayChannelRef.current?.close();
+      displayChannelRef.current = null;
+    };
+  }, [deck?.id]);
+
+  useEffect(() => {
+    if (!sessionReady) return;
+    broadcastDisplayState();
+  }, [sessionReady, broadcastDisplayState]);
+
+  useEffect(() => {
+    setPlayerPrivacyMode(!isRevealed);
+  }, [isRevealed]);
+
   const triggerConfetti = () => {
+    pausePlayback();
+
     const defaults = {
       particleCount: 80,
       spread: 55,
@@ -509,11 +603,12 @@ export const HostPage: React.FC = () => {
 
     confetti({ ...defaults, angle: 60, origin: { x: 0, y: 0.55 } });
     confetti({ ...defaults, angle: 120, origin: { x: 1, y: 0.55 } });
+    setShowBingoModal(true);
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isPlayable) return;
+      if (!canHost) return;
       if (["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement).tagName)) {
         return;
       }
@@ -545,6 +640,7 @@ export const HostPage: React.FC = () => {
     handleCallNext,
     handleTogglePlayPause,
     isPlayable,
+    canHost,
   ]);
 
   if (!deck) {
@@ -600,8 +696,9 @@ export const HostPage: React.FC = () => {
       onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
       crossfadeOverlapMs={crossfadeOverlapMs}
       onCrossfadeOverlapChange={persistCrossfadeMs}
+      onOpenDisplay={openDisplayWindow}
       gameStarted={calledHistory.length > 0}
-      disabled={!isPlayable}
+      disabled={!canHost}
     />
   );
 
@@ -675,7 +772,7 @@ export const HostPage: React.FC = () => {
         className={`w-full pl-8 ${isMobile ? "text-base" : ""}`}
         value={historySearch}
         onChange={(e) => setHistorySearch(e.target.value)}
-        placeholder="Verify song: type title or artist..."
+        placeholder="Search called songs only…"
       />
     </div>
   );
@@ -688,6 +785,7 @@ export const HostPage: React.FC = () => {
         isChecking={isChecking}
         progress={gateProgress}
         invalidTracks={invalidTracks}
+        readiness={readiness}
         onRetry={() => void runCheck(true)}
       />
 
@@ -757,6 +855,51 @@ export const HostPage: React.FC = () => {
             </div>
           </Window>
         </Split>
+      )}
+
+      {showContinueModal && (
+        <PcModal title="Continue Game?" onClose={handleStartNewGame}>
+          <p className="text-sm mb-4">
+            A game session for this deck was found. Continue where you left off, or start a fresh shuffle?
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={handleStartNewGame}>
+              Start New Game
+            </Button>
+            <Button type="button" variant="primary" onClick={handleContinueGame}>
+              Continue Game
+            </Button>
+          </div>
+        </PcModal>
+      )}
+
+      {showBingoModal && (
+        <PcModal title="Bingo!" onClose={() => setShowBingoModal(false)}>
+          <p className="text-sm mb-3">
+            Playback paused. Verify the winning card against these recent calls:
+          </p>
+          <ul className="space-y-2 mb-4">
+            {calledHistory.slice(0, 5).map((item) => (
+              <li
+                key={item.callNumber}
+                className="flex items-center gap-2 p-2 pc-bevel-inset text-xs"
+              >
+                <span className="font-bold shrink-0">#{item.callNumber}</span>
+                <span className="truncate">
+                  {item.track.title} — {item.track.artist}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted mb-4">
+            Use the called songs log search to confirm the player&apos;s claim.
+          </p>
+          <div className="flex justify-end">
+            <Button type="button" variant="primary" onClick={() => setShowBingoModal(false)}>
+              Resume Host
+            </Button>
+          </div>
+        </PcModal>
       )}
 
       {showResetModal && (

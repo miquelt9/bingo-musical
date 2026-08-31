@@ -90,16 +90,16 @@ export function useAutoFixBlocked(
 
       if (recheck.playable) {
         showToast({
-          title: "Auto-Fix Complete",
+          title: "Fix all songs complete",
           icon: <ShieldCheck className="w-3.5 h-3.5" />,
           message: "All songs verified! Replaced restricted tracks with playable alternatives.",
           duration: 8000,
         });
       } else {
         showToast({
-          title: "Auto-Fix Complete",
+          title: "Fix all songs complete",
           icon: <AlertTriangle className="w-3.5 h-3.5" />,
-          message: `Auto-fix complete, but ${recheck.invalidTracks.length} song${
+          message: `Fix all songs finished, but ${recheck.invalidTracks.length} song${
             recheck.invalidTracks.length > 1 ? "s" : ""
           } still need attention.`,
           duration: 12000,

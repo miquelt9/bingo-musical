@@ -139,7 +139,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
       <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[9px] text-zinc-400 font-medium">
         <span>Musical Bingo Creator</span>
         <span>
-          Mark {gridSize} in a row. Dark tiles are blocked spaces.
+          Mark {gridSize} in a row. Empty squares appear when the deck has fewer songs than cells.
         </span>
       </div>
     </div>

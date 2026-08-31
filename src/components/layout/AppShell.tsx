@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
   FolderOpen,
@@ -25,9 +25,6 @@ import {
   setVolume,
   toggleMute,
 } from "../../lib/youtube/player";
-function formatClock(date: Date) {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { decks, activeDeck, loadDeck } = useDeck();
@@ -46,17 +43,11 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   useAutoDeleteEmptyDeckOnLeave();
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
-  const [clock, setClock] = useState(() => formatClock(new Date()));
 
   useEffect(() => {
     return subscribeToPlayerState((state) => {
       setPlayerState(state);
     });
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(formatClock(new Date())), 1000);
-    return () => window.clearInterval(timer);
   }, []);
 
   const isPlaying = playerState?.state === "playing";
@@ -143,9 +134,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <YoutubePlayerEngine />
 
       <Taskbar className="print:hidden">
-        <Link to="/" className="pc-button pc-start-btn hidden sm:inline-flex">
-          Start
-        </Link>
         <NavLink
           to="/"
           end
@@ -159,12 +147,12 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <NavLink
           to={currentDeckId ? `/deck/${currentDeckId}` : "/"}
           end
-          title="Editor"
-          aria-label="Editor"
+          title="Deck"
+          aria-label="Deck"
           className={() => taskbarItemClass("editor")}
         >
           <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Editor</span>
+          <span className="hidden sm:inline">Deck</span>
         </NavLink>
         <NavLink
           to={currentDeckId ? `/deck/${currentDeckId}/cards` : "/"}
@@ -210,9 +198,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </select>
         )}
 
-        <div className="pc-taskbar-trailing">
-          <div className="pc-taskbar-clock hidden sm:block">{clock}</div>
-        </div>
+        <div className="pc-taskbar-trailing" />
       </Taskbar>
     </Desktop>
   );

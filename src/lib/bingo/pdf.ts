@@ -160,7 +160,7 @@ export async function generateBingoPdf(
     doc.setFontSize(7.5);
     doc.setTextColor(161, 161, 170);
     doc.text("Musical Bingo Creator", marginX, footerY);
-    doc.text(`Card #${card.cardNumber} of ${cards.length} · Mark ${gridSize} in a row`, pageWidth - marginX, footerY, {
+    doc.text(`Card #${card.cardNumber} of ${cards.length} · Mark ${gridSize} in a row · empty squares = fewer songs than cells`, pageWidth - marginX, footerY, {
       align: "right",
     });
 

@@ -57,15 +57,33 @@ interface PlayerSlot {
   preloadedClip: Clip | null;
 }
 
-const PLAYER_VARS: YT.PlayerVars = {
+const PLAYER_VARS_BASE: YT.PlayerVars = {
   autoplay: 0,
-  controls: 1,
   modestbranding: 1,
   rel: 0,
   playsinline: 1,
   enablejsapi: 1,
   origin: typeof window !== "undefined" ? window.location.origin : "",
 };
+
+let privacyModeHidden = true;
+
+function getPlayerVars(): YT.PlayerVars {
+  return {
+    ...PLAYER_VARS_BASE,
+    controls: privacyModeHidden ? 0 : 1,
+    cc_load_policy: privacyModeHidden ? 0 : undefined,
+    iv_load_policy: privacyModeHidden ? 3 : undefined,
+  };
+}
+
+export function setPlayerPrivacyMode(hidden: boolean): void {
+  privacyModeHidden = hidden;
+  if (!slots) return;
+  for (const slot of slots) {
+    slot.container.classList.toggle("youtube-player--privacy", hidden);
+  }
+}
 
 let slots: [PlayerSlot, PlayerSlot] | null = null;
 let playerMountCount = 0;
@@ -294,7 +312,7 @@ function createPlayer(container: HTMLElement, slotIndex: number): Promise<YT.Pla
       const ytPlayer = new window.YT!.Player(mount, {
         width: "100%",
         height: "100%",
-        playerVars: PLAYER_VARS,
+        playerVars: getPlayerVars(),
         events: {
           onReady: () => {
             if (slotIndex === activeSlotIndex) {
@@ -367,6 +385,7 @@ export async function mountDualPlayers(
   if (!slots) return;
   slots[0].player = primaryPlayer;
   slots[1].player = standbyPlayer;
+  setPlayerPrivacyMode(privacyModeHidden);
   setVisibleSlot(0);
   updateActiveElementId();
   notifyListeners();

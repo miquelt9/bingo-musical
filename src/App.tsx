@@ -8,6 +8,7 @@ import { HomePage } from "./pages/HomePage";
 import { EditorPage } from "./pages/EditorPage";
 import { CardsPage } from "./pages/CardsPage";
 import { HostPage } from "./pages/HostPage";
+import { DisplayPage } from "./pages/DisplayPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { SharedDeckPage } from "./pages/SharedDeckPage";
@@ -36,9 +37,17 @@ export const App: React.FC = () => {
       <ThemeProvider>
         <ToastProvider>
           <DeckProvider>
-            <AppShell>
-              <AppRoutes />
-            </AppShell>
+            <Routes>
+              <Route path="/deck/:id/display" element={<DisplayPage />} />
+              <Route
+                path="*"
+                element={
+                  <AppShell>
+                    <AppRoutes />
+                  </AppShell>
+                }
+              />
+            </Routes>
           </DeckProvider>
         </ToastProvider>
       </ThemeProvider>

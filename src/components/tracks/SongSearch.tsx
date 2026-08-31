@@ -24,11 +24,15 @@ interface SongSearchProps {
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void;
   onAddTracks?: (tracks: Track[]) => void;
+  onAfterAdd?: () => void;
 }
 
 const VIEWPORT_MARGIN = 8;
 const SUGGESTION_GAP = 4;
 const SUGGESTION_MAX_HEIGHT = 256;
+const SUGGESTION_MIN_HEIGHT = 80;
+/** Above modal overlay (--pc-overlay-z: 1000) so portaled suggestions stay clickable. */
+const SUGGESTION_Z_INDEX = 1050;
 
 function computeSuggestionPosition(anchorRect: DOMRect): {
   top: number;
@@ -45,8 +49,14 @@ function computeSuggestionPosition(anchorRect: DOMRect): {
   const spaceBelow = window.innerHeight - anchorRect.bottom - VIEWPORT_MARGIN;
   const spaceAbove = anchorRect.top - VIEWPORT_MARGIN;
 
-  if (spaceBelow >= spaceAbove) {
-    const maxHeight = Math.min(SUGGESTION_MAX_HEIGHT, Math.max(spaceBelow - SUGGESTION_GAP, 80));
+  const openDown =
+    spaceBelow >= SUGGESTION_MIN_HEIGHT || spaceBelow >= spaceAbove;
+
+  if (openDown) {
+    const maxHeight = Math.min(
+      SUGGESTION_MAX_HEIGHT,
+      Math.max(spaceBelow - SUGGESTION_GAP, SUGGESTION_MIN_HEIGHT),
+    );
     return {
       top: anchorRect.bottom + SUGGESTION_GAP,
       left,
@@ -55,7 +65,10 @@ function computeSuggestionPosition(anchorRect: DOMRect): {
     };
   }
 
-  const maxHeight = Math.min(SUGGESTION_MAX_HEIGHT, Math.max(spaceAbove - SUGGESTION_GAP, 80));
+  const maxHeight = Math.min(
+    SUGGESTION_MAX_HEIGHT,
+    Math.max(spaceAbove - SUGGESTION_GAP, SUGGESTION_MIN_HEIGHT),
+  );
   return {
     top: Math.max(VIEWPORT_MARGIN, anchorRect.top - maxHeight - SUGGESTION_GAP),
     left,
@@ -85,6 +98,7 @@ export const SongSearch: React.FC<SongSearchProps> = ({
   existingVideoIds = [],
   onAddTrack,
   onAddTracks,
+  onAfterAdd,
 }) => {
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -379,6 +393,11 @@ export const SongSearch: React.FC<SongSearchProps> = ({
 
       onAddTrack(hitToTrack(hit, selectedCatalog ?? undefined));
       setAddedIds((prev) => new Set(prev).add(hit.videoId));
+      setHits([]);
+      setKind(null);
+      setQuery("");
+      setSelectedCatalog(null);
+      onAfterAdd?.();
     } finally {
       setAddingVideoId(null);
     }
@@ -389,6 +408,13 @@ export const SongSearch: React.FC<SongSearchProps> = ({
       (hit) => !alreadyInDeck.has(hit.videoId) && !addedIds.has(hit.videoId)
     );
     if (fresh.length === 0) return;
+
+    if (!selectedCatalog) {
+      const ok = window.confirm(
+        "These results may not match your search. Add all playable videos anyway?"
+      );
+      if (!ok) return;
+    }
 
     setIsCheckingEmbeds(true);
     setError(null);
@@ -422,6 +448,12 @@ export const SongSearch: React.FC<SongSearchProps> = ({
 
       if (blocked > 0) {
         setError(`Added ${playable.length} playable video${playable.length === 1 ? "" : "s"}. Skipped ${blocked} with embedding disabled.`);
+      } else {
+        setHits([]);
+        setKind(null);
+        setQuery("");
+        setSelectedCatalog(null);
+        onAfterAdd?.();
       }
     } finally {
       setIsCheckingEmbeds(false);
@@ -464,13 +496,14 @@ export const SongSearch: React.FC<SongSearchProps> = ({
       id="song-suggestion-list"
       ref={suggestionListRef}
       role="listbox"
-      className="pc-window overflow-y-auto z-[100]"
+      className="pc-window overflow-y-auto"
       style={{
         position: "fixed",
         top: suggestionPosition?.top ?? -9999,
         left: suggestionPosition?.left ?? -9999,
         width: suggestionPosition?.width,
         maxHeight: suggestionPosition?.maxHeight,
+        zIndex: SUGGESTION_Z_INDEX,
         visibility: suggestionPosition ? "visible" : "hidden",
       }}
     >
@@ -515,7 +548,10 @@ export const SongSearch: React.FC<SongSearchProps> = ({
 
   return (
     <div className="space-y-3">
-      <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
+      <form
+        onSubmit={handleSearch}
+        className={`flex gap-2 ${suggestionsOpen ? "flex-col" : "flex-col sm:flex-row"}`}
+      >
         <div ref={inputContainerRef} className="relative flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
           <input
@@ -529,10 +565,22 @@ export const SongSearch: React.FC<SongSearchProps> = ({
             }
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
+              const next = e.target.value;
+              setQuery(next);
               setSelectedCatalog(null);
               setError(null);
               setShowSuggestions(true);
+            }}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text").trim();
+              if (!looksLikeYoutubeInput(pasted)) return;
+              e.preventDefault();
+              setQuery(pasted);
+              setSelectedCatalog(null);
+              setError(null);
+              setShowSuggestions(false);
+              skipCatalogQuery.current = pasted;
+              void runYoutubeSearch(pasted);
             }}
             onKeyDown={handleQueryKeyDown}
             onFocus={() => {
