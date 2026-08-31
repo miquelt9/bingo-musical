@@ -1,11 +1,13 @@
 export interface Env {
   SHARED_DECKS: KVNamespace;
+  USAGE_EVENTS?: AnalyticsEngineDataset;
   /** Comma-separated browser origins allowed for CORS (e.g. https://user.github.io). */
   ALLOWED_ORIGINS?: string;
 }
 
 const SHARE_ID_PATTERN = /^[a-zA-Z0-9_-]{6,12}$/;
 const MAX_BODY_BYTES = 256 * 1024;
+const MAX_EVENT_BODY_BYTES = 512;
 const MAX_SONGS = 150;
 const SHARE_TTL_SECONDS = 60 * 60 * 24 * 365;
 const SHARE_KEY_PREFIX = "share:";
@@ -13,6 +15,23 @@ const RATE_LIMIT_PREFIX = "rl:";
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_SEC = 60;
 const SHARE_ID_RETRIES = 5;
+
+const ALLOWED_EVENTS = new Set([
+  "host_started",
+  "cards_printed",
+  "deck_imported",
+  "page_view",
+]);
+
+const ALLOWED_ROUTE_LABELS = new Set([
+  "home",
+  "editor",
+  "cards",
+  "host",
+  "import",
+  "share",
+  "settings",
+]);
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
@@ -51,8 +70,26 @@ function jsonResponse(
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+function emptyResponse(request: Request, env: Env, status = 204): Response {
+  return new Response(null, {
+    status,
+    headers: corsHeaders(request, env),
+  });
+}
+
 function errorResponse(request: Request, env: Env, message: string, status: number): Response {
   return jsonResponse(request, env, { error: message }, status);
+}
+
+function trackUsageEvent(env: Env, event: string, route?: string): void {
+  if (!env.USAGE_EVENTS) return;
+
+  const blobs = route ? [event, route] : [event];
+  env.USAGE_EVENTS.writeDataPoint({
+    blobs,
+    doubles: [],
+    indexes: [],
+  });
 }
 
 function generateShareId(length = 8): string {
@@ -151,6 +188,7 @@ async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
     return errorResponse(request, env, "Could not create share link. Please try again.", 503);
   }
 
+  trackUsageEvent(env, "share_created");
   return jsonResponse(request, env, { shareId }, 201);
 }
 
@@ -161,15 +199,55 @@ async function handleGetDeck(request: Request, env: Env, shareId: string): Promi
 
   const stored = await env.SHARED_DECKS.get(`${SHARE_KEY_PREFIX}${shareId}`);
   if (!stored) {
+    trackUsageEvent(env, "share_not_found");
     return errorResponse(request, env, "Shared deck not found.", 404);
   }
 
   try {
     const payload = JSON.parse(stored);
+    trackUsageEvent(env, "share_opened");
     return jsonResponse(request, env, payload, 200);
   } catch {
     return errorResponse(request, env, "Stored deck is corrupted.", 500);
   }
+}
+
+async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
+  if (!(await checkRateLimit(request, env))) {
+    return errorResponse(request, env, "Too many requests. Please try again later.", 429);
+  }
+
+  const contentLength = Number(request.headers.get("Content-Length") ?? "0");
+  if (contentLength > MAX_EVENT_BODY_BYTES) {
+    return errorResponse(request, env, "Event payload is too large.", 413);
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse(request, env, "Invalid JSON body.", 400);
+  }
+
+  if (!body || typeof body !== "object") {
+    return errorResponse(request, env, "Invalid event payload.", 400);
+  }
+
+  const { event, route } = body as { event?: unknown; route?: unknown };
+  if (typeof event !== "string" || !ALLOWED_EVENTS.has(event)) {
+    return errorResponse(request, env, "Invalid event.", 400);
+  }
+
+  if (route !== undefined) {
+    if (typeof route !== "string" || !ALLOWED_ROUTE_LABELS.has(route)) {
+      return errorResponse(request, env, "Invalid route.", 400);
+    }
+    trackUsageEvent(env, event, route);
+  } else {
+    trackUsageEvent(env, event);
+  }
+
+  return emptyResponse(request, env);
 }
 
 export default {
@@ -190,6 +268,10 @@ export default {
     const match = url.pathname.match(/^\/api\/decks\/([^/]+)$/);
     if (match && request.method === "GET") {
       return handleGetDeck(request, env, decodeURIComponent(match[1]));
+    }
+
+    if (url.pathname === "/api/events" && request.method === "POST") {
+      return handleTrackEvent(request, env);
     }
 
     if (url.pathname === "/api/health" && request.method === "GET") {

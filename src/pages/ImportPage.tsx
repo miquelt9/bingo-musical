@@ -4,6 +4,7 @@ import { Button, Window } from "@miquelt9/pc-ui";
 import { AlertCircle, Upload } from "lucide-react";
 import { BackButton } from "../components/ui/BackButton";
 import { useDeck } from "../state/DeckContext";
+import { trackEvent } from "../lib/analytics/trackEvent";
 
 export const ImportPage: React.FC = () => {
   const { importDeck } = useDeck();
@@ -20,6 +21,7 @@ export const ImportPage: React.FC = () => {
     setIsImporting(true);
     try {
       const imported = await importDeck(file);
+      trackEvent("deck_imported");
       navigate(`/deck/${imported.id}`);
     } catch (err) {
       setError((err as Error).message);

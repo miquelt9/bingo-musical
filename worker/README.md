@@ -64,6 +64,53 @@ Rebuild/redeploy the frontend after setting the secret.
 |--------|------|-------------|
 | `POST` | `/api/decks` | Store deck export JSON, returns `{ "shareId": "..." }` |
 | `GET` | `/api/decks/:shareId` | Fetch stored deck export JSON |
+| `POST` | `/api/events` | Record anonymous usage event (returns `204`) |
 | `GET` | `/api/health` | Health check |
 
 Shared decks expire after 1 year (KV TTL).
+
+## Usage analytics (Workers Analytics Engine)
+
+The worker writes anonymous, aggregate events to the `bingo_musical_usage` dataset (configured in `wrangler.toml`). No cookies, IPs, or user identifiers are stored.
+
+**Server-side events** (automatic):
+
+| Event | Trigger |
+|-------|---------|
+| `share_created` | Successful `POST /api/decks` |
+| `share_opened` | Successful `GET /api/decks/:shareId` |
+| `share_not_found` | `GET /api/decks/:shareId` returns 404 |
+
+**Client-side events** (via `POST /api/events` from the app):
+
+| Event | When |
+|-------|------|
+| `page_view` | Route change (with route label: `home`, `editor`, `cards`, `host`, etc.) |
+| `host_started` | Host game session ready |
+| `deck_imported` | JSON deck import succeeds |
+| `cards_printed` | Browser print or PDF export |
+
+View data in the Cloudflare dashboard → **Workers Analytics Engine** → SQL, for example:
+
+```sql
+SELECT blob1 AS event, COUNT() AS count
+FROM bingo_musical_usage
+WHERE timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY event
+ORDER BY count DESC
+```
+
+Page views by route:
+
+```sql
+SELECT blob2 AS route, COUNT() AS count
+FROM bingo_musical_usage
+WHERE blob1 = 'page_view'
+  AND timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY route
+ORDER BY count DESC
+```
+
+**Note:** Analytics Engine bindings do not work in `wrangler dev` locally. Events appear after deploying the worker.
+
+KV dashboard metrics (reads/writes) show infrastructure usage for shares and rate limiting — not full-site visitor counts. For traffic metrics, use Cloudflare Web Analytics (see root `README.md`).

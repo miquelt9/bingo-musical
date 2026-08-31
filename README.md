@@ -91,10 +91,21 @@ npm run build
 Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.yml`). Set repository secrets as needed:
 
 - `VITE_SHARE_API_URL` — Cloudflare Worker URL for short deck share links (see `worker/README.md`)
+- `VITE_CF_WEB_ANALYTICS_TOKEN` — Cloudflare Web Analytics site token (see below)
 
 ### 6. Deploy the share API (optional)
 
 Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`).
+
+### 7. Web Analytics (optional)
+
+For cookieless traffic metrics (visitors, page views, Core Web Vitals):
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/) → **Web Analytics** → **Add a site**.
+2. Register hostname **`miquelt9.github.io`** and choose **manual** JS snippet setup.
+3. Copy the site token into GitHub secret `VITE_CF_WEB_ANALYTICS_TOKEN` (and local `.env` for production builds).
+
+The beacon loads only in production builds and does not use cookies.
 
 ---
 
@@ -131,7 +142,7 @@ Musical Bingo Creator is a free personal hobby project. It is **not affiliated**
 
 ## Privacy
 
-Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, and GitHub Pages hosting. There is no analytics or user accounts on our side. See **Settings → Privacy** in the app for the full notice.
+Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, and GitHub Pages hosting. We use cookieless Cloudflare Web Analytics for aggregate traffic and anonymous feature-usage counts via our share Worker. There are no user accounts. See **Settings → Privacy** in the app for the full notice.
 
 ## Third-party services
 

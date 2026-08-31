@@ -10,3 +10,7 @@ preview_id = "081e52d940274e61a90482b07b30979a"
 
 [vars]
 ALLOWED_ORIGINS = "https://127.0.0.1:5173,http://127.0.0.1:5173,http://localhost:5173,https://miquelt9.github.io"
+
+[[analytics_engine_datasets]]
+binding = "USAGE_EVENTS"
+dataset = "bingo_musical_usage"

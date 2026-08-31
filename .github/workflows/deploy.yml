@@ -34,6 +34,7 @@ jobs:
         run: npm run build
         env:
           VITE_SHARE_API_URL: ${{ secrets.VITE_SHARE_API_URL }}
+          VITE_CF_WEB_ANALYTICS_TOKEN: ${{ secrets.VITE_CF_WEB_ANALYTICS_TOKEN }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

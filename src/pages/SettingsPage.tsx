@@ -188,8 +188,25 @@ export const SettingsPage: React.FC = () => {
             <ExternalLink className="w-3 h-3" />
           </a>
         </li>
+        <li>
+          <strong>Cloudflare Web Analytics</strong> — cookieless aggregate traffic metrics (page views,
+          visitors, performance). Does not use cookies, localStorage, or fingerprinting. See{" "}
+          <a
+            href="https://developers.cloudflare.com/web-analytics/"
+            target="_blank"
+            rel="noreferrer"
+            className="pc-link inline-flex items-center gap-0.5"
+          >
+            Cloudflare Web Analytics
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </li>
       </ul>
-      <p>We do not run analytics or user accounts.</p>
+      <p>
+        We also collect anonymous, aggregate usage counts for key features (for example shares created,
+        host sessions started, cards printed) via our Cloudflare Worker when link sharing is enabled. No
+        user accounts, no sale of data, and no persistent visitor identifiers.
+      </p>
       <p>
         Questions or privacy requests: open an issue on{" "}
         <a

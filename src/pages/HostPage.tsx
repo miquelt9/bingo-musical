@@ -32,6 +32,7 @@ import {
   Clip,
 } from "../lib/youtube/player";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
+import { trackEvent } from "../lib/analytics/trackEvent";
 import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -356,6 +357,13 @@ export const HostPage: React.FC = () => {
   }, [handleCallNext]);
 
   const initializedDeckIdRef = useRef<string | null>(null);
+  const hostTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!sessionReady || hostTrackedRef.current) return;
+    hostTrackedRef.current = true;
+    trackEvent("host_started");
+  }, [sessionReady]);
 
   useEffect(() => {
     if (!id) {

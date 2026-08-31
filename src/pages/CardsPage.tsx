@@ -16,6 +16,7 @@ import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
 import { BackButton } from "../components/ui/BackButton";
+import { trackEvent } from "../lib/analytics/trackEvent";
 import {
   Printer,
   Download,
@@ -189,6 +190,7 @@ export const CardsPage: React.FC = () => {
       await downloadBingoPdf(cards, cardOptions, (current, total) => {
         setPdfProgress({ current, total });
       });
+      trackEvent("cards_printed");
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF: " + (err as Error).message);
@@ -200,6 +202,7 @@ export const CardsPage: React.FC = () => {
 
   const handleBrowserPrint = () => {
     if (!isPlayable) return;
+    trackEvent("cards_printed");
     window.print();
   };
 
