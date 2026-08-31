@@ -91,6 +91,75 @@ let playbackFadeOut = false;
 let outroFadeInProgress = false;
 let volumeRampRafId: number | null = null;
 
+let fallbackContainer: HTMLElement | null = null;
+let attachedViewport: HTMLElement | null = null;
+
+interface PendingPlayRequest {
+  clip: Clip;
+  handleEnd?: ClipEndHandler;
+  options?: ClipPlaybackOptions;
+}
+
+let pendingPlay: PendingPlayRequest | null = null;
+
+function isCoarsePointerDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(pointer: coarse)").matches ||
+    "ontouchstart" in window
+  );
+}
+
+function getPlayersRoot(): HTMLElement | null {
+  return slots?.[0]?.container.parentElement ?? null;
+}
+
+function refreshAllPlayerSizes(): void {
+  if (!slots) return;
+  refreshPlayerSize(slots[0]);
+  refreshPlayerSize(slots[1]);
+}
+
+export function setPlayerFallbackContainer(el: HTMLElement | null): void {
+  fallbackContainer = el;
+  if (!attachedViewport && el) {
+    const root = getPlayersRoot();
+    if (root && root.parentElement !== el) {
+      el.appendChild(root);
+      refreshAllPlayerSizes();
+    }
+  }
+}
+
+/** Move the shared player DOM into a visible viewport, or back to the hidden fallback. */
+export function attachPlayersToViewport(viewport: HTMLElement | null): void {
+  const root = getPlayersRoot();
+  if (!root) return;
+
+  if (viewport) {
+    if (root.parentElement !== viewport) {
+      viewport.appendChild(root);
+    }
+    attachedViewport = viewport;
+    refreshAllPlayerSizes();
+    return;
+  }
+
+  attachedViewport = null;
+  const target = fallbackContainer;
+  if (target && root.parentElement !== target) {
+    target.appendChild(root);
+    refreshAllPlayerSizes();
+  }
+}
+
+function flushPendingPlay(): void {
+  if (!pendingPlay || !currentState.isReady || !getActiveSlot()?.player) return;
+  const request = pendingPlay;
+  pendingPlay = null;
+  playClip(request.clip, request.handleEnd, request.options);
+}
+
 let currentState: PlayerPlaybackState = {
   isReady: false,
   state: "unstarted",
@@ -277,6 +346,7 @@ export async function mountDualPlayers(
     setVisibleSlot(visibleSlotIndex);
     updateActiveElementId();
     notifyListeners();
+    flushPendingPlay();
     return;
   }
 
@@ -300,6 +370,7 @@ export async function mountDualPlayers(
   setVisibleSlot(0);
   updateActiveElementId();
   notifyListeners();
+  flushPendingPlay();
 }
 
 /** @deprecated Use mountDualPlayers with wrapper elements */
@@ -488,8 +559,9 @@ function getTargetVolume(): number {
 
 function applyClipPlaybackOptions(options?: ClipPlaybackOptions): void {
   if (!options) return;
-  if (options.fadeIn != null) playbackFadeIn = options.fadeIn;
-  if (options.fadeOut != null) playbackFadeOut = options.fadeOut;
+  const touchDevice = isCoarsePointerDevice();
+  if (options.fadeIn != null) playbackFadeIn = touchDevice ? false : options.fadeIn;
+  if (options.fadeOut != null) playbackFadeOut = touchDevice ? false : options.fadeOut;
   outroFadeInProgress = false;
 }
 
@@ -937,8 +1009,8 @@ export function playClip(
   options?: ClipPlaybackOptions
 ): void {
   const active = getActiveSlot();
-  if (!active?.player) {
-    console.warn("Player not yet mounted");
+  if (!active?.player || !currentState.isReady) {
+    pendingPlay = { clip, handleEnd, options };
     return;
   }
 

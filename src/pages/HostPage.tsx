@@ -12,7 +12,7 @@ import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay"
 import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { HostInlineVideoPanel } from "../components/player/DraggableVideoWindow";
-import { YoutubeVideoSlots } from "../components/player/YoutubeVideoSlots";
+import { attachPlayersToViewport } from "../lib/youtube/player";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
@@ -198,6 +198,7 @@ export const HostPage: React.FC = () => {
   const [sessionReady, setSessionReady] = useState(false);
 
   const chainTimeoutRef = useRef<number | null>(null);
+  const videoViewportRef = useRef<HTMLDivElement>(null);
   const uncalledIdsRef = useRef(uncalledIds);
   const autoCallNextOnEndRef = useRef(autoCallNextOnEnd);
   const autoRevealOnEndRef = useRef(autoRevealOnEnd);
@@ -440,6 +441,15 @@ export const HostPage: React.FC = () => {
     autoCallNextOnEnd,
     sessionReady,
   ]);
+
+  useEffect(() => {
+    if (!isMobile || !showVideo) {
+      attachPlayersToViewport(null);
+      return;
+    }
+    attachPlayersToViewport(videoViewportRef.current);
+    return () => attachPlayersToViewport(null);
+  }, [isMobile, showVideo, playerState?.isReady]);
 
   useEffect(() => {
     return subscribeToPlayerState((state) => {
@@ -702,9 +712,7 @@ export const HostPage: React.FC = () => {
         <div className="host-board-mobile-stack">
           {answerCard}
 
-          <HostInlineVideoPanel visible={showVideo}>
-            <YoutubeVideoSlots />
-          </HostInlineVideoPanel>
+          <HostInlineVideoPanel visible={showVideo} viewportRef={videoViewportRef} />
 
           <div className="host-controls">{hostControls}</div>
 

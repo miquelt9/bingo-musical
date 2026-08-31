@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { clampVideoWindowBounds, VideoWindowBounds } from "../../lib/videoWindow";
+import { attachPlayersToViewport } from "../../lib/youtube/player";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 
 const TITLEBAR_HEIGHT = 30;
@@ -7,19 +8,19 @@ const MIN_CONTENT_HEIGHT = 135;
 
 interface HostInlineVideoPanelProps {
   visible: boolean;
-  children: React.ReactNode;
+  viewportRef?: React.Ref<HTMLDivElement>;
 }
 
 /** Fixed 16:9 inline video panel for mobile host — no drag or resize. */
 export const HostInlineVideoPanel: React.FC<HostInlineVideoPanelProps> = ({
   visible,
-  children,
+  viewportRef,
 }) => {
   if (!visible) return null;
 
   return (
     <div className="host-inline-video print:hidden">
-      <div className="host-inline-video__inner bg-black">{children}</div>
+      <div ref={viewportRef} className="host-inline-video__inner bg-black" />
     </div>
   );
 };
@@ -29,7 +30,6 @@ interface DraggableVideoWindowProps {
   bounds: VideoWindowBounds;
   onBoundsChange: (bounds: VideoWindowBounds) => void;
   onClose: () => void;
-  children: React.ReactNode;
 }
 
 export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
@@ -37,9 +37,9 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
   bounds,
   onBoundsChange,
   onClose,
-  children,
 }) => {
   const isMobile = useIsMobile();
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const interactionRef = useRef<
     | {
@@ -102,6 +102,15 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, [bounds, onBoundsChange]);
 
+  useEffect(() => {
+    if (isMobile || !visible) {
+      attachPlayersToViewport(null);
+      return;
+    }
+    attachPlayersToViewport(contentRef.current);
+    return () => attachPlayersToViewport(null);
+  }, [visible, isMobile, bounds.width, bounds.height]);
+
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
@@ -160,9 +169,11 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
           </button>
         </div>
       </div>
-      <div className="video-window-draggable__content bg-black" style={{ height: contentHeight }}>
-        {children}
-      </div>
+      <div
+        ref={contentRef}
+        className="video-window-draggable__content bg-black"
+        style={{ height: contentHeight }}
+      />
       {visible && (
         <div
           className="video-window-resize-handle"

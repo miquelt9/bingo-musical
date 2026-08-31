@@ -152,6 +152,24 @@
   pointer-events: none;
 }
 
+/* Hidden fallback mount for the always-on YouTube player engine */
+.youtube-player-engine-fallback {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 320px;
+  height: 180px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.youtube-player-engine-fallback .video-window-players {
+  width: 100%;
+  height: 100%;
+}
+
 .video-window-resize-handle {
   position: absolute;
   right: 0;

@@ -14,7 +14,7 @@ import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDec
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
-import { YoutubeVideoSlots } from "../player/YoutubeVideoSlots";
+import { YoutubePlayerEngine } from "../player/YoutubePlayerEngine";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import {
   subscribeToPlayerState,
@@ -149,10 +149,10 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           bounds={videoWindowBounds}
           onBoundsChange={setVideoWindowBounds}
           onClose={() => setShowVideo(false)}
-        >
-          <YoutubeVideoSlots />
-        </DraggableVideoWindow>
+        />
       )}
+
+      <YoutubePlayerEngine />
 
       <Taskbar className="print:hidden">
         <Link to="/" className="pc-button pc-start-btn hidden sm:inline-flex">
