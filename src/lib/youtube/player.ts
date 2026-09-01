@@ -1,10 +1,3 @@
-declare global {
-  interface Window {
-    YT?: typeof YT;
-    onYouTubeIframeAPIReady?: () => void;
-  }
-}
-
 import { markVideoEmbedBlocked } from "./validator";
 
 export const YOUTUBE_SLOT_WRAP_A = "youtube-slot-wrap-a";

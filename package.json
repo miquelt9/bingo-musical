@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "validate:sample-deck": "node scripts/validate-sample-deck.mjs",
-    "build": "npm run validate:sample-deck && tsc && vite build",
+    "build": "npm run validate:sample-deck && npx tsc && npx vite build",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",
     "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
@@ -28,7 +28,7 @@
     "@types/node": "^22.10.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@types/youtube": "^0.1.0",
+    "@types/youtube": "^0.1.2",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
