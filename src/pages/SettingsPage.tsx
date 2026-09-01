@@ -12,13 +12,12 @@ import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
 import {
   Check,
   ExternalLink,
-  ShieldCheck,
   RotateCcw,
   Monitor,
   Moon,
   Sun,
   Code,
-  AlertCircle,
+  Info,
   ChevronDown,
   ChevronRight,
   Download,
@@ -64,14 +63,11 @@ export const SettingsPage: React.FC = () => {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(!isMobile);
-  const [disclaimerOpen, setDisclaimerOpen] = useState(!isMobile);
-  const [privacyOpen, setPrivacyOpen] = useState(!isMobile);
+  const [dataNotesOpen, setDataNotesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setAboutOpen(!isMobile);
-    setDisclaimerOpen(!isMobile);
-    setPrivacyOpen(!isMobile);
   }, [isMobile]);
 
   const handleResetSampleDeck = () => {
@@ -139,90 +135,29 @@ export const SettingsPage: React.FC = () => {
     </>
   );
 
-  const disclaimerContent = (
-    <ul className="text-xs leading-relaxed space-y-2 list-disc list-inside">
-      <li>Not affiliated with YouTube, Google, Spotify, Apple, Deezer, or MusicBrainz.</li>
-      <li>
-        Playback uses the YouTube embedded player only. This app does not host, download, or
-        redistribute music.
-      </li>
-      <li>
-        YouTube may show ads before or during embedded clips. This app cannot remove them. For
-        smoother hosting, sign in with YouTube Premium in this browser (ad-free playback is not
-        guaranteed).
-      </li>
-      <li>Intended for private or social games at home with family and friends.</li>
-      <li>
-        Bars, ticketed events, or commercial venues may require music performance licenses (e.g. SGAE
-        in Spain). That is the organizer&apos;s responsibility, not this app&apos;s.
-      </li>
-      <li>Song titles on printed cards are factual. You choose which YouTube videos to link.</li>
-    </ul>
-  );
-
-  const privacyContent = (
-    <div className="text-xs leading-relaxed space-y-3">
+  const dataNotesContent = (
+    <div className="text-xs leading-relaxed space-y-2">
       <p>
-        {APP_NAME} runs in your web browser with no backend of its own. Your decks, embed cache,
-        and theme are stored in <strong>localStorage</strong> on your device and are not sent to us.
-        Active host games and card-print settings are kept in <strong>sessionStorage</strong> until you
-        close the browser tab.
-      </p>
-      <p>When you use certain features, your browser may contact third parties directly:</p>
-      <ul className="list-disc list-inside space-y-1 pl-1">
-        <li>
-          <strong>YouTube</strong> — iframe playback (may set cookies and show ads when you play a
-          video)
-        </li>
-        <li>
-          <strong>Invidious / Piped</strong> — public instances used for YouTube search and metadata
-        </li>
-        <li>
-          <strong>iTunes, Deezer, MusicBrainz</strong> — song autocomplete
-        </li>
-        <li>
-          <strong>noembed.com</strong> — embed permission checks
-        </li>
-        <li>
-          <strong>GitHub Pages</strong> — hosting; see the{" "}
-          <a
-            href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement"
-            target="_blank"
-            rel="noreferrer"
-            className="pc-link inline-flex items-center gap-0.5"
-          >
-            GitHub Privacy Statement
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </li>
-        <li>
-          <strong>Cloudflare Web Analytics</strong> — cookieless aggregate traffic metrics (page views,
-          visitors, performance). Does not use cookies, localStorage, or fingerprinting. See{" "}
-          <a
-            href="https://developers.cloudflare.com/web-analytics/"
-            target="_blank"
-            rel="noreferrer"
-            className="pc-link inline-flex items-center gap-0.5"
-          >
-            Cloudflare Web Analytics
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </li>
-      </ul>
-      <p>
-        We also collect anonymous, aggregate usage counts for key features (for example shares created,
-        host sessions started, cards printed) via our Cloudflare Worker when link sharing is enabled. No
-        user accounts, no sale of data, and no persistent visitor identifiers.
+        Your decks stay in this browser. We don&apos;t run accounts or keep your song lists on a server.
       </p>
       <p>
-        Questions or privacy requests: open an issue on{" "}
+        Clips play through YouTube embeds you choose. Search and matching may call public music APIs
+        and YouTube-related services. YouTube may show its own ads — that&apos;s normal for embedded
+        playback.
+      </p>
+      <p>
+        Not affiliated with YouTube, Google, or any music platform. A hobby tool for casual games at
+        home.
+      </p>
+      <p className="text-muted">
+        Share links may log anonymous usage counts (no personal data). Questions?{" "}
         <a
           href={`${GITHUB_REPO_URL}/issues`}
           target="_blank"
           rel="noreferrer"
           className="pc-link inline-flex items-center gap-0.5"
         >
-          GitHub
+          GitHub issues
           <ExternalLink className="w-3 h-3" />
         </a>
         .
@@ -392,27 +327,14 @@ export const SettingsPage: React.FC = () => {
               <CollapsibleSection
                 title={
                   <span className="inline-flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    Disclaimer
+                    <Info className="w-4 h-4" />
+                    Data &amp; playback
                   </span>
                 }
-                open={disclaimerOpen}
-                onToggle={() => setDisclaimerOpen((open) => !open)}
+                open={dataNotesOpen}
+                onToggle={() => setDataNotesOpen((open) => !open)}
               >
-                {disclaimerContent}
-              </CollapsibleSection>
-
-              <CollapsibleSection
-                title={
-                  <span className="inline-flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" />
-                    Privacy
-                  </span>
-                }
-                open={privacyOpen}
-                onToggle={() => setPrivacyOpen((open) => !open)}
-              >
-                {privacyContent}
+                {dataNotesContent}
               </CollapsibleSection>
             </>
           ) : (
@@ -428,27 +350,19 @@ export const SettingsPage: React.FC = () => {
                 {aboutContent}
               </Group>
 
-              <Group
-                legend={
+              <CollapsibleSection
+                title={
                   <span className="inline-flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    Disclaimer
+                    <Info className="w-4 h-4" />
+                    Data &amp; playback
                   </span>
                 }
+                open={dataNotesOpen}
+                onToggle={() => setDataNotesOpen((open) => !open)}
+                className="pt-2 border-t border-[var(--pc-border)]"
               >
-                {disclaimerContent}
-              </Group>
-
-              <Group
-                legend={
-                  <span className="inline-flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" />
-                    Privacy
-                  </span>
-                }
-              >
-                {privacyContent}
-              </Group>
+                {dataNotesContent}
+              </CollapsibleSection>
             </>
           )}
         </div>
