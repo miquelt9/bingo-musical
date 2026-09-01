@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button, Input, Window, Split } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
@@ -34,6 +34,7 @@ import {
 } from "../lib/youtube/player";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
 import { getDeckReadiness } from "../lib/decks/readiness";
+import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import {
   HOST_SESSION_KEY,
   getDisplayChannelName,
@@ -42,7 +43,8 @@ import {
   SerializedCalledEntry,
 } from "../lib/host/session";
 import { trackEvent } from "../lib/analytics/trackEvent";
-import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown } from "lucide-react";
+import { useToast } from "../state/ToastContext";
+import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown, Edit3 } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -169,6 +171,7 @@ export const HostPage: React.FC = () => {
   const isMobile = useIsMobile();
   const { decks, loadDeck, updateDeck, isLoading } = useDeck();
   const { showVideo, toggleVideo } = usePlayerUI();
+  const { showToast } = useToast();
 
   const deck = useMemo(
     () => (id ? decks.find((d) => d.id === id) ?? null : null),
@@ -275,6 +278,7 @@ export const HostPage: React.FC = () => {
     [deck?.tracks]
   );
   const canHost = isPlayable && readiness.canHost;
+  const emptyDeck = Boolean(deck && isEmptyDeck(deck));
 
   const clearChainTimeout = useCallback(() => {
     if (chainTimeoutRef.current !== null) {
@@ -361,6 +365,7 @@ export const HostPage: React.FC = () => {
 
   const initializedDeckIdRef = useRef<string | null>(null);
   const hostTrackedRef = useRef(false);
+  const deckNotFoundRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!sessionReady || hostTrackedRef.current) return;
@@ -377,9 +382,19 @@ export const HostPage: React.FC = () => {
     if (isLoading) return;
 
     if (!deck) {
+      if (id && deckNotFoundRef.current !== id) {
+        deckNotFoundRef.current = id;
+        showToast({
+          title: "Deck not found",
+          message: "That deck may have been deleted or the link is invalid.",
+          duration: 5000,
+        });
+      }
       navigate("/", { replace: true });
       return;
     }
+
+    deckNotFoundRef.current = null;
 
     if (initializedDeckIdRef.current === deck.id) return;
 
@@ -412,22 +427,7 @@ export const HostPage: React.FC = () => {
       });
       setSessionReady(true);
     }
-  }, [id, deck, isLoading, navigate, clearChainTimeout]);
-
-  useEffect(() => {
-    if (!deck || sessionReady || initializedDeckIdRef.current !== deck.id) return;
-    if (pendingRestoreRef.current) return;
-    setSessionReady(true);
-  }, [
-    deck,
-    sessionReady,
-    uncalledIds,
-    calledHistory,
-    currentCall,
-    isRevealed,
-    autoRevealOnEnd,
-    autoCallNextOnEnd,
-  ]);
+  }, [id, deck, isLoading, navigate, clearChainTimeout, showToast]);
 
   useEffect(() => {
     if (!deck || !sessionReady) return;
@@ -690,6 +690,7 @@ export const HostPage: React.FC = () => {
       currentTrack={currentCall?.track ?? null}
       remainingCount={uncalledIds.length}
       totalCount={deck.tracks.length}
+      calledCount={calledHistory.length}
       autoRevealOnEnd={autoRevealOnEnd}
       onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
       autoCallNextOnEnd={autoCallNextOnEnd}
@@ -699,6 +700,7 @@ export const HostPage: React.FC = () => {
       onOpenDisplay={openDisplayWindow}
       gameStarted={calledHistory.length > 0}
       disabled={!canHost}
+      isRevealed={isRevealed}
     />
   );
 
@@ -717,11 +719,13 @@ export const HostPage: React.FC = () => {
       ) : (
         filteredHistory.map((item) => {
           const isCurrent = item.callNumber === currentCall?.callNumber;
+          const hideAnswer = isCurrent && !isRevealed;
           const thumbUrl =
-            item.track.albumArtUrl ||
-            (item.track.youtubeVideoId
-              ? getYoutubeThumbnailUrl(item.track.youtubeVideoId, "hqdefault")
-              : "");
+            !hideAnswer &&
+            (item.track.albumArtUrl ||
+              (item.track.youtubeVideoId
+                ? getYoutubeThumbnailUrl(item.track.youtubeVideoId, "hqdefault")
+                : ""));
           return (
             <div
               key={item.callNumber}
@@ -746,9 +750,11 @@ export const HostPage: React.FC = () => {
                 )}
                 <div className="min-w-0">
                   <p className="font-bold text-xs truncate">
-                    {item.track.title}
+                    {hideAnswer ? "???" : item.track.title}
                   </p>
-                  <p className="text-[11px] truncate">{item.track.artist}</p>
+                  <p className="text-[11px] truncate">
+                    {hideAnswer ? "Artist hidden" : item.track.artist}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -789,6 +795,18 @@ export const HostPage: React.FC = () => {
         onRetry={() => void runCheck(true)}
       />
 
+      {emptyDeck && (
+        <div className="pc-bevel-inset p-6 mb-4 text-center text-sm">
+          <Music2 className="w-10 h-10 mx-auto mb-3 opacity-60" />
+          <p className="font-semibold mb-2">Add songs before hosting</p>
+          <p className="text-xs text-muted mb-4">{EMPTY_DECK_ACTION_TITLE}</p>
+          <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary">
+            <Edit3 className="w-3.5 h-3.5" />
+            Edit deck
+          </Link>
+        </div>
+      )}
+
       <PageHeader
         back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
         primaryAction={
@@ -811,50 +829,56 @@ export const HostPage: React.FC = () => {
         }
       />
 
-      {isMobile ? (
-        <div className="host-board-mobile-stack">
-          {answerCard}
-
-          <HostInlineVideoPanel visible={showVideo} viewportRef={videoViewportRef} />
-
-          <div className="host-controls">{hostControls}</div>
-
-          <details className="host-board-log-details" open>
-            <summary className="host-board-log-details__summary">
-              <History className="w-4 h-4" aria-hidden="true" />
-              Called Songs ({calledHistory.length})
-              <ChevronDown className="w-4 h-4 host-board-log-details__chevron" aria-hidden="true" />
-            </summary>
-            <div className="host-board-log-details__body">
-              {calledSongsLogSearch}
-              {calledSongsLogList}
-            </div>
-          </details>
-        </div>
-      ) : (
-        <Split direction="row" className="host-board-main">
-          <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "7" }}>
+      {sessionReady && !emptyDeck ? (
+        isMobile ? (
+          <div className="host-board-mobile-stack">
             {answerCard}
-            <div className="host-controls">{hostControls}</div>
-          </div>
 
-          <Window
-            fill
-            grow={5}
-            className="host-board-log"
-            title={
-              <span className="inline-flex items-center gap-2">
-                <History className="w-4 h-4" />
-                Called Songs Log ({calledHistory.length})
-              </span>
-            }
-          >
-            <div className="host-board-log-body">
-              {calledSongsLogSearch}
-              {calledSongsLogList}
+            <HostInlineVideoPanel visible={showVideo} viewportRef={videoViewportRef} />
+
+            <div className="host-controls">{hostControls}</div>
+
+            <details className="host-board-log-details" open>
+              <summary className="host-board-log-details__summary">
+                <History className="w-4 h-4" aria-hidden="true" />
+                Called Songs ({calledHistory.length})
+                <ChevronDown className="w-4 h-4 host-board-log-details__chevron" aria-hidden="true" />
+              </summary>
+              <div className="host-board-log-details__body">
+                {calledSongsLogSearch}
+                {calledSongsLogList}
+              </div>
+            </details>
+          </div>
+        ) : (
+          <Split direction="row" className="host-board-main">
+            <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "7" }}>
+              {answerCard}
+              <div className="host-controls">{hostControls}</div>
             </div>
-          </Window>
-        </Split>
+
+            <Window
+              fill
+              grow={5}
+              className="host-board-log"
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  Called Songs Log ({calledHistory.length})
+                </span>
+              }
+            >
+              <div className="host-board-log-body">
+                {calledSongsLogSearch}
+                {calledSongsLogList}
+              </div>
+            </Window>
+          </Split>
+        )
+      ) : (
+        <div className="host-board-loading pc-bevel-inset p-8 text-center text-sm text-muted">
+          <p>Loading game session…</p>
+        </div>
       )}
 
       {showContinueModal && (

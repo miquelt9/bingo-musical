@@ -16,6 +16,7 @@ import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
 import { trackEvent } from "../lib/analytics/trackEvent";
+import { useToast } from "../state/ToastContext";
 import {
   Printer,
   Download,
@@ -54,8 +55,9 @@ function readCardSettings(deckId: string): CardSettings | null {
 export const CardsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { decks, loadDeck, updateDeck } = useDeck();
+  const { decks, loadDeck, updateDeck, isLoading } = useDeck();
   const isMobile = useIsMobile();
+  const { showToast } = useToast();
 
   const deck = useMemo(() => (id ? decks.find((d) => d.id === id) ?? null : null), [id, decks]);
 
@@ -101,19 +103,31 @@ export const CardsPage: React.FC = () => {
   }, [deck, customTitle, cardCount, gridSize]);
 
   const layoutKeyRef = useRef("");
+  const deckNotFoundRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (id) loadDeck(id);
   }, [id, loadDeck]);
 
   useEffect(() => {
-    if (deck) return;
+    if (isLoading || !id) return;
+    if (deck) {
+      deckNotFoundRef.current = null;
+      return;
+    }
+    if (deckNotFoundRef.current === id) return;
+    deckNotFoundRef.current = id;
+    showToast({
+      title: "Deck not found",
+      message: "That deck may have been deleted or the link is invalid.",
+      duration: 5000,
+    });
     if (decks.length > 0) {
       navigate(`/deck/${decks[0].id}/cards`, { replace: true });
     } else {
       navigate("/", { replace: true });
     }
-  }, [deck, decks, navigate]);
+  }, [deck, decks, id, isLoading, navigate, showToast]);
 
   useEffect(() => {
     if (!deck) return;

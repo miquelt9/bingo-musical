@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Window, Modal } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
@@ -12,6 +12,7 @@ import {
 } from "../lib/decks/readiness";
 import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
+import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
@@ -30,7 +31,8 @@ import {
 const ONBOARDING_KEY = "mb_onboarding_dismissed";
 const SAMPLE_DECK_ID = SAMPLE_POP_HITS_DECK.id;
 
-function healthBadgeLabel(health: ReturnType<typeof getDeckReadiness>["health"], blocked: number): string {
+function healthBadgeLabel(health: ReturnType<typeof getDeckReadiness>["health"], blocked: number, empty: boolean): string {
+  if (empty) return "In progress";
   switch (health) {
     case "ready":
       return "Ready";
@@ -66,6 +68,23 @@ export const HomePage: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
+  const [verifyTick, setVerifyTick] = useState(0);
+
+  useEffect(() => {
+    const uncached = decks.flatMap((d) =>
+      d.tracks.filter((t) => t.youtubeVideoId && !getCachedEmbedStatus(t.youtubeVideoId))
+    );
+    if (uncached.length === 0) return;
+
+    let cancelled = false;
+    void validateTracksEmbeddability(uncached, 3).then(() => {
+      if (!cancelled) setVerifyTick((tick) => tick + 1);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [decks]);
 
   const sortedDecks = useMemo(() => {
     return [...decks].sort((a, b) => {
@@ -76,7 +95,7 @@ export const HomePage: React.FC = () => {
       if (aReady !== bReady) return aReady ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-  }, [decks]);
+  }, [decks, verifyTick]);
 
   const dismissOnboarding = () => {
     localStorage.setItem(ONBOARDING_KEY, "1");
@@ -113,18 +132,20 @@ export const HomePage: React.FC = () => {
 
     const statsLine = (
       <p className="home-deck-card-stats text-xs">
-        {formatReadinessPrimary(readiness)}
-        {secondary ? (
+        {emptyDeck
+          ? "0 songs — add tracks in the editor"
+          : formatReadinessPrimary(readiness)}
+        {!emptyDeck && secondary ? (
           <span className="text-pc-warning font-semibold"> · {secondary}</span>
         ) : null}
       </p>
     );
 
-    const healthBadge = !emptyDeck ? (
-      <span className={healthBadgeClass(readiness.health)}>
-        {healthBadgeLabel(readiness.health, readiness.blockedCount)}
+    const healthBadge = (
+      <span className={healthBadgeClass(emptyDeck ? "empty" : readiness.health)}>
+        {healthBadgeLabel(readiness.health, readiness.blockedCount, emptyDeck)}
       </span>
-    ) : null;
+    );
 
     const overflowItems = [
       {
@@ -328,7 +349,7 @@ export const HomePage: React.FC = () => {
               Try sample deck
             </Link>
             <button type="button" className="pc-button text-xs" onClick={dismissOnboarding}>
-              Got it
+              Don&apos;t show again
             </button>
           </div>
         </div>

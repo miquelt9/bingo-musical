@@ -1,6 +1,6 @@
 import { Track } from "../../types/deck";
 import { cellCount, normalizeGridSize } from "../bingo/generateCards";
-import { canStartGame } from "../youtube/playabilityGate";
+import { canStartGame, isTrackNeedsVerification } from "../youtube/playabilityGate";
 import { getUnplayableTracks, isTrackUnplayable } from "../youtube/validator";
 
 export type DeckHealth = "ready" | "needs_fix" | "empty" | "too_few";
@@ -10,6 +10,7 @@ export interface DeckReadiness {
   readyCount: number;
   blockedCount: number;
   unmatchedCount: number;
+  needsVerificationCount: number;
   canHost: boolean;
   health: DeckHealth;
   /** Minimum tracks to host a meaningful game */
@@ -55,6 +56,9 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
   const readyCount = tracks.filter(
     (t) => t.youtubeVideoId && t.matchStatus !== "failed" && !isTrackUnplayable(t)
   ).length;
+  const needsVerificationCount = tracks.filter(
+    (t) => t.youtubeVideoId && t.matchStatus !== "failed" && isTrackNeedsVerification(t)
+  ).length;
 
   const minHostTracks = Math.max(MIN_HOST_TRACKS, getMinTracksForGrid(gridSize));
   const tooFewForHost = readyCount < minHostTracks;
@@ -70,6 +74,7 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
     readyCount,
     blockedCount,
     unmatchedCount,
+    needsVerificationCount,
     canHost,
     health,
     minHostTracks,
@@ -78,10 +83,20 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
 }
 
 export function formatReadinessPrimary(readiness: DeckReadiness): string {
-  return `${readiness.readyCount}/${readiness.total} ready to play`;
+  const base = `${readiness.readyCount}/${readiness.total} ready to play`;
+  if (readiness.needsVerificationCount > 0) {
+    return `${readiness.readyCount}/${readiness.total} matched · verifying…`;
+  }
+  return base;
 }
 
 export function formatReadinessSecondary(readiness: DeckReadiness): string | null {
+  if (readiness.needsVerificationCount > 0 && readiness.canHost) {
+    return null;
+  }
+  if (readiness.needsVerificationCount > 0) {
+    return "Checking audio compatibility";
+  }
   if (readiness.blockedCount > 0) {
     return `${readiness.blockedCount} need fixing`;
   }

@@ -44,7 +44,7 @@ export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { decks, activeDeck, loadDeck, updateDeck, shareDeck } = useDeck();
+  const { decks, activeDeck, loadDeck, updateDeck, shareDeck, isLoading } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
@@ -70,6 +70,7 @@ export const EditorPage: React.FC = () => {
   const backgroundVerifyRef = useRef<string | null>(null);
   const autostartMatchRef = useRef(false);
   const blockedToastShownRef = useRef(false);
+  const deckNotFoundRef = useRef<string | null>(null);
 
   const { handleAutoFixBlocked, isMatching: isAutoFixing } = useAutoFixBlocked(deck, {
     onDeckUpdate: setDeck,
@@ -85,17 +86,26 @@ export const EditorPage: React.FC = () => {
   }, [activeDeck, id]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || isLoading) return;
     const found = loadDeck(id);
     if (found) {
+      deckNotFoundRef.current = null;
       setDeck(found);
       setDeckName(found.name);
-    } else if (decks.length > 0) {
-      navigate(`/deck/${decks[0].id}`, { replace: true });
-    } else {
-      navigate("/", { replace: true });
+    } else if (deckNotFoundRef.current !== id) {
+      deckNotFoundRef.current = id;
+      showToast({
+        title: "Deck not found",
+        message: "That deck may have been deleted or the link is invalid.",
+        duration: 5000,
+      });
+      if (decks.length > 0) {
+        navigate(`/deck/${decks[0].id}`, { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     }
-  }, [id, loadDeck, decks, navigate]);
+  }, [id, loadDeck, decks, navigate, isLoading, showToast]);
 
   useEffect(() => {
     blockedToastShownRef.current = false;

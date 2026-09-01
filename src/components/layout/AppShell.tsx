@@ -10,8 +10,9 @@ import {
 } from "lucide-react";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
-import { useAutoDeleteEmptyDeckOnLeave } from "../../hooks/useAutoDeleteEmptyDeckOnLeave";
+import { useDeckNavGuards } from "../../hooks/useDeckNavGuards";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+import { useToast } from "../../state/ToastContext";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
 import { YoutubePlayerEngine } from "../player/YoutubePlayerEngine";
@@ -39,8 +40,10 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     setVideoWindowBounds,
   } = usePlayerUI();
   const isMobile = useIsMobile();
-
-  useAutoDeleteEmptyDeckOnLeave();
+  const { showToast } = useToast();
+  const currentDeckId = activeDeck?.id || decks[0]?.id;
+  const { canOpenHost, canOpenCards, hostBlockReason, cardsBlockReason } =
+    useDeckNavGuards(currentDeckId);
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
 
@@ -52,7 +55,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const isPlaying = playerState?.state === "playing";
   const hasActiveClip = Boolean(playerState?.currentClip);
-  const currentDeckId = activeDeck?.id || decks[0]?.id;
   const path = location.pathname.replace(/\/+$/, "") || "/";
   const activeTab =
     path === "/settings"
@@ -97,6 +99,48 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           : "";
       navigate(`/deck/${deckId}${suffix}`);
     }
+  };
+
+  const handleBlockedNav = (reason: string | undefined) => {
+    showToast({
+      title: "Not available",
+      message: reason ?? "This action is not available for the current deck.",
+      duration: 4000,
+    });
+  };
+
+  const renderTaskbarNav = (
+    tab: string,
+    to: string,
+    label: string,
+    icon: React.ReactNode,
+    enabled: boolean,
+    blockReason: string | undefined
+  ) => {
+    const className = `${taskbarItemClass(tab)}${enabled ? "" : " opacity-60 pointer-events-auto"}`;
+
+    if (!enabled || !currentDeckId) {
+      return (
+        <button
+          type="button"
+          title={blockReason ?? label}
+          aria-label={label}
+          aria-disabled="true"
+          className={className}
+          onClick={() => handleBlockedNav(blockReason)}
+        >
+          {icon}
+          <span className="hidden sm:inline">{label}</span>
+        </button>
+      );
+    }
+
+    return (
+      <NavLink to={to} title={label} aria-label={label} className={() => className}>
+        {icon}
+        <span className="hidden sm:inline">{label}</span>
+      </NavLink>
+    );
   };
 
   return (
@@ -154,24 +198,22 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
           <span className="hidden sm:inline">Deck</span>
         </NavLink>
-        <NavLink
-          to={currentDeckId ? `/deck/${currentDeckId}/cards` : "/"}
-          title="Cards"
-          aria-label="Cards"
-          className={() => taskbarItemClass("cards")}
-        >
-          <Printer className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Cards</span>
-        </NavLink>
-        <NavLink
-          to={currentDeckId ? `/deck/${currentDeckId}/play` : "/"}
-          title="Host"
-          aria-label="Host"
-          className={() => taskbarItemClass("host")}
-        >
-          <Radio className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Host</span>
-        </NavLink>
+        {renderTaskbarNav(
+          "cards",
+          `/deck/${currentDeckId}/cards`,
+          "Cards",
+          <Printer className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />,
+          canOpenCards,
+          cardsBlockReason
+        )}
+        {renderTaskbarNav(
+          "host",
+          `/deck/${currentDeckId}/play`,
+          "Host",
+          <Radio className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />,
+          canOpenHost,
+          hostBlockReason
+        )}
         <NavLink
           to="/settings"
           title="Settings"

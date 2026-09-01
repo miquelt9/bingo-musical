@@ -52,6 +52,7 @@ interface CallNextControlsProps {
   currentTrack: Track | null;
   remainingCount: number;
   totalCount: number;
+  calledCount: number;
   autoRevealOnEnd: boolean;
   onToggleAutoReveal: () => void;
   autoCallNextOnEnd: boolean;
@@ -61,6 +62,7 @@ interface CallNextControlsProps {
   onOpenDisplay: () => void;
   gameStarted: boolean;
   disabled?: boolean;
+  isRevealed?: boolean;
 }
 
 export const CallNextControls: React.FC<CallNextControlsProps> = ({
@@ -77,6 +79,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   currentTrack,
   remainingCount,
   totalCount,
+  calledCount,
   autoRevealOnEnd,
   onToggleAutoReveal,
   autoCallNextOnEnd,
@@ -86,10 +89,10 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   onOpenDisplay,
   gameStarted,
   disabled = false,
+  isRevealed = true,
 }) => {
   const isMobile = useIsMobile();
-  const isDeckFinished = remainingCount === 0 && totalCount > 0;
-  const calledCount = totalCount - remainingCount;
+  const isDeckFinished = remainingCount === 0 && totalCount > 0 && calledCount > 0;
   const progressPercent = totalCount > 0 ? (calledCount / totalCount) * 100 : 0;
 
   const handlePlayPause = () => {
@@ -151,19 +154,21 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      <label
-        className={`inline-flex items-center gap-2.5 select-none ${
-          autoCallNextOnEnd ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-        }`}
-      >
-        <input
-          type="checkbox"
-          checked={autoRevealOnEnd}
-          onChange={onToggleAutoReveal}
-          disabled={autoCallNextOnEnd}
-        />
-        <span className="font-medium">Auto-reveal answer when snippet finishes playing</span>
-      </label>
+      {autoCallNextOnEnd ? (
+        <p className="text-[10px] opacity-80">
+          Auto-play next already reveals each answer when the snippet ends.
+        </p>
+      ) : (
+        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoRevealOnEnd}
+            onChange={onToggleAutoReveal}
+            disabled={disabled}
+          />
+          <span className="font-medium">Auto-reveal answer when snippet finishes playing</span>
+        </label>
+      )}
 
       <div className="inline-flex items-center gap-2">
         <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -227,23 +232,42 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
       >
         {!isMobile && <p className="text-xs font-semibold mb-2">Now Playing</p>}
         {hasPlayableTrack && currentTrack ? (
-          <NowPlayingControls
-            playerState={buildDisplayPlayerState(currentTrack, playerState)}
-            onPlayPause={handlePlayPause}
-            onStop={onStop}
-            onToggleMute={onToggleMute}
-            onVolumeChange={onVolumeChange}
-            onToggleVideo={onToggleVideo}
-            showVideo={showVideo}
-            showVideoToggle={!isMobile}
-            compact={isMobile}
-          />
+          isRevealed ? (
+            <NowPlayingControls
+              playerState={buildDisplayPlayerState(currentTrack, playerState)}
+              onPlayPause={handlePlayPause}
+              onStop={onStop}
+              onToggleMute={onToggleMute}
+              onVolumeChange={onVolumeChange}
+              onToggleVideo={onToggleVideo}
+              showVideo={showVideo}
+              showVideoToggle={!isMobile}
+              compact={isMobile}
+            />
+          ) : (
+            <div className="host-now-playing-placeholder">
+              <Music2 className="w-5 h-5 shrink-0 opacity-60" />
+              <div className="min-w-0">
+                <p className="font-bold text-sm truncate">Mystery track playing…</p>
+                <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
+              </div>
+            </div>
+          )
         ) : currentTrack ? (
           <div className="host-now-playing-placeholder">
             <Music2 className="w-5 h-5 shrink-0 opacity-60" />
             <div className="min-w-0">
-              <p className="font-bold text-sm truncate">{currentTrack.title}</p>
-              <p className="text-xs text-muted truncate">{currentTrack.artist}</p>
+              {isRevealed ? (
+                <>
+                  <p className="font-bold text-sm truncate">{currentTrack.title}</p>
+                  <p className="text-xs text-muted truncate">{currentTrack.artist}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-sm truncate">Mystery track playing…</p>
+                  <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
+                </>
+              )}
               <p className="text-[11px] text-pc-warning mt-0.5">No YouTube video linked for this track</p>
             </div>
           </div>
