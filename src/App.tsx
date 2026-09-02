@@ -12,6 +12,7 @@ import { DisplayPage } from "./pages/DisplayPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { SharedDeckPage } from "./pages/SharedDeckPage";
+import { AppUpdateWatcher } from "./components/version/AppUpdateWatcher";
 import { useRouteAnalytics } from "./hooks/useRouteAnalytics";
 
 function AppRoutes() {
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
       <ThemeProvider>
         <ToastProvider>
           <DeckProvider>
+            <AppUpdateWatcher />
             <Routes>
               <Route path="/deck/:id/display" element={<DisplayPage />} />
               <Route

@@ -36,6 +36,7 @@ jobs:
       - name: Build
         run: npx tsc && npx vite build
         env:
+          VITE_BUILD_ID: ${{ github.sha }}
           VITE_SHARE_API_URL: ${{ secrets.VITE_SHARE_API_URL }}
           VITE_CF_WEB_ANALYTICS_TOKEN: ${{ secrets.VITE_CF_WEB_ANALYTICS_TOKEN }}
 
