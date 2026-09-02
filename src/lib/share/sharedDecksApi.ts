@@ -82,11 +82,15 @@ export async function publishSharedDeck(deck: Deck): Promise<PublishedSharedDeck
   }
 
   const body = (await response.json()) as { shareId?: string };
-  if (!body.shareId) {
-    throw new Error("Share API returned an invalid response.");
+  if (body.shareId && body.shareId !== shareId) {
+    console.warn(
+      `Share API returned id "${body.shareId}" but content hash is "${shareId}". ` +
+        "The share API may need redeploying."
+    );
   }
 
-  return { shareId: body.shareId };
+  // The link is always derived from deck content, not from a server-assigned random id.
+  return { shareId };
 }
 
 export async function fetchSharedDeckPayload(shareId: string): Promise<unknown> {

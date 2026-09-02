@@ -62,11 +62,9 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     setPublishError(null);
 
     void publishSharedDeck(deck)
-      .then(({ shareId: publishedId }) => {
+      .then(() => {
         if (cancelled) return;
-        const url = buildSharedDeckUrl(publishedId);
-        setShareId(publishedId);
-        setShareUrl(url);
+        // shareId/shareUrl are already set from the content hash above.
       })
       .catch((err: Error) => {
         if (!cancelled) {
