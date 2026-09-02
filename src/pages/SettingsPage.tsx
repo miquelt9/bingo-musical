@@ -18,6 +18,7 @@ import {
   Sun,
   Code,
   Info,
+  AlertCircle,
   ChevronDown,
   ChevronRight,
   Download,
