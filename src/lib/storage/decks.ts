@@ -1,5 +1,6 @@
 import { Deck, Track, MatchStatus } from "../../types/deck";
 import { SAMPLE_POP_HITS_DECK } from "./mockDeck";
+import { buildCanonicalSharePayload } from "../share/deckCanonical";
 import { parseYoutubeVideoId, getYoutubeWatchUrl } from "../youtube/parseUrl";
 import { createTrack } from "../tracks";
 import { downloadTextFile, slugifyFilename } from "./download";
@@ -106,24 +107,27 @@ export interface SerializedDeckExport {
 }
 
 export function serializeDeckForExport(deck: Deck): SerializedDeckExport {
-  const songs = deck.tracks.map((track) => {
-    const song: Record<string, unknown> = {
-      title: track.title,
-      artist: track.artist,
+  const canonical = buildCanonicalSharePayload(deck);
+  const songs = canonical.songs.map((song) => {
+    const entry: Record<string, unknown> = {
+      title: song.title,
+      artist: song.artist,
+      start: song.start,
+      end: song.end,
     };
-    if (track.album) song.album = track.album;
-    if (track.youtubeVideoId) {
-      song.youtube = getYoutubeWatchUrl(track.youtubeVideoId, track.startTime);
+    if (song.album) {
+      entry.album = song.album;
     }
-    song.start = track.startTime;
-    song.end = track.endTime;
-    return song;
+    if (song.youtube) {
+      entry.youtube = getYoutubeWatchUrl(song.youtube, song.start);
+    }
+    return entry;
   });
 
   const exportObject = {
-    format: "bingo-musical-deck",
-    schemaVersion: 1,
-    name: deck.name,
+    format: canonical.format,
+    schemaVersion: canonical.schemaVersion,
+    name: canonical.name,
     exportedAt: new Date().toISOString(),
     songs,
   };

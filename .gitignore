@@ -30,3 +30,4 @@ dist-ssr
 
 # Cloudflare Wrangler
 .wrangler
+scripts/.compute-sample-share-id.mjs

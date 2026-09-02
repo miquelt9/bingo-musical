@@ -113,9 +113,14 @@ The beacon loads only in production builds and does not use cookies.
 ## 📤 Sharing a deck
 
 1. Open a deck (or use the share button on the home page deck list).
-2. Click **Share** — the app uploads a snapshot and gives you a short link like `…/bingo-musical/#/share/Ab12Cd34`.
-3. Send the link on WhatsApp, Telegram, or email (no JSON file required).
-4. Recipients open the link, preview the songs, and click **Add to my decks** to copy it locally.
+2. Click **Share** — the app resolves a short link like `…/bingo-musical/#/share/xYz12Ab3Cd` from the deck content. Identical decks (same name and songs/clips) always get the same id.
+3. The app checks whether that deck is already on the server (read-only) before uploading. Only the first share of a given deck writes to KV; later shares reuse the existing snapshot.
+4. Send the link on WhatsApp, Telegram, or email (no JSON file required).
+5. Recipients open the link, preview the songs, and click **Add to my decks** to copy it locally.
+
+Older random share links (`#/share/…`) keep working until they expire.
+
+Run `npm run compute:sample-share-id` to print the stable share id for the built-in sample deck.
 
 If link sharing is not configured, the share dialog falls back to downloading a `.json` file and the `#/import` flow.
 

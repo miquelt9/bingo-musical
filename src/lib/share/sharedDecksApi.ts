@@ -1,5 +1,11 @@
 import { Deck } from "../../types/deck";
 import { serializeDeckForExport } from "../storage/decks";
+import {
+  buildCanonicalSharePayload,
+  canonicalizeSharePayload,
+  canonicalPayloadsEqual,
+  computeShareId,
+} from "./deckCanonical";
 
 const API_URL = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
 
@@ -15,6 +21,10 @@ export interface PublishedSharedDeck {
   shareId: string;
 }
 
+export async function computeShareIdForDeck(deck: Deck): Promise<string> {
+  return computeShareId(buildCanonicalSharePayload(deck));
+}
+
 async function readApiError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { error?: string };
@@ -27,9 +37,37 @@ async function readApiError(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
+async function tryResolveExistingShare(
+  shareId: string,
+  canonical: ReturnType<typeof buildCanonicalSharePayload>
+): Promise<string | null> {
+  const response = await fetch(`${API_URL}/api/decks/${encodeURIComponent(shareId)}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  const existing = await response.json();
+  const existingCanonical = canonicalizeSharePayload(existing);
+  if (existingCanonical && canonicalPayloadsEqual(existingCanonical, canonical)) {
+    return shareId;
+  }
+
+  return null;
+}
+
 export async function publishSharedDeck(deck: Deck): Promise<PublishedSharedDeck> {
   if (!API_URL) {
     throw new Error("Link sharing is not configured yet.");
+  }
+
+  const canonical = buildCanonicalSharePayload(deck);
+  const shareId = await computeShareId(canonical);
+  const existingShareId = await tryResolveExistingShare(shareId, canonical);
+  if (existingShareId) {
+    return { shareId: existingShareId };
   }
 
   const { exportObject } = serializeDeckForExport(deck);

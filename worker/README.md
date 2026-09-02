@@ -41,7 +41,7 @@ Stores shared Musical Bingo decks as read-only snapshots and serves them via sho
    npm run dev
    ```
 
-4. Share a deck — the link should look like `http://localhost:5173/#/share/Ab12Cd34`.
+4. Share a deck — the link should look like `http://localhost:5173/#/share/xYz12Ab3Cd`. The id is derived from the deck content, so sharing the same deck twice does not create duplicate KV entries.
 
 ## Deploy the worker
 
@@ -62,10 +62,12 @@ Rebuild/redeploy the frontend after setting the secret.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/decks` | Store deck export JSON, returns `{ "shareId": "..." }` |
+| `POST` | `/api/decks` | Store deck export JSON if not already present. Returns `{ "shareId": "..." }` with `201` on first write or `200` when content already exists (no KV write). |
 | `GET` | `/api/decks/:shareId` | Fetch stored deck export JSON |
 | `POST` | `/api/events` | Record anonymous usage event (returns `204`) |
 | `GET` | `/api/health` | Health check |
+
+Share ids are the first 10 characters of a SHA-256 hash (base64url) of a canonical JSON payload: deck name plus each song’s title, artist, optional album, YouTube video id, and clip start/end. Volatile fields such as `exportedAt` and local track ids are excluded. Legacy random ids remain valid until TTL expiry.
 
 Shared decks expire after 1 year (KV TTL).
 
@@ -77,7 +79,8 @@ The worker writes anonymous, aggregate events to the `bingo_musical_usage` datas
 
 | Event | Trigger |
 |-------|---------|
-| `share_created` | Successful `POST /api/decks` |
+| `share_created` | Successful `POST /api/decks` that wrote a new KV entry |
+| `share_deduplicated` | Successful `POST /api/decks` when identical content was already stored (no write) |
 | `share_opened` | Successful `GET /api/decks/:shareId` |
 | `share_not_found` | `GET /api/decks/:shareId` returns 404 |
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "validate:sample-deck": "node scripts/validate-sample-deck.mjs",
+    "compute:sample-share-id": "esbuild scripts/compute-sample-share-id.ts --bundle --platform=node --format=esm --outfile=scripts/.compute-sample-share-id.mjs && node scripts/.compute-sample-share-id.mjs",
     "build": "npm run validate:sample-deck && npx tsc && npx vite build",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",

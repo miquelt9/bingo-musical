@@ -1,3 +1,9 @@
+import {
+  canonicalizeSharePayload,
+  canonicalPayloadsEqual,
+  computeShareId,
+} from "../../src/lib/share/deckCanonical";
+
 export interface Env {
   SHARED_DECKS: KVNamespace;
   USAGE_EVENTS?: AnalyticsEngineDataset;
@@ -157,6 +163,44 @@ async function allocateShareId(env: Env, serialized: string): Promise<string | n
   return null;
 }
 
+async function allocateContentAddressedShareId(
+  env: Env,
+  payload: Record<string, unknown>,
+  serialized: string
+): Promise<{ shareId: string; created: boolean } | null> {
+  const canonical = canonicalizeSharePayload(payload);
+  if (!canonical) {
+    return null;
+  }
+
+  const shareId = await computeShareId(canonical);
+  const key = `${SHARE_KEY_PREFIX}${shareId}`;
+  const existing = await env.SHARED_DECKS.get(key);
+
+  if (existing) {
+    try {
+      const existingPayload = JSON.parse(existing) as unknown;
+      const existingCanonical = canonicalizeSharePayload(existingPayload);
+      if (existingCanonical && canonicalPayloadsEqual(existingCanonical, canonical)) {
+        return { shareId, created: false };
+      }
+    } catch {
+      // Fall through to random-id allocation on corrupted stored payload.
+    }
+
+    const fallbackShareId = await allocateShareId(env, serialized);
+    if (!fallbackShareId) {
+      return null;
+    }
+    return { shareId: fallbackShareId, created: true };
+  }
+
+  await env.SHARED_DECKS.put(key, serialized, {
+    expirationTtl: SHARE_TTL_SECONDS,
+  });
+  return { shareId, created: true };
+}
+
 async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
   if (!(await checkRateLimit(request, env))) {
     return errorResponse(request, env, "Too many share requests. Please try again later.", 429);
@@ -183,13 +227,13 @@ async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
     return errorResponse(request, env, "Invalid deck payload.", 400);
   }
 
-  const shareId = await allocateShareId(env, serialized);
-  if (!shareId) {
+  const result = await allocateContentAddressedShareId(env, payload, serialized);
+  if (!result) {
     return errorResponse(request, env, "Could not create share link. Please try again.", 503);
   }
 
-  trackUsageEvent(env, "share_created");
-  return jsonResponse(request, env, { shareId }, 201);
+  trackUsageEvent(env, result.created ? "share_created" : "share_deduplicated");
+  return jsonResponse(request, env, { shareId: result.shareId }, result.created ? 201 : 200);
 }
 
 async function handleGetDeck(request: Request, env: Env, shareId: string): Promise<Response> {

@@ -9,8 +9,8 @@ import {
   importDeckFromData,
   parseAndImportDeckFile,
 } from "../lib/storage/decks";
-import { buildSharedDeckUrl, shareDeckNative } from "../lib/share/deckShare";
 import { fetchSharedDeckPayload, isShareApiConfigured, publishSharedDeck } from "../lib/share/sharedDecksApi";
+import { buildSharedDeckUrl, shareDeckNative } from "../lib/share/deckShare";
 import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 

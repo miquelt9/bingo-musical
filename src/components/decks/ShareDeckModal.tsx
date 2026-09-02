@@ -10,7 +10,7 @@ import {
   buildSharedDeckUrl,
   getPlatformShareUrls,
 } from "../../lib/share/deckShare";
-import { isShareApiConfigured, publishSharedDeck } from "../../lib/share/sharedDecksApi";
+import { isShareApiConfigured, publishSharedDeck, computeShareIdForDeck } from "../../lib/share/sharedDecksApi";
 
 interface ShareDeckModalProps {
   deck: Deck;
@@ -32,7 +32,28 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   const [publishError, setPublishError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (shareUrl || !isShareApiConfigured()) {
+    if (initialShareUrl || shareUrl || !isShareApiConfigured()) {
+      return;
+    }
+
+    let cancelled = false;
+    void computeShareIdForDeck(deck)
+      .then((predictedShareId) => {
+        if (cancelled) return;
+        setShareId(predictedShareId);
+        setShareUrl(buildSharedDeckUrl(predictedShareId));
+      })
+      .catch(() => {
+        // Ignore local hash errors; publish flow handles failures.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck, initialShareUrl, shareUrl]);
+
+  useEffect(() => {
+    if (!isShareApiConfigured() || initialShareUrl) {
       return;
     }
 
@@ -61,7 +82,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [deck, shareUrl]);
+  }, [deck, initialShareUrl]);
 
   const copyLink = async () => {
     if (!shareUrl) return;
@@ -103,13 +124,19 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   return (
     <PcModal title={`Share "${deck.name}"`} onClose={onClose}>
       <div className="space-y-4">
-        {isPublishing ? (
+        {isPublishing && !shareUrl ? (
           <p className="text-sm inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
             Creating share link…
           </p>
         ) : shareUrl ? (
           <>
+            {isPublishing ? (
+              <p className="text-sm inline-flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Confirming share link…
+              </p>
+            ) : null}
             <p className="text-sm">Anyone with this link can open the deck and add a copy to their browser.</p>
             <div className="pc-bevel-inset p-3 break-all text-xs">{shareUrl}</div>
             <div className="flex flex-wrap justify-end gap-2 pt-2">
