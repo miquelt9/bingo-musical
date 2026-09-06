@@ -149,8 +149,19 @@ export const SettingsPage: React.FC = () => {
       </p>
       <p>
         Deezer previews are normally limited to the first 30 seconds and can be unavailable or blocked
-        by provider CORS or terms. Not affiliated with YouTube, Google, Deezer, or any music platform. A hobby tool for casual games at
-        home.
+        by provider CORS or terms. Under{" "}
+        <a
+          href="https://developers.deezer.com/termsofuse"
+          target="_blank"
+          rel="noreferrer"
+          className="pc-link inline-flex items-center gap-0.5"
+        >
+          Deezer&apos;s developer terms
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        , those previews are for non-commercial private / family / home use only. Bars, ticketed events,
+        or other commercial venues are outside that scope and remain the organizer&apos;s responsibility.
+        Not affiliated with YouTube, Google, Deezer, or any music platform.
       </p>
       <p className="text-muted">
         Share links may log anonymous usage counts (no personal data). Questions?{" "}
