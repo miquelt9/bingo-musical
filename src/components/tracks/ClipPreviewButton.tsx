@@ -7,6 +7,7 @@ import {
   subscribeToPlayerState,
   PlayerPlaybackState,
 } from "../../lib/youtube/player";
+import { usePlayerUI } from "../../state/PlayerUIContext";
 
 interface ClipPreviewButtonProps {
   track: Track;
@@ -22,6 +23,7 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
   showLabel = false,
 }) => {
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
+  const { requestPlayerEngine } = usePlayerUI();
 
   useEffect(() => {
     return subscribeToPlayerState((state) => {
@@ -46,6 +48,7 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
     if (isPlaying || isLoading) {
       stopPlayback();
     } else {
+      requestPlayerEngine();
       playClip({
         videoId: track.youtubeVideoId,
         startTime: track.startTime,

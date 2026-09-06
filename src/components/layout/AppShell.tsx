@@ -26,6 +26,7 @@ import {
   setVolume,
   toggleMute,
 } from "../../lib/youtube/player";
+import { readHostSessionRaw } from "../../lib/host/session";
 
 const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { decks, activeDeck, loadDeck } = useDeck();
@@ -38,6 +39,8 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     toggleVideo,
     videoWindowBounds,
     setVideoWindowBounds,
+    engineRequested,
+    requestPlayerEngine,
   } = usePlayerUI();
   const isMobile = useIsMobile();
   const { showToast } = useToast();
@@ -72,6 +75,12 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isHostRoute = activeTab === "host";
 
   useEffect(() => {
+    if (isHostRoute) {
+      requestPlayerEngine();
+    }
+  }, [isHostRoute, requestPlayerEngine]);
+
+  useEffect(() => {
     setShowVideo(isHostRoute);
   }, [isHostRoute, setShowVideo]);
 
@@ -90,6 +99,32 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const handleDeckChange = (deckId: string) => {
+    if (deckId === activeDeck?.id) return;
+
+    const targetDeck = decks.find((d) => d.id === deckId);
+    const targetName = targetDeck?.name ?? "this deck";
+    const hostDeckId = activeTab === "host"
+      ? location.pathname.match(/^\/deck\/([^/]+)/)?.[1]
+      : undefined;
+    const hostSession = hostDeckId ? readHostSessionRaw(hostDeckId) : null;
+    const hasGameInProgress = Boolean(
+      hostSession &&
+        (hostSession.calledHistory.length > 0 || hostSession.currentCall !== null)
+    );
+
+    const needsConfirm =
+      activeTab === "editor" ||
+      activeTab === "cards" ||
+      (activeTab === "host" && (hasGameInProgress || hasActiveClip));
+
+    if (needsConfirm) {
+      const message =
+        activeTab === "host"
+          ? `Switch to "${targetName}"? You'll leave the current host session.`
+          : `Switch to "${targetName}"? You'll leave the current deck.`;
+      if (!window.confirm(message)) return;
+    }
+
     loadDeck(deckId);
     if (location.pathname.startsWith("/deck/")) {
       const suffix = location.pathname.includes("/cards")
@@ -175,7 +210,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      <YoutubePlayerEngine />
+      {(isHostRoute || hasActiveClip || engineRequested) && <YoutubePlayerEngine />}
 
       <Taskbar className="print:hidden">
         <NavLink

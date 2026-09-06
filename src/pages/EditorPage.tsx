@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
@@ -28,7 +28,9 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { BackButton } from "../components/ui/BackButton";
 import { useToast } from "../state/ToastContext";
 import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
+import { useDeckRoute } from "../hooks/useDeckRoute";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import {
   Edit3,
   Printer,
@@ -41,10 +43,10 @@ import {
 } from "lucide-react";
 
 export const EditorPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, deck: routeDeck, notFound } = useDeckRoute();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { decks, activeDeck, loadDeck, updateDeck, shareDeck, isLoading } = useDeck();
+  const { activeDeck, updateDeck, shareDeck } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
@@ -70,7 +72,6 @@ export const EditorPage: React.FC = () => {
   const backgroundVerifyRef = useRef<string | null>(null);
   const autostartMatchRef = useRef(false);
   const blockedToastShownRef = useRef(false);
-  const deckNotFoundRef = useRef<string | null>(null);
 
   const { handleAutoFixBlocked, isMatching: isAutoFixing } = useAutoFixBlocked(deck, {
     onDeckUpdate: setDeck,
@@ -86,26 +87,10 @@ export const EditorPage: React.FC = () => {
   }, [activeDeck, id]);
 
   useEffect(() => {
-    if (!id || isLoading) return;
-    const found = loadDeck(id);
-    if (found) {
-      deckNotFoundRef.current = null;
-      setDeck(found);
-      setDeckName(found.name);
-    } else if (deckNotFoundRef.current !== id) {
-      deckNotFoundRef.current = id;
-      showToast({
-        title: "Deck not found",
-        message: "That deck may have been deleted or the link is invalid.",
-        duration: 5000,
-      });
-      if (decks.length > 0) {
-        navigate(`/deck/${decks[0].id}`, { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
-    }
-  }, [id, loadDeck, decks, navigate, isLoading, showToast]);
+    if (!routeDeck) return;
+    setDeck(routeDeck);
+    setDeckName(routeDeck.name);
+  }, [routeDeck]);
 
   useEffect(() => {
     blockedToastShownRef.current = false;
@@ -248,6 +233,10 @@ export const EditorPage: React.FC = () => {
     }, { replace: true });
     void handleAutoMatchAll();
   }, [deck, autostartMatch, isMatching, isAutoFixing, setSearchParams, handleAutoMatchAll]);
+
+  if (notFound) {
+    return <DeckNotFoundPage />;
+  }
 
   if (!deck) {
     return (

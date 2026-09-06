@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button, Input, Window, Split } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
@@ -14,7 +14,9 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { HostInlineVideoPanel } from "../components/player/DraggableVideoWindow";
 import { attachPlayersToViewport } from "../lib/youtube/player";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
+import { useDeckRoute } from "../hooks/useDeckRoute";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import {
   playClip,
   pausePlayback,
@@ -43,7 +45,6 @@ import {
   SerializedCalledEntry,
 } from "../lib/host/session";
 import { trackEvent } from "../lib/analytics/trackEvent";
-import { useToast } from "../state/ToastContext";
 import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown, Edit3 } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -166,21 +167,10 @@ function clearHostSession(deckId: string): void {
 }
 
 export const HostPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { decks, loadDeck, updateDeck, isLoading } = useDeck();
+  const { deck, isLoading, notFound } = useDeckRoute();
+  const { updateDeck } = useDeck();
   const { showVideo, toggleVideo } = usePlayerUI();
-  const { showToast } = useToast();
-
-  const deck = useMemo(
-    () => (id ? decks.find((d) => d.id === id) ?? null : null),
-    [id, decks]
-  );
-
-  useEffect(() => {
-    if (id) loadDeck(id);
-  }, [id, loadDeck]);
 
   const [uncalledIds, setUncalledIds] = useState<string[]>([]);
   const [calledHistory, setCalledHistory] = useState<CalledEntry[]>([]);
@@ -365,7 +355,6 @@ export const HostPage: React.FC = () => {
 
   const initializedDeckIdRef = useRef<string | null>(null);
   const hostTrackedRef = useRef(false);
-  const deckNotFoundRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!sessionReady || hostTrackedRef.current) return;
@@ -374,27 +363,7 @@ export const HostPage: React.FC = () => {
   }, [sessionReady]);
 
   useEffect(() => {
-    if (!id) {
-      navigate("/", { replace: true });
-      return;
-    }
-
-    if (isLoading) return;
-
-    if (!deck) {
-      if (id && deckNotFoundRef.current !== id) {
-        deckNotFoundRef.current = id;
-        showToast({
-          title: "Deck not found",
-          message: "That deck may have been deleted or the link is invalid.",
-          duration: 5000,
-        });
-      }
-      navigate("/", { replace: true });
-      return;
-    }
-
-    deckNotFoundRef.current = null;
+    if (!deck) return;
 
     if (initializedDeckIdRef.current === deck.id) return;
 
@@ -427,7 +396,7 @@ export const HostPage: React.FC = () => {
       });
       setSessionReady(true);
     }
-  }, [id, deck, isLoading, navigate, clearChainTimeout, showToast]);
+  }, [deck, clearChainTimeout]);
 
   useEffect(() => {
     if (!deck || !sessionReady) return;
@@ -642,6 +611,10 @@ export const HostPage: React.FC = () => {
     isPlayable,
     canHost,
   ]);
+
+  if (notFound) {
+    return <DeckNotFoundPage />;
+  }
 
   if (!deck) {
     if (isLoading) return null;
@@ -875,11 +848,11 @@ export const HostPage: React.FC = () => {
             </Window>
           </Split>
         )
-      ) : (
+      ) : !showContinueModal ? (
         <div className="host-board-loading pc-bevel-inset p-8 text-center text-sm text-muted">
           <p>Loading game session…</p>
         </div>
-      )}
+      ) : null}
 
       {showContinueModal && (
         <PcModal title="Continue Game?" onClose={handleStartNewGame}>

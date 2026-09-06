@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
@@ -16,7 +16,8 @@ import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
 import { trackEvent } from "../lib/analytics/trackEvent";
-import { useToast } from "../state/ToastContext";
+import { useDeckRoute } from "../hooks/useDeckRoute";
+import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import {
   Printer,
   Download,
@@ -32,6 +33,7 @@ import {
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
 const CARD_COUNT_PRESETS = [5, 10, 20, 50, 100] as const;
 const BINGO_PERCENT = 100;
+const EVENT_TITLE_MAX = 80;
 
 interface CardSettings {
   cardCount: number;
@@ -53,13 +55,9 @@ function readCardSettings(deckId: string): CardSettings | null {
 }
 
 export const CardsPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { decks, loadDeck, updateDeck, isLoading } = useDeck();
+  const { deck, isLoading, notFound } = useDeckRoute();
+  const { updateDeck } = useDeck();
   const isMobile = useIsMobile();
-  const { showToast } = useToast();
-
-  const deck = useMemo(() => (id ? decks.find((d) => d.id === id) ?? null : null), [id, decks]);
 
   const [customTitle, setCustomTitle] = useState("");
   const [cardCount, setCardCount] = useState<number>(10);
@@ -103,31 +101,6 @@ export const CardsPage: React.FC = () => {
   }, [deck, customTitle, cardCount, gridSize]);
 
   const layoutKeyRef = useRef("");
-  const deckNotFoundRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (id) loadDeck(id);
-  }, [id, loadDeck]);
-
-  useEffect(() => {
-    if (isLoading || !id) return;
-    if (deck) {
-      deckNotFoundRef.current = null;
-      return;
-    }
-    if (deckNotFoundRef.current === id) return;
-    deckNotFoundRef.current = id;
-    showToast({
-      title: "Deck not found",
-      message: "That deck may have been deleted or the link is invalid.",
-      duration: 5000,
-    });
-    if (decks.length > 0) {
-      navigate(`/deck/${decks[0].id}/cards`, { replace: true });
-    } else {
-      navigate("/", { replace: true });
-    }
-  }, [deck, decks, id, isLoading, navigate, showToast]);
 
   useEffect(() => {
     if (!deck) return;
@@ -242,7 +215,11 @@ export const CardsPage: React.FC = () => {
     triggerBrowserPrint([card]);
   };
 
-  if (!deck) return null;
+  if (notFound) {
+    return <DeckNotFoundPage />;
+  }
+
+  if (isLoading || !deck) return null;
 
   const readiness = getDeckReadiness(deck.tracks, gridSize);
   const currentCard = cards[activePreviewIndex] || cards[0];
@@ -358,9 +335,14 @@ export const CardsPage: React.FC = () => {
                   type="text"
                   className="w-full mt-1"
                   value={customTitle}
+                  maxLength={EVENT_TITLE_MAX}
                   onChange={(e) => setCustomTitle(e.target.value)}
+                  onBlur={() => setCustomTitle((current) => current.trim())}
                   placeholder="e.g. Friday Night 80s Bingo"
                 />
+                <span className="block mt-1 text-[11px] font-normal text-muted text-right">
+                  {customTitle.length}/{EVENT_TITLE_MAX}
+                </span>
               </label>
 
               <div>

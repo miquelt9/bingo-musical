@@ -80,15 +80,24 @@ export function deleteDeck(id: string): void {
   saveStoredDecks(filtered);
 }
 
+function nextCopyName(baseName: string, existingNames: string[]): string {
+  const firstCopy = `${baseName} (Copy)`;
+  if (!existingNames.includes(firstCopy)) return firstCopy;
+  let n = 2;
+  while (existingNames.includes(`${baseName} (Copy ${n})`)) n++;
+  return `${baseName} (Copy ${n})`;
+}
+
 export function duplicateDeck(id: string): Deck | null {
   const deck = getDeckById(id);
   if (!deck) return null;
 
+  const existingNames = getStoredDecks().map((d) => d.name);
   const now = new Date().toISOString();
   const newDeck: Deck = {
     ...deck,
     id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    name: `${deck.name} (Copy)`,
+    name: nextCopyName(deck.name, existingNames),
     createdAt: now,
     updatedAt: now,
     tracks: deck.tracks.map((t, index) => ({
