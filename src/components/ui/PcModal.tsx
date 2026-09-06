@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Overlay, Window } from "@miquelt9/pc-ui";
 import { twMerge } from "tailwind-merge";
 
@@ -15,6 +15,17 @@ export const PcModal: React.FC<PcModalProps> = ({
   children,
   className = "",
 }) => {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [onClose]);
+
   return (
     <Overlay className="print:hidden" onClick={onClose}>
       <Window

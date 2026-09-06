@@ -20,6 +20,8 @@ export interface DeckReadiness {
 }
 
 export const MIN_HOST_TRACKS = 10;
+/** Smallest bingo grid (3×3) — Cards nav unlocks at this many songs. */
+export const MIN_CARDS_TRACKS = 9;
 export const RECOMMENDED_TRACKS: Record<number, number> = {
   3: 9,
   4: 20,

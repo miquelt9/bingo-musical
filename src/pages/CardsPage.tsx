@@ -8,6 +8,7 @@ import {
   getDeckReadiness,
   getLargestValidGridSize,
   isGridSizeValidForDeck,
+  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { BingoCard } from "../types/deck";
@@ -241,6 +242,16 @@ export const CardsPage: React.FC = () => {
             <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary inline-flex items-center gap-2">
               <Edit3 className="w-4 h-4" />
               Open deck
+            </Link>
+          </>
+        ) : deck.tracks.length < MIN_CARDS_TRACKS ? (
+          <>
+            <p className="text-sm">
+              Need at least {MIN_CARDS_TRACKS} songs for a 3×3 bingo card (you have {deck.tracks.length}).
+            </p>
+            <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary inline-flex items-center gap-2">
+              <Edit3 className="w-4 h-4" />
+              Add more songs
             </Link>
           </>
         ) : (

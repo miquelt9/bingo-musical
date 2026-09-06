@@ -327,10 +327,12 @@ export const EditorPage: React.FC = () => {
 
   const handleOpenSuggestSongs = () => {
     if (emptyDeck) return;
+    stopPlayback();
     setSuggestSeeds(pickSuggestSeeds(deck.tracks));
   };
 
   const handleFindSimilar = (track: Track) => {
+    stopPlayback();
     setSuggestSeeds([track]);
   };
 
@@ -375,6 +377,7 @@ export const EditorPage: React.FC = () => {
 
   const handleOpenAddTrack = () => {
     setAddSongRainbowDismissed(true);
+    stopPlayback();
     if (deck) requestPlayerEngine(deck.provider);
     setShowAddTrackModal(true);
   };
@@ -524,7 +527,7 @@ export const EditorPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => setShowConvertModal(true)} disabled={emptyDeck} title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Create a copy using the other music provider"}>
+            <Button type="button" onClick={() => { stopPlayback(); setShowConvertModal(true); }} disabled={emptyDeck} title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Create a copy using the other music provider"}>
               <ArrowRightLeft className="w-4 h-4" />
               <span className="hidden sm:inline">Convert deck</span>
             </Button>
@@ -648,9 +651,10 @@ export const EditorPage: React.FC = () => {
           provider={deck.provider}
           seeds={suggestSeeds}
           existingIds={deck.tracks.map((t) => getTrackSourceId(t))}
+          existingTracks={deck.tracks}
           title={
             suggestSeeds.length === 1
-              ? `Similar to ${suggestSeeds[0].title}`
+              ? `More songs like ${suggestSeeds[0].artist}`
               : "Suggested songs"
           }
           onClose={() => setSuggestSeeds(null)}

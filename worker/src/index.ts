@@ -23,6 +23,7 @@ const RATE_LIMIT_PREFIX = "rl:";
 const RATE_LIMIT_WINDOW_SEC = 60;
 const RATE_LIMITS = {
   deezer: 30,
+  youtube: 40,
   share: 10,
   events: 20,
 } as const;
@@ -32,6 +33,22 @@ const DEEZER_API = "https://api.deezer.com";
 const DEEZER_EDGE_CACHE_TTL = 86400;
 const DEEZER_META_CACHE_TTL_SECONDS = 60 * 60 * 24 * 3;
 const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/";
+const YOUTUBE_CACHE_PREFIX = "https://bingo-musical.cache/youtube/";
+const YOUTUBE_META_CACHE_TTL_SECONDS = 60 * 30;
+const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
+/** Small curated list — Worker races these server-side so browsers never fan out. */
+const YOUTUBE_INVIDIOUS = [
+  "https://invidious.private.coffee",
+  "https://invidious.materialio.us",
+  "https://inv.tux.pizza",
+  "https://invidious.nerdvpn.de",
+];
+const YOUTUBE_PIPED = [
+  "https://pipedapi.kavin.rocks",
+  "https://api.piped.private.coffee",
+  "https://pipedapi.adminforge.de",
+  "https://pipedapi.leptons.xyz",
+];
 
 const ALLOWED_EVENTS = new Set([
   "host_started",
@@ -167,6 +184,467 @@ async function deezerTrackCacheKey(id: string): Promise<string> {
 
 async function deezerRelatedCacheKey(id: string, limit: number): Promise<string> {
   return `related:${id}:${limit}`;
+}
+
+function youtubeCacheRequest(key: string): Request {
+  return new Request(`${YOUTUBE_CACHE_PREFIX}${key}`, { method: "GET" });
+}
+
+async function readYoutubeCache<T>(key: string): Promise<T | null> {
+  try {
+    const cached = await caches.default.match(youtubeCacheRequest(key));
+    if (!cached) return null;
+    return (await cached.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeYoutubeCache(key: string, body: unknown): Promise<void> {
+  try {
+    const response = new Response(JSON.stringify(body), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`,
+      },
+    });
+    await caches.default.put(youtubeCacheRequest(key), response);
+  } catch {
+    // best-effort
+  }
+}
+
+async function youtubeSearchCacheKey(query: string, limit: number): Promise<string> {
+  const hash = await sha256Hex(`${normalizeCacheText(query)}|${limit}`);
+  return `yt-search:${hash}`;
+}
+
+async function youtubeVideoCacheKey(id: string): Promise<string> {
+  return `yt-video:${id}`;
+}
+
+async function youtubeRelatedCacheKey(id: string, limit: number): Promise<string> {
+  return `yt-related:${id}:${limit}`;
+}
+
+async function youtubePlaylistCacheKey(id: string): Promise<string> {
+  return `yt-playlist:${id}`;
+}
+
+interface YoutubeHit {
+  videoId: string;
+  title: string;
+  author: string;
+  thumbnailUrl: string;
+  lengthSeconds: number;
+}
+
+function isYoutubeVideoId(id: string): boolean {
+  return YOUTUBE_VIDEO_ID_PATTERN.test(id);
+}
+
+function parseYoutubeIdFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url, "https://youtube.com");
+    const v = parsed.searchParams.get("v");
+    if (v && isYoutubeVideoId(v)) return v;
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1] || "";
+    return isYoutubeVideoId(last) ? last : null;
+  } catch {
+    return null;
+  }
+}
+
+function thumbFromInvidious(
+  item: { videoThumbnails?: Array<{ quality?: string; url?: string }>; videoId?: string }
+): string {
+  const thumbs = item.videoThumbnails || [];
+  return (
+    thumbs.find((t) => t.quality === "medium")?.url ||
+    thumbs.find((t) => t.quality === "high")?.url ||
+    thumbs[0]?.url ||
+    (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : "")
+  );
+}
+
+function mapInvidiousHit(item: {
+  type?: string;
+  videoId?: string;
+  title?: string;
+  author?: string;
+  lengthSeconds?: number;
+  videoThumbnails?: Array<{ quality?: string; url?: string }>;
+}): YoutubeHit | null {
+  if (item.type && item.type !== "video" && item.type !== "shortVideo") return null;
+  const videoId = item.videoId || "";
+  if (!isYoutubeVideoId(videoId)) return null;
+  return {
+    videoId,
+    title: item.title || "Untitled",
+    author: item.author || "Unknown Artist",
+    thumbnailUrl: thumbFromInvidious({ ...item, videoId }),
+    lengthSeconds: typeof item.lengthSeconds === "number" ? item.lengthSeconds : 0,
+  };
+}
+
+function mapPipedHit(item: {
+  type?: string;
+  url?: string;
+  title?: string;
+  uploaderName?: string;
+  duration?: number;
+  thumbnail?: string;
+}): YoutubeHit | null {
+  if (item.type && item.type !== "stream" && item.type !== "video") return null;
+  const videoId = parseYoutubeIdFromUrl(item.url || "") || "";
+  if (!isYoutubeVideoId(videoId)) return null;
+  return {
+    videoId,
+    title: item.title || "Untitled",
+    author: item.uploaderName || "Unknown Artist",
+    thumbnailUrl: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    lengthSeconds: typeof item.duration === "number" ? item.duration : 0,
+  };
+}
+
+async function raceYoutubeFirst<T>(
+  tasks: Array<() => Promise<T | null>>,
+  concurrency = 3
+): Promise<T | null> {
+  if (tasks.length === 0) return null;
+  const limit = Math.max(1, concurrency);
+  let next = 0;
+  let inFlight = 0;
+  let remaining = tasks.length;
+  let settled: T | null = null;
+  let done = false;
+
+  await new Promise<void>((resolve) => {
+    const launch = () => {
+      while (!done && inFlight < limit && next < tasks.length) {
+        const task = tasks[next++];
+        inFlight += 1;
+        void task()
+          .then((result) => {
+            inFlight -= 1;
+            remaining -= 1;
+            if (result != null && !done) {
+              settled = result;
+              done = true;
+              resolve();
+              return;
+            }
+            if (remaining === 0) {
+              done = true;
+              resolve();
+              return;
+            }
+            launch();
+          })
+          .catch(() => {
+            inFlight -= 1;
+            remaining -= 1;
+            if (remaining === 0) {
+              done = true;
+              resolve();
+              return;
+            }
+            launch();
+          });
+      }
+    };
+    launch();
+  });
+
+  return settled;
+}
+
+async function fetchJsonUpstream(url: string, timeoutMs = 4500): Promise<unknown | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function searchYoutubeUpstream(query: string, limit: number): Promise<YoutubeHit[] | null> {
+  const tasks: Array<() => Promise<YoutubeHit[] | null>> = [
+    ...YOUTUBE_PIPED.map((instance) => async () => {
+      const data = await fetchJsonUpstream(
+        `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`
+      );
+      if (!data || typeof data !== "object") return null;
+      const items = Array.isArray((data as { items?: unknown }).items)
+        ? (data as { items: unknown[] }).items
+        : Array.isArray(data)
+          ? data
+          : [];
+      const hits = items
+        .map((item) => mapPipedHit(item as Parameters<typeof mapPipedHit>[0]))
+        .filter((h): h is YoutubeHit => Boolean(h));
+      return hits.length > 0 ? hits.slice(0, limit) : null;
+    }),
+    ...YOUTUBE_INVIDIOUS.map((instance) => async () => {
+      const data = await fetchJsonUpstream(
+        `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video`
+      );
+      if (!Array.isArray(data)) return null;
+      const hits = data
+        .map((item) => mapInvidiousHit(item as Parameters<typeof mapInvidiousHit>[0]))
+        .filter((h): h is YoutubeHit => Boolean(h));
+      return hits.length > 0 ? hits.slice(0, limit) : null;
+    }),
+  ];
+  return raceYoutubeFirst(tasks, 3);
+}
+
+async function fetchYoutubeVideoUpstream(videoId: string): Promise<YoutubeHit | null> {
+  const fallback: YoutubeHit = {
+    videoId,
+    title: "YouTube video",
+    author: "Unknown Artist",
+    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    lengthSeconds: 180,
+  };
+  const tasks: Array<() => Promise<YoutubeHit | null>> = [
+    ...YOUTUBE_INVIDIOUS.map((instance) => async () => {
+      const data = await fetchJsonUpstream(`${instance}/api/v1/videos/${videoId}`);
+      if (!data || typeof data !== "object") return null;
+      return mapInvidiousHit({ ...(data as object), videoId, type: "video" } as Parameters<
+        typeof mapInvidiousHit
+      >[0]);
+    }),
+    ...YOUTUBE_PIPED.map((instance) => async () => {
+      const data = await fetchJsonUpstream(`${instance}/streams/${videoId}`);
+      if (!data || typeof data !== "object") return null;
+      const body = data as {
+        title?: string;
+        uploader?: string;
+        uploaderName?: string;
+        thumbnailUrl?: string;
+        thumbnail?: string;
+        duration?: number;
+      };
+      return {
+        videoId,
+        title: body.title || fallback.title,
+        author: body.uploader || body.uploaderName || fallback.author,
+        thumbnailUrl: body.thumbnailUrl || body.thumbnail || fallback.thumbnailUrl,
+        lengthSeconds: typeof body.duration === "number" ? body.duration : fallback.lengthSeconds,
+      };
+    }),
+  ];
+  return (await raceYoutubeFirst(tasks, 3)) || fallback;
+}
+
+async function fetchYoutubeRelatedUpstream(videoId: string, limit: number): Promise<YoutubeHit[] | null> {
+  const tasks: Array<() => Promise<YoutubeHit[] | null>> = [
+    ...YOUTUBE_INVIDIOUS.map((instance) => async () => {
+      const data = await fetchJsonUpstream(`${instance}/api/v1/videos/${videoId}`);
+      if (!data || typeof data !== "object") return null;
+      const recommended = Array.isArray((data as { recommendedVideos?: unknown }).recommendedVideos)
+        ? (data as { recommendedVideos: unknown[] }).recommendedVideos
+        : [];
+      const hits = recommended
+        .map((video) => mapInvidiousHit({ ...(video as object), type: "video" } as Parameters<typeof mapInvidiousHit>[0]))
+        .filter((h): h is YoutubeHit => Boolean(h))
+        .filter((h) => h.videoId !== videoId);
+      return hits.length > 0 ? hits.slice(0, limit) : null;
+    }),
+    ...YOUTUBE_PIPED.map((instance) => async () => {
+      const data = await fetchJsonUpstream(`${instance}/streams/${videoId}`);
+      if (!data || typeof data !== "object") return null;
+      const related = Array.isArray((data as { relatedStreams?: unknown }).relatedStreams)
+        ? (data as { relatedStreams: unknown[] }).relatedStreams
+        : [];
+      const hits = related
+        .map((video) =>
+          mapPipedHit({ ...(video as object), type: (video as { type?: string }).type || "stream" } as Parameters<
+            typeof mapPipedHit
+          >[0])
+        )
+        .filter((h): h is YoutubeHit => Boolean(h))
+        .filter((h) => h.videoId !== videoId);
+      return hits.length > 0 ? hits.slice(0, limit) : null;
+    }),
+  ];
+  return raceYoutubeFirst(tasks, 3);
+}
+
+async function fetchYoutubePlaylistUpstream(
+  playlistId: string
+): Promise<{ name: string; hits: YoutubeHit[] } | null> {
+  const tasks: Array<() => Promise<{ name: string; hits: YoutubeHit[] } | null>> = [
+    ...YOUTUBE_INVIDIOUS.map((instance) => async () => {
+      const data = await fetchJsonUpstream(
+        `${instance}/api/v1/playlists/${encodeURIComponent(playlistId)}`,
+        6000
+      );
+      if (!data || typeof data !== "object") return null;
+      const videos = Array.isArray((data as { videos?: unknown }).videos)
+        ? (data as { videos: unknown[] }).videos
+        : [];
+      const hits = videos
+        .map((video) => mapInvidiousHit({ ...(video as object), type: "video" } as Parameters<typeof mapInvidiousHit>[0]))
+        .filter((h): h is YoutubeHit => Boolean(h));
+      if (hits.length === 0) return null;
+      return {
+        name: typeof (data as { title?: string }).title === "string" ? (data as { title: string }).title : "YouTube playlist",
+        hits: hits.slice(0, 50),
+      };
+    }),
+    ...YOUTUBE_PIPED.map((instance) => async () => {
+      const data = await fetchJsonUpstream(
+        `${instance}/playlists/${encodeURIComponent(playlistId)}`,
+        6000
+      );
+      if (!data || typeof data !== "object") return null;
+      const videos = Array.isArray((data as { relatedStreams?: unknown }).relatedStreams)
+        ? (data as { relatedStreams: unknown[] }).relatedStreams
+        : [];
+      const hits = videos
+        .map((video) => mapPipedHit({ ...(video as object), type: "stream" } as Parameters<typeof mapPipedHit>[0]))
+        .filter((h): h is YoutubeHit => Boolean(h));
+      if (hits.length === 0) return null;
+      return {
+        name: typeof (data as { name?: string }).name === "string" ? (data as { name: string }).name : "YouTube playlist",
+        hits: hits.slice(0, 50),
+      };
+    }),
+  ];
+  return raceYoutubeFirst(tasks, 3);
+}
+
+async function handleYoutubeSearch(request: Request, env: Env): Promise<Response> {
+  if (!(await checkRateLimit(request, env, "youtube"))) {
+    return rateLimitResponse(request, env, "Too many YouTube search requests. Please try again later.");
+  }
+  const url = new URL(request.url);
+  const query = url.searchParams.get("q")?.trim() || "";
+  if (query.length < 2) return errorResponse(request, env, "Search query is too short.", 400);
+  const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "8", 10) || 8));
+  const cacheKey = await youtubeSearchCacheKey(query, limit);
+
+  try {
+    const cached = await readYoutubeCache<{ data: YoutubeHit[] }>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
+    const hits = await searchYoutubeUpstream(query, limit);
+    if (!hits) return errorResponse(request, env, "No YouTube results available right now.", 502);
+    const payload = { data: hits };
+    await writeYoutubeCache(cacheKey, payload);
+    const response = jsonResponse(request, env, payload, 200);
+    response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
+    return response;
+  } catch {
+    return errorResponse(request, env, "Could not reach YouTube search backends right now.", 502);
+  }
+}
+
+async function handleYoutubeVideo(request: Request, env: Env, videoId: string): Promise<Response> {
+  if (!(await checkRateLimit(request, env, "youtube"))) {
+    return rateLimitResponse(request, env, "Too many YouTube requests. Please try again later.");
+  }
+  if (!isYoutubeVideoId(videoId)) return errorResponse(request, env, "Invalid YouTube video id.", 400);
+  const cacheKey = await youtubeVideoCacheKey(videoId);
+
+  try {
+    const cached = await readYoutubeCache<YoutubeHit>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
+    const hit = await fetchYoutubeVideoUpstream(videoId);
+    if (!hit) return errorResponse(request, env, "YouTube video not found.", 404);
+    await writeYoutubeCache(cacheKey, hit);
+    const response = jsonResponse(request, env, hit, 200);
+    response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
+    return response;
+  } catch {
+    return errorResponse(request, env, "Could not reach YouTube backends right now.", 502);
+  }
+}
+
+async function handleYoutubeRelated(request: Request, env: Env, videoId: string): Promise<Response> {
+  if (!(await checkRateLimit(request, env, "youtube"))) {
+    return rateLimitResponse(request, env, "Too many YouTube requests. Please try again later.");
+  }
+  if (!isYoutubeVideoId(videoId)) return errorResponse(request, env, "Invalid YouTube video id.", 400);
+  const url = new URL(request.url);
+  const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "12", 10) || 12));
+  const cacheKey = await youtubeRelatedCacheKey(videoId, limit);
+
+  try {
+    const cached = await readYoutubeCache<{ data: YoutubeHit[] }>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
+    const hits = await fetchYoutubeRelatedUpstream(videoId, limit);
+    if (!hits) return errorResponse(request, env, "No related YouTube videos available.", 502);
+    const payload = { data: hits };
+    await writeYoutubeCache(cacheKey, payload);
+    const response = jsonResponse(request, env, payload, 200);
+    response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
+    return response;
+  } catch {
+    return errorResponse(request, env, "Could not reach YouTube backends right now.", 502);
+  }
+}
+
+async function handleYoutubePlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
+  if (!(await checkRateLimit(request, env, "youtube"))) {
+    return rateLimitResponse(request, env, "Too many YouTube requests. Please try again later.");
+  }
+  if (!playlistId || playlistId.length < 6 || playlistId.length > 128) {
+    return errorResponse(request, env, "Invalid YouTube playlist id.", 400);
+  }
+  const cacheKey = await youtubePlaylistCacheKey(playlistId);
+
+  try {
+    const cached = await readYoutubeCache<{ name: string; data: YoutubeHit[] }>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
+    const playlist = await fetchYoutubePlaylistUpstream(playlistId);
+    if (!playlist) return errorResponse(request, env, "YouTube playlist not found.", 404);
+    const payload = { name: playlist.name, data: playlist.hits };
+    await writeYoutubeCache(cacheKey, payload);
+    const response = jsonResponse(request, env, payload, 200);
+    response.headers.set("Cache-Control", `public, max-age=${YOUTUBE_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
+    return response;
+  } catch {
+    return errorResponse(request, env, "Could not reach YouTube backends right now.", 502);
+  }
 }
 
 function trackUsageEvent(env: Env, event: string, route?: string): void {
@@ -655,6 +1133,25 @@ export default {
 
     if (url.pathname === "/api/deezer/batch-search" && request.method === "POST") {
       return handleDeezerBatchSearch(request, env);
+    }
+
+    if (url.pathname === "/api/youtube/search" && request.method === "GET") {
+      return handleYoutubeSearch(request, env);
+    }
+
+    const youtubeVideoMatch = url.pathname.match(/^\/api\/youtube\/video\/([^/]+)$/);
+    if (youtubeVideoMatch && request.method === "GET") {
+      return handleYoutubeVideo(request, env, decodeURIComponent(youtubeVideoMatch[1]));
+    }
+
+    const youtubeRelatedMatch = url.pathname.match(/^\/api\/youtube\/related\/([^/]+)$/);
+    if (youtubeRelatedMatch && request.method === "GET") {
+      return handleYoutubeRelated(request, env, decodeURIComponent(youtubeRelatedMatch[1]));
+    }
+
+    const youtubePlaylistMatch = url.pathname.match(/^\/api\/youtube\/playlist\/([^/]+)$/);
+    if (youtubePlaylistMatch && request.method === "GET") {
+      return handleYoutubePlaylist(request, env, decodeURIComponent(youtubePlaylistMatch[1]));
     }
 
     const deezerTrackRelatedMatch = url.pathname.match(/^\/api\/deezer\/track\/([^/]+)\/related$/);

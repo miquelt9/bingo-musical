@@ -17,6 +17,7 @@ interface SuggestSongsModalProps {
   provider: MusicProvider;
   seeds: Track[];
   existingIds: Array<string | null | undefined>;
+  existingTracks?: Array<Pick<Track, "title" | "artist">>;
   title?: string;
   onClose: () => void;
   onAddTrack: (track: Track) => void;
@@ -34,18 +35,26 @@ function hitSubtitle(item: SuggestHit): string {
   if (item.provider === "deezer") {
     return `${item.hit.artist}${item.hit.album ? ` · ${item.hit.album}` : ""}`;
   }
+  const artist = item.catalog?.artist || item.hit.author;
   const duration = item.hit.lengthSeconds > 0 ? ` · ${formatDuration(item.hit.lengthSeconds)}` : "";
-  return `${item.hit.author}${duration}`;
+  return `${artist}${duration}`;
+}
+
+function hitTitle(item: SuggestHit): string {
+  if (item.provider === "deezer") return item.hit.title;
+  return item.catalog?.title || item.hit.title;
 }
 
 function hitArtUrl(item: SuggestHit): string {
-  return item.provider === "deezer" ? item.hit.albumArtUrl : item.hit.thumbnailUrl;
+  if (item.provider === "deezer") return item.hit.albumArtUrl;
+  return item.catalog?.artworkUrl || item.hit.thumbnailUrl;
 }
 
 export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
   provider,
   seeds,
   existingIds,
+  existingTracks = [],
   title,
   onClose,
   onAddTrack,
@@ -59,8 +68,10 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const seedsRef = useRef(seeds);
   const excludeRef = useRef(existingIds);
+  const excludeTracksRef = useRef(existingTracks);
   seedsRef.current = seeds;
   excludeRef.current = existingIds;
+  excludeTracksRef.current = existingTracks;
   const alreadyInDeck = new Set([
     ...existingIds.filter((id): id is string => Boolean(id)),
     ...addedIds,
@@ -79,6 +90,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
 
     const snapshotSeeds = seedsRef.current;
     const snapshotExclude = excludeRef.current;
+    const snapshotExcludeTracks = excludeTracksRef.current;
 
     void (async () => {
       try {
@@ -86,6 +98,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
           provider,
           seeds: snapshotSeeds,
           excludeIds: snapshotExclude,
+          excludeTracks: snapshotExcludeTracks,
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
@@ -137,14 +150,14 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
   const modalTitle =
     title ||
     (seeds.length === 1
-      ? `Similar to ${seeds[0].title}`
+      ? `More songs like ${seeds[0].artist}`
       : `Suggested songs (${seeds.length} seeds)`);
 
   return (
     <PcModal title={modalTitle} onClose={onClose} className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <p className="text-xs mb-3">
-        Suggestions based on songs already in this deck. Only playable{" "}
-        {getProviderLabel(provider)} results are shown.
+        Other songs from artists in this deck (not alternate uploads of the same track). Only
+        playable {getProviderLabel(provider)} results are shown.
       </p>
 
       {isLoading && (
@@ -190,7 +203,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
                     }
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">{item.hit.title}</p>
+                    <p className="text-sm font-semibold truncate">{hitTitle(item)}</p>
                     <p className="text-xs truncate">{hitSubtitle(item)}</p>
                     <p
                       className={`text-[11px] mt-1 flex items-center gap-1 ${

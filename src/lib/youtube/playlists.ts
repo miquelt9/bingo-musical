@@ -145,6 +145,51 @@ export async function fetchYoutubePlaylist(input: string): Promise<YoutubePlayli
     throw new Error("Paste a YouTube playlist URL (youtube.com/playlist?list=...).");
   }
 
+  const apiUrl = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
+  if (apiUrl) {
+    try {
+      const res = await fetchWithTimeout(
+        `${apiUrl}/api/youtube/playlist/${encodeURIComponent(playlistId)}`,
+        10000
+      );
+      if (res.ok) {
+        const body = (await res.json()) as {
+          name?: string;
+          data?: Array<{
+            videoId?: string;
+            title?: string;
+            author?: string;
+            thumbnailUrl?: string;
+            lengthSeconds?: number;
+          }>;
+        };
+        const tracks: Track[] = [];
+        const seen = new Set<string>();
+        for (const hit of body.data || []) {
+          const videoId = hit.videoId || "";
+          if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId) || seen.has(videoId)) continue;
+          seen.add(videoId);
+          const { title, artist } = guessTitleArtist(hit.title || "Untitled", hit.author || "");
+          tracks.push(
+            createTrack({
+              title,
+              artist,
+              albumArtUrl: hit.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+              durationMs: typeof hit.lengthSeconds === "number" ? hit.lengthSeconds * 1000 : 180000,
+              media: { provider: "youtube", id: videoId, providerTitle: hit.title },
+              matchStatus: "matched",
+            })
+          );
+        }
+        if (tracks.length > 0) {
+          return { playlistId, name: body.name || "YouTube Playlist", tracks };
+        }
+      }
+    } catch {
+      // fall through to curated fallbacks
+    }
+  }
+
   const backends = getYoutubeBackends();
   const result = await raceFirstSuccess(
     [
@@ -155,13 +200,13 @@ export async function fetchYoutubePlaylist(input: string): Promise<YoutubePlayli
         (instance) => (signal: AbortSignal) => tryInvidiousPlaylist(instance, playlistId, signal)
       ),
     ],
-    { concurrency: 6 }
+    { concurrency: 1 }
   );
 
   if (result) return result;
 
   throw new Error(
-    "Could not load that YouTube playlist from public search instances. Paste a song list instead, or try again later."
+    "Could not load that YouTube playlist. Paste a song list instead, or try again later."
   );
 }
 

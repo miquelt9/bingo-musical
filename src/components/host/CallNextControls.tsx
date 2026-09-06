@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, SlidersHorizontal, Music2, ChevronDown, Monitor } from "lucide-react";
+import { Shuffle, SlidersHorizontal, Music2, ChevronDown, ChevronUp, Monitor } from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/player/player";
 import { getTrackProvider, getTrackSourceId } from "../../lib/music/providers";
@@ -226,6 +226,9 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
           <Monitor className="w-4 h-4" />
           Open display window
         </Button>
+        <p className="text-[10px] opacity-80 -mt-1">
+          Prefer Display for projection. Host Video is off by default so players cannot see titles.
+        </p>
       </div>
 
       <div
@@ -248,12 +251,30 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
               compact={isMobile}
             />
           ) : (
-            <div className="host-now-playing-placeholder">
-              <Music2 className="w-5 h-5 shrink-0 opacity-60" />
-              <div className="min-w-0">
-                <p className="font-bold text-sm truncate">Mystery track playing…</p>
-                <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
+            <div className="flex flex-col gap-2">
+              <div className="host-now-playing-placeholder">
+                <Music2 className="w-5 h-5 shrink-0 opacity-60" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm truncate">Mystery track playing…</p>
+                  <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
+                </div>
+                {!isMobile && (
+                  <button
+                    type="button"
+                    className="pc-button shrink-0"
+                    onClick={onToggleVideo}
+                    title="Toggle visual video preview (covered until reveal)"
+                  >
+                    <span>Video</span>
+                    {showVideo ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
+              {!isMobile && (
+                <p className="text-[10px] opacity-80">
+                  Video stays covered until you reveal. For projection, use Display or leave Video off.
+                </p>
+              )}
             </div>
           )
         ) : currentTrack ? (

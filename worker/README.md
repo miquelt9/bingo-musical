@@ -69,11 +69,14 @@ Rebuild/redeploy the frontend after setting the secret.
 | `GET` | `/api/deezer/search?q=...&limit=8` | Normalized Deezer catalog search metadata |
 | `POST` | `/api/deezer/batch-search` | Match up to 40 title/artist pairs in one rate-limited request |
 | `GET` | `/api/deezer/track/:id` | Normalized Deezer track metadata |
-| `GET` | `/api/deezer/track/:id/related?limit=12` | Artist-radio style suggestions for a track |
+| `GET` | `/api/youtube/search?q=...&limit=8` | Normalized YouTube search via curated Piped/Invidious backends |
+| `GET` | `/api/youtube/video/:id` | Normalized YouTube video metadata |
+| `GET` | `/api/youtube/related/:id?limit=12` | Related video suggestions for a YouTube id |
+| `GET` | `/api/youtube/playlist/:id` | Playlist title + up to 50 video hits |
 
 Share ids are the first 10 characters of a SHA-256 hash (base64url) of a canonical JSON payload: deck name, provider, each song’s title, artist, optional album, provider media id, and clip start/end. Volatile fields such as `exportedAt`, preview URLs, and local track ids are excluded. Legacy random ids remain valid until TTL expiry.
 
-Deezer endpoints return metadata and the provider’s short preview URL only. The Worker does not proxy or download audio. Requests are rate limited and metadata responses are cached briefly at Cloudflare’s edge.
+Deezer and YouTube metadata endpoints return catalog/search metadata only. The Worker does not proxy or download media. YouTube search races a small curated list of public Piped/Invidious instances server-side so browsers do not fan out. Requests are rate limited and metadata responses are cached briefly at Cloudflare’s edge.
 
 Shared decks expire after 1 year (KV TTL).
 

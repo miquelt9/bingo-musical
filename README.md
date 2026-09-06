@@ -17,7 +17,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Paste a bulk song list (`Artist - Title`, one per line) and match clips in the editor.
   - Decks auto-save as you add songs from search.
 - 🔍 **Smart YouTube Matcher:**
-  - Automated fallback search across public Invidious & Piped instances (no YouTube API token required).
+  - YouTube search/metadata via the share Worker (curated Piped/Invidious backends server-side; narrow client fallback only if the Worker is down).
   - Direct 1-click manual YouTube link or Video ID override with instant thumbnail validation.
   - Cancellable batch auto-match and embed validation.
   - **Fix all songs** for blocked videos — finds and replaces restricted clips from the deck or taskbar notice.
@@ -152,12 +152,12 @@ Playback uses YouTube embeds and Deezer’s short preview URLs only — the app 
 
 ## Privacy
 
-Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), the configured share Worker, noembed.com, Deezer preview hosts, and GitHub Pages hosting. Deezer metadata requests go through the share Worker; the browser loads the returned short preview URL directly. We use cookieless Cloudflare Web Analytics for aggregate traffic and anonymous feature-usage counts via our share Worker. There are no user accounts. See **Settings → Privacy** in the app for the full notice.
+Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, catalog APIs (iTunes, Deezer, MusicBrainz), the configured share Worker, noembed.com, Deezer preview hosts, and GitHub Pages hosting. YouTube and Deezer metadata requests go through the share Worker when configured; a narrow Piped/Invidious fallback may be used only if the Worker is unavailable. The browser loads Deezer short preview URLs and YouTube embeds directly. We use cookieless Cloudflare Web Analytics for aggregate traffic and anonymous feature-usage counts via our share Worker. There are no user accounts. See **Settings → Privacy** in the app for the full notice.
 
 ## Third-party services
 
-- **YouTube** — embedded playback via the IFrame Player API (ads may appear during clips)
+- **YouTube** — embedded playback via the IFrame Player API (ads may appear during clips); search/metadata via the share Worker, with a narrow Piped/Invidious client fallback only if the Worker is down
 - **Deezer** — catalog metadata via the Worker and short preview URLs (normally 30 seconds; no full-track playback)
-- **Invidious / Piped** — public instances for YouTube search and metadata (no official YouTube API key)
+- **Share Worker** — deck sharing, Deezer metadata, and YouTube search/metadata (server-side Piped/Invidious race)
 - **iTunes, Deezer, MusicBrainz** — song title autocomplete
 - **noembed.com** — YouTube embed permission checks

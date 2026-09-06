@@ -172,8 +172,9 @@ export const DraggableVideoWindow: React.FC<DraggableVideoWindowProps> = ({
       </div>
       <div
         ref={contentRef}
-        className="video-window-draggable__content bg-black"
+        className="video-window-draggable__content bg-black relative"
         style={{ height: contentHeight }}
+        aria-label="YouTube video preview"
       />
       {visible && (
         <div

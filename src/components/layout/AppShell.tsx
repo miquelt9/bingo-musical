@@ -79,12 +79,11 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (isHostRoute) {
       requestPlayerEngine();
+    } else {
+      // Keep Host audio-only by default; don't leave a spoiler window open on other routes.
+      setShowVideo(false);
     }
-  }, [isHostRoute, requestPlayerEngine]);
-
-  useEffect(() => {
-    setShowVideo(isHostRoute);
-  }, [isHostRoute, setShowVideo]);
+  }, [isHostRoute, requestPlayerEngine, setShowVideo]);
 
   const taskbarItemClass = (tab: string) =>
     `pc-button pc-taskbar-item ${activeTab === tab ? "active" : ""}`;

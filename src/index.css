@@ -226,12 +226,26 @@
   height: 100%;
 }
 
+.youtube-player--privacy {
+  position: relative;
+}
+
 .youtube-player--privacy iframe {
   pointer-events: none;
 }
 
 .youtube-player--privacy .youtube-player-mount {
   overflow: hidden;
+}
+
+/* Opaque cover over iframe chrome / end-screen titles during mystery Host play. */
+.youtube-player--privacy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #000;
+  pointer-events: none;
 }
 
 .display-page {
@@ -356,11 +370,16 @@
 .video-window-player-slot--active {
   z-index: 2;
   pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
 }
 
 .video-window-player-slot--standby {
   z-index: 1;
   pointer-events: none;
+  /* Hide preloaded next clip so titles/end-screens cannot spoil mystery play. */
+  opacity: 0;
+  visibility: hidden;
 }
 
 /* Hidden fallback mount for the always-on YouTube player engine */

@@ -142,10 +142,11 @@ export const SettingsPage: React.FC = () => {
         Your decks stay in this browser. We don&apos;t run accounts or keep your song lists on a server.
       </p>
       <p>
-        Clips play through YouTube embeds or Deezer&apos;s short preview URLs. Deezer search metadata is
-        requested through the configured Worker, while the browser loads the returned preview directly;
-        the app never requests full-length audio. Search and matching may call public music APIs and
-        YouTube-related services. YouTube may show its own ads — that&apos;s normal for embedded playback.
+        Clips play through YouTube embeds or Deezer&apos;s short preview URLs. Deezer and YouTube
+        search metadata are requested through the configured Worker, while the browser loads Deezer
+        previews and YouTube embeds directly; the app never requests full-length audio. Catalog
+        matching may also call iTunes or MusicBrainz. YouTube may show its own ads — that&apos;s
+        normal for embedded playback.
       </p>
       <p>
         Deezer previews are normally limited to the first 30 seconds and can be unavailable or blocked
