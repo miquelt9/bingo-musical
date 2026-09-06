@@ -136,7 +136,7 @@ interface DeezerApiTrack {
   duration?: number;
   preview?: string;
   link?: string;
-  artist?: { name?: string };
+  artist?: { id?: number; name?: string };
   album?: { title?: string; cover_medium?: string; cover_small?: string };
 }
 
@@ -283,6 +283,52 @@ async function handleDeezerTrack(request: Request, env: Env, id: string): Promis
     const normalized = normalizeDeezerTrack(item);
     if (!normalized) return errorResponse(request, env, "Deezer track is unavailable.", 404);
     const response = jsonResponse(request, env, normalized, 200);
+    response.headers.set("Cache-Control", "public, max-age=300");
+    return response;
+  } catch {
+    return errorResponse(request, env, "Could not reach Deezer right now.", 502);
+  }
+}
+
+async function handleDeezerTrackRelated(request: Request, env: Env, id: string): Promise<Response> {
+  if (!(await checkRateLimit(request, env))) {
+    return errorResponse(request, env, "Too many Deezer requests. Please try again later.", 429);
+  }
+  if (!/^\d+$/.test(id)) return errorResponse(request, env, "Invalid Deezer track id.", 400);
+
+  const url = new URL(request.url);
+  const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "12", 10) || 12));
+
+  try {
+    const trackUpstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
+      cf: { cacheTtl: 300, cacheEverything: true },
+    });
+    if (!trackUpstream.ok) return errorResponse(request, env, "Deezer track not found.", 404);
+    const track = await trackUpstream.json() as DeezerApiTrack & { error?: unknown };
+    const artistId =
+      typeof track.artist?.id === "number" || typeof track.artist?.id === "string"
+        ? String(track.artist.id)
+        : "";
+    if (!/^\d+$/.test(artistId)) {
+      return errorResponse(request, env, "Could not resolve the artist for that track.", 404);
+    }
+
+    const radioUpstream = await fetch(
+      `${DEEZER_API}/artist/${encodeURIComponent(artistId)}/radio?limit=${limit}`,
+      { cf: { cacheTtl: 300, cacheEverything: true } }
+    );
+    if (!radioUpstream.ok) {
+      return errorResponse(request, env, `Deezer artist radio failed (${radioUpstream.status}).`, 502);
+    }
+    const body = await radioUpstream.json() as { data?: DeezerApiTrack[] };
+    const data = Array.isArray(body.data)
+      ? body.data
+          .map(normalizeDeezerTrack)
+          .filter((item): item is Record<string, unknown> => item !== null)
+          .filter((item) => item.id !== id)
+          .slice(0, limit)
+      : [];
+    const response = jsonResponse(request, env, { data, total: data.length }, 200);
     response.headers.set("Cache-Control", "public, max-age=300");
     return response;
   } catch {
@@ -483,6 +529,15 @@ export default {
 
     if (url.pathname === "/api/deezer/batch-search" && request.method === "POST") {
       return handleDeezerBatchSearch(request, env);
+    }
+
+    const deezerTrackRelatedMatch = url.pathname.match(/^\/api\/deezer\/track\/([^/]+)\/related$/);
+    if (deezerTrackRelatedMatch && request.method === "GET") {
+      return handleDeezerTrackRelated(
+        request,
+        env,
+        decodeURIComponent(deezerTrackRelatedMatch[1])
+      );
     }
 
     const deezerTrackMatch = url.pathname.match(/^\/api\/deezer\/track\/([^/]+)$/);

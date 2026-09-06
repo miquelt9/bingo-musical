@@ -220,6 +220,68 @@ export async function searchYoutubeVideos(
   return hits ? rankYoutubeHits(hits, q).slice(0, limit) : [];
 }
 
+export async function fetchRelatedYoutubeVideos(
+  videoId: string,
+  limit = 12,
+  signal?: AbortSignal
+): Promise<YoutubeSearchHit[]> {
+  if (!isVideoId(videoId)) return [];
+
+  const backends = getYoutubeBackends();
+  const tasks: Array<(taskSignal: AbortSignal) => Promise<YoutubeSearchHit[] | null>> = [
+    ...backends.invidious.map((instance) => async (taskSignal: AbortSignal) => {
+      try {
+        const res = await fetchWithTimeout(`${instance}/api/v1/videos/${videoId}`, 5000, taskSignal);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const recommended = Array.isArray(data.recommendedVideos) ? data.recommendedVideos : [];
+        const hits = recommended
+          .map((video: {
+            videoId?: string;
+            title?: string;
+            author?: string;
+            lengthSeconds?: number;
+            videoThumbnails?: Array<{ quality?: string; url?: string }>;
+          }) => mapInvidiousVideo({ ...video, type: "video" }))
+          .filter((h: YoutubeSearchHit | null): h is YoutubeSearchHit => Boolean(h))
+          .filter((h: YoutubeSearchHit) => h.videoId !== videoId);
+        if (hits.length === 0) return null;
+        rememberYoutubeBackend("invidious", instance);
+        return hits.slice(0, limit);
+      } catch {
+        return null;
+      }
+    }),
+    ...backends.piped.map((instance) => async (taskSignal: AbortSignal) => {
+      try {
+        const res = await fetchWithTimeout(`${instance}/streams/${videoId}`, 5000, taskSignal);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const related = Array.isArray(data.relatedStreams) ? data.relatedStreams : [];
+        const hits = related
+          .map((video: {
+            url?: string;
+            title?: string;
+            uploaderName?: string;
+            duration?: number;
+            thumbnail?: string;
+            type?: string;
+          }) => mapPipedVideo({ ...video, type: video.type || "stream" }))
+          .filter((h: YoutubeSearchHit | null): h is YoutubeSearchHit => Boolean(h))
+          .filter((h: YoutubeSearchHit) => h.videoId !== videoId);
+        if (hits.length === 0) return null;
+        rememberYoutubeBackend("piped", instance);
+        return hits.slice(0, limit);
+      } catch {
+        return null;
+      }
+    }),
+  ];
+
+  const hits = await raceFirstSuccess(tasks, { parentSignal: signal, concurrency: 6 });
+  return hits ? hits.slice(0, limit) : [];
+}
+
 async function fetchVideoHit(videoId: string, signal?: AbortSignal): Promise<YoutubeSearchHit> {
   const fallback: YoutubeSearchHit = {
     videoId,

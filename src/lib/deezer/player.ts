@@ -281,6 +281,41 @@ function createAudioSlot(container: HTMLElement, wrapperId: string, slotIndex: n
   return { wrapperId, container, audio, clip: null, preloadedClip: null };
 }
 
+const DEEZER_ENGINE_HOST_ID = "deezer-audio-engine-host";
+
+/**
+ * Mount audio slots synchronously so play() can run inside a user gesture.
+ * React's DeezerAudioEngine also calls this; both share one document.body host.
+ */
+export function ensureDeezerPlayersMounted(): void {
+  if (slots && slots[0].container.isConnected && slots[1].container.isConnected) {
+    currentState.isReady = true;
+    return;
+  }
+
+  let host = document.getElementById(DEEZER_ENGINE_HOST_ID);
+  if (!host) {
+    host = document.createElement("div");
+    host.id = DEEZER_ENGINE_HOST_ID;
+    host.className = "deezer-audio-engine-fallback print:hidden";
+    host.setAttribute("aria-hidden", "true");
+    document.body.appendChild(host);
+  }
+
+  let wrapA = host.querySelector<HTMLElement>(`#${DEEZER_SLOT_WRAP_A}`);
+  let wrapB = host.querySelector<HTMLElement>(`#${DEEZER_SLOT_WRAP_B}`);
+  if (!wrapA || !wrapB) {
+    host.replaceChildren();
+    wrapA = document.createElement("div");
+    wrapA.id = DEEZER_SLOT_WRAP_A;
+    wrapB = document.createElement("div");
+    wrapB.id = DEEZER_SLOT_WRAP_B;
+    host.append(wrapA, wrapB);
+  }
+
+  mountDeezerPlayers(wrapA, wrapB);
+}
+
 export function mountDeezerPlayers(wrapA: HTMLElement, wrapB: HTMLElement): void {
   if (slots && slots[0].container.isConnected && slots[1].container.isConnected) {
     currentState.isReady = true;
@@ -400,6 +435,7 @@ export function activatePreloadedClip(clip: PlayableClip, handleEnd?: ClipEndHan
 
 export function playClip(clip: PlayableClip, handleEnd?: ClipEndHandler, options?: ClipPlaybackOptions): void {
   if (clip.provider !== "deezer") return;
+  ensureDeezerPlayersMounted();
   if (!slots || !currentState.isReady) {
     pendingPlay = { clip, handleEnd, options };
     currentState.currentClip = clip;

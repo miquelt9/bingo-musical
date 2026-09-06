@@ -6,6 +6,8 @@ import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
 import { ConvertDeckModal } from "../components/decks/ConvertDeckModal";
 import { SongSearch } from "../components/tracks/SongSearch";
+import { SuggestSongsModal } from "../components/tracks/SuggestSongsModal";
+import { pickSuggestSeeds } from "../lib/music/suggest";
 import { batchMatchTracks, BatchMatchProgress } from "../lib/youtube/matcher";
 import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
 import {
@@ -29,9 +31,11 @@ import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { BackButton } from "../components/ui/BackButton";
 import { useToast } from "../state/ToastContext";
+import { usePlayerUI } from "../state/PlayerUIContext";
 import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { stopPlayback } from "../lib/player/player";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { getTrackSourceId } from "../lib/music/providers";
 import {
@@ -44,6 +48,7 @@ import {
   AlertTriangle,
   Sparkles,
   ArrowRightLeft,
+  Wand2,
 } from "lucide-react";
 
 export const EditorPage: React.FC = () => {
@@ -65,10 +70,12 @@ export const EditorPage: React.FC = () => {
   const cancelMatchingRef = useRef(false);
 
   const { showToast } = useToast();
+  const { requestPlayerEngine } = usePlayerUI();
   const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
+  const [suggestSeeds, setSuggestSeeds] = useState<Track[] | null>(null);
   const [addSongRainbowDismissed, setAddSongRainbowDismissed] = useState(false);
   const [hostGateOpen, setHostGateOpen] = useState(false);
   const [hostGateChecking, setHostGateChecking] = useState(false);
@@ -318,6 +325,15 @@ export const EditorPage: React.FC = () => {
   const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
   const hostDisabled = isTrackBusy || hostGateChecking || emptyDeck || !readiness.canHost;
 
+  const handleOpenSuggestSongs = () => {
+    if (emptyDeck) return;
+    setSuggestSeeds(pickSuggestSeeds(deck.tracks));
+  };
+
+  const handleFindSimilar = (track: Track) => {
+    setSuggestSeeds([track]);
+  };
+
   const handleHostLiveGame = async () => {
     if (!deck) return;
 
@@ -359,7 +375,13 @@ export const EditorPage: React.FC = () => {
 
   const handleOpenAddTrack = () => {
     setAddSongRainbowDismissed(true);
+    if (deck) requestPlayerEngine(deck.provider);
     setShowAddTrackModal(true);
+  };
+
+  const handleCloseAddTrack = () => {
+    stopPlayback();
+    setShowAddTrackModal(false);
   };
 
   return (
@@ -506,6 +528,15 @@ export const EditorPage: React.FC = () => {
               <ArrowRightLeft className="w-4 h-4" />
               <span className="hidden sm:inline">Convert deck</span>
             </Button>
+            <Button
+              type="button"
+              onClick={handleOpenSuggestSongs}
+              disabled={emptyDeck}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Suggest songs based on this deck"}
+            >
+              <Wand2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Suggest songs</span>
+            </Button>
             <span
               className={`pc-rainbow-attention${showAddSongRainbow ? " pc-rainbow-attention--active" : ""}`}
             >
@@ -524,6 +555,7 @@ export const EditorPage: React.FC = () => {
         tracks={deck.tracks}
         onUpdateTrack={handleUpdateTrack}
         onDeleteTrack={handleDeleteTrack}
+        onFindSimilar={handleFindSimilar}
         onAutoMatchAll={handleAutoMatchAll}
         onAutoFixBlocked={handleAutoFixBlocked}
         isMatching={isTrackBusy}
@@ -594,7 +626,7 @@ export const EditorPage: React.FC = () => {
       {showAddTrackModal && (
         <PcModal
           title={`Add a song (${deck.tracks.length} in deck)`}
-          onClose={() => setShowAddTrackModal(false)}
+          onClose={handleCloseAddTrack}
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
         >
         <p className="text-xs mb-3">
@@ -609,6 +641,22 @@ export const EditorPage: React.FC = () => {
             onAddTracks={handleAddTracks}
           />
         </PcModal>
+      )}
+
+      {suggestSeeds && suggestSeeds.length > 0 && (
+        <SuggestSongsModal
+          provider={deck.provider}
+          seeds={suggestSeeds}
+          existingIds={deck.tracks.map((t) => getTrackSourceId(t))}
+          title={
+            suggestSeeds.length === 1
+              ? `Similar to ${suggestSeeds[0].title}`
+              : "Suggested songs"
+          }
+          onClose={() => setSuggestSeeds(null)}
+          onAddTrack={handleAddTrack}
+          onAddTracks={handleAddTracks}
+        />
       )}
 
       <ConvertDeckModal

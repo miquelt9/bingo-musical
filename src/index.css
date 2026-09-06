@@ -458,13 +458,23 @@
 .pc-overflow-menu {
   position: relative;
   display: inline-flex;
+  align-items: center;
 }
 
 .pc-overflow-menu-trigger {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+}
+
+@media (max-width: 639px) {
+  .pc-overflow-menu-trigger {
+    min-width: 44px;
+  }
 }
 
 .pc-overflow-menu-panel {

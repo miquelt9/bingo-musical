@@ -21,6 +21,7 @@ interface TrackTableProps {
   tracks: Track[];
   onUpdateTrack: (updatedTrack: Track) => void;
   onDeleteTrack?: (trackId: string) => void;
+  onFindSimilar?: (track: Track) => void;
   onAutoMatchAll?: () => void;
   onAutoFixBlocked?: () => void;
   isMatching?: boolean;
@@ -75,6 +76,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   tracks,
   onUpdateTrack,
   onDeleteTrack,
+  onFindSimilar,
   onAutoMatchAll,
   onAutoFixBlocked,
   isMatching = false,
@@ -289,6 +291,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
           onEditVideo={setEditingTrack}
           onEditClip={setTimestampEditingTrack}
           onDeleteTrack={onDeleteTrack ? setTrackPendingDelete : undefined}
+          onFindSimilar={onFindSimilar}
           isTrackBlocked={isTrackBlocked}
           isBusy={isMatching}
         />

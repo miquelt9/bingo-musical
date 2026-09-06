@@ -16,6 +16,7 @@ interface OverflowMenuProps {
   items: OverflowMenuItem[];
   ariaLabel?: string;
   className?: string;
+  triggerClassName?: string;
   align?: "left" | "right";
 }
 
@@ -57,6 +58,7 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
   items,
   ariaLabel = "More actions",
   className,
+  triggerClassName,
   align = "right",
 }) => {
   const [open, setOpen] = useState(false);
@@ -158,7 +160,7 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        className="pc-button pc-overflow-menu-trigger"
+        className={twMerge("pc-button pc-overflow-menu-trigger", triggerClassName)}
         onClick={() => setOpen((value) => !value)}
         aria-label={ariaLabel}
         aria-expanded={open}

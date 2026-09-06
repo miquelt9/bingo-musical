@@ -127,6 +127,20 @@ export async function resolveDeezerTrack(input: string, signal?: AbortSignal): P
   return hit;
 }
 
+export async function fetchDeezerRelatedTracks(
+  trackId: string,
+  limit = 12,
+  signal?: AbortSignal
+): Promise<DeezerTrackHit[]> {
+  const id = parseDeezerTrackId(trackId);
+  if (!id) return [];
+  const body = await fetchJson<{ data?: Partial<DeezerTrackHit>[] }>(
+    `/api/deezer/track/${encodeURIComponent(id)}/related?limit=${Math.max(1, Math.min(20, limit))}`,
+    signal
+  );
+  return (body.data || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null);
+}
+
 export function deezerHitToTrack(hit: DeezerTrackHit): Track {
   const media = {
     provider: "deezer" as const,

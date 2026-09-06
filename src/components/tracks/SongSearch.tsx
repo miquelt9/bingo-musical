@@ -726,12 +726,13 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
                       track={hitToPreviewTrack(hit, canPreview)}
                       size="sm"
                       showLabel
+                      className="!h-8 !min-h-8"
                     />
                     <button
                       type="button"
                       disabled={added || isBlocked || isAddingThis || isCheckingThis}
                       onClick={() => void addHit(hit)}
-                      className={`pc-button shrink-0 text-xs ${added ? "active" : isBlocked ? "" : "pc-button--primary"}`}
+                      className={`pc-button inline-flex items-center justify-center gap-1.5 shrink-0 h-8 !min-h-8 px-2.5 py-1 text-xs ${added ? "active" : isBlocked ? "" : "pc-button--primary"}`}
                       title={
                         isBlocked
                           ? embedStatus?.reason || "This video cannot be embedded in the game"

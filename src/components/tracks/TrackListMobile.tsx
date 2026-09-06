@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Timer,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 
 interface TrackListMobileProps {
@@ -21,6 +22,7 @@ interface TrackListMobileProps {
   onEditVideo: (track: Track) => void;
   onEditClip: (track: Track) => void;
   onDeleteTrack?: (track: Track) => void;
+  onFindSimilar?: (track: Track) => void;
   isTrackBlocked: (track: Track) => boolean;
   isBusy?: boolean;
 }
@@ -55,6 +57,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
   onEditVideo,
   onEditClip,
   onDeleteTrack,
+  onFindSimilar,
   isTrackBlocked,
   isBusy = false,
 }) => {
@@ -99,6 +102,16 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
         ) : null;
 
         const overflowItems = [
+          ...(onFindSimilar
+            ? [
+                {
+                  icon: <Sparkles className="w-4 h-4" />,
+                  label: "Find similar",
+                  onClick: () => onFindSimilar(track),
+                  disabled: isBusy,
+                },
+              ]
+            : []),
           {
             icon: <Edit2 className="w-4 h-4" />,
             label: isBlocked ? "Fix source" : "Change source",
@@ -128,99 +141,6 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
             : []),
         ];
 
-        const mobileActions = (
-          <div className="flex items-center gap-1 shrink-0">
-            {isReady ? (
-              <button
-                type="button"
-                className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
-                disabled={isBusy}
-                onClick={() => onEditClip(track)}
-                title="Edit clip timestamps"
-              >
-                <Timer className="w-4 h-4" />
-                <span>Edit clip</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
-                disabled={isBusy}
-                onClick={() => onEditVideo(track)}
-                title={isBlocked ? "Fix unavailable source" : "Link or change source"}
-              >
-                <Edit2 className="w-4 h-4" />
-                <span>Fix</span>
-              </button>
-            )}
-            {statusButton}
-            <ClipPreviewButton track={track} size="sm" className={actionBtnSize} />
-            <OverflowMenu ariaLabel={`Edit ${track.title}`} items={overflowItems} />
-          </div>
-        );
-
-        const desktopActions = (
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isReady ? (
-              <button
-                type="button"
-                className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
-                disabled={isBusy}
-                onClick={() => onEditClip(track)}
-                title="Edit clip timestamps"
-              >
-                <Timer className="w-4 h-4" />
-                Edit clip
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
-                disabled={isBusy}
-                onClick={() => onEditVideo(track)}
-                title={isBlocked ? "Fix unavailable source" : "Link or change source"}
-              >
-                <Edit2 className="w-4 h-4" />
-                Fix
-              </button>
-            )}
-            {statusButton}
-            <ClipPreviewButton
-              track={track}
-              size="md"
-              showLabel
-              className={`${actionBtnSize} !h-9`}
-            />
-            {isReady && (
-              <button
-                type="button"
-                className={`${actionBtnClass} ${actionBtnSize}`}
-                disabled={isBusy}
-                onClick={() => onEditVideo(track)}
-                title="Change source"
-              >
-                <Edit2 className="w-4 h-4" />
-                Change source
-              </button>
-            )}
-            {onDeleteTrack && (
-              <button
-                type="button"
-                className={`${actionBtnClass} ${actionBtnSize}`}
-                disabled={isBusy}
-                onClick={() => onDeleteTrack(track)}
-                title="Remove song from deck"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
-            )}
-          </div>
-        );
-
-        const thumbSize = isMobile ? "w-14 h-14" : "w-20 h-20";
-        const thumbIconSize = isMobile ? "w-7 h-7" : "w-9 h-9";
-
         return (
           <li
             key={track.id}
@@ -232,11 +152,13 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
               <img
                 src={thumb}
                 alt=""
-                className={`${thumbSize} object-cover shrink-0 pc-bevel-inset`}
+                className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} object-cover shrink-0 pc-bevel-inset`}
               />
             ) : (
-              <div className={`${thumbSize} pc-bevel-inset shrink-0 flex items-center justify-center`}>
-                <Music2 className={thumbIconSize} />
+              <div
+                className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} pc-bevel-inset shrink-0 flex items-center justify-center`}
+              >
+                <Music2 className={isMobile ? "w-7 h-7" : "w-9 h-9"} />
               </div>
             )}
 
@@ -249,7 +171,43 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
               </p>
             </div>
 
-            {isMobile ? mobileActions : desktopActions}
+            <div className={`flex items-center shrink-0 ${isMobile ? "gap-1" : "gap-1.5"}`}>
+              {isReady ? (
+                <button
+                  type="button"
+                  className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
+                  disabled={isBusy}
+                  onClick={() => onEditClip(track)}
+                  title="Edit clip timestamps"
+                >
+                  <Timer className="w-4 h-4" />
+                  {isMobile ? <span>Edit clip</span> : "Edit clip"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
+                  disabled={isBusy}
+                  onClick={() => onEditVideo(track)}
+                  title={isBlocked ? "Fix unavailable source" : "Link or change source"}
+                >
+                  <Edit2 className="w-4 h-4" />
+                  {isMobile ? <span>Fix</span> : "Fix"}
+                </button>
+              )}
+              {statusButton}
+              <ClipPreviewButton
+                track={track}
+                size={isMobile ? "sm" : "md"}
+                showLabel={!isMobile}
+                className={isMobile ? actionBtnSize : `${actionBtnSize} !h-9`}
+              />
+              <OverflowMenu
+                ariaLabel={`More actions for ${track.title}`}
+                items={overflowItems}
+                triggerClassName={actionBtnSize}
+              />
+            </div>
           </li>
         );
       })}

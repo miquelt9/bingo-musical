@@ -416,7 +416,7 @@ export const HomePage: React.FC = () => {
             >
               <Disc3 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">Deezer</span>
-              <span className="text-[11px] text-muted">30-second previews</span>
+              <span className="text-[11px] text-muted">30-second previews (ad-free)</span>
             </button>
           </div>
         </div>
