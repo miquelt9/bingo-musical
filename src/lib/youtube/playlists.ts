@@ -70,8 +70,7 @@ async function tryInvidiousPlaylist(
           artist,
           albumArtUrl: thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
           durationMs,
-          youtubeVideoId: videoId,
-          youtubeTitle: video.title,
+          media: { provider: "youtube", id: videoId, providerTitle: video.title },
           matchStatus: "matched",
         })
       );
@@ -122,8 +121,7 @@ async function tryPipedPlaylist(
           artist,
           albumArtUrl: video.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
           durationMs,
-          youtubeVideoId: videoId,
-          youtubeTitle: video.title,
+          media: { provider: "youtube", id: videoId, providerTitle: video.title },
           matchStatus: "matched",
         })
       );
@@ -170,11 +168,12 @@ export async function fetchYoutubePlaylist(input: string): Promise<YoutubePlayli
 export function createDeckFromYoutubePlaylist(imported: YoutubePlaylistImport): Deck {
   const now = new Date().toISOString();
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     name: imported.name,
     createdAt: now,
     updatedAt: now,
+    provider: "youtube",
     source: {
       type: "youtube-playlist",
       playlistId: imported.playlistId,

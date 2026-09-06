@@ -12,7 +12,7 @@ import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay"
 import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { HostInlineVideoPanel } from "../components/player/DraggableVideoWindow";
-import { attachPlayersToViewport } from "../lib/youtube/player";
+import { attachPlayersToViewport } from "../lib/player/player";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -32,9 +32,10 @@ import {
   continueClipPlayback,
   activatePreloadedClip,
   PlayerPlaybackState,
-  Clip,
-} from "../lib/youtube/player";
+} from "../lib/player/player";
+import { PlayableClip } from "../lib/player/types";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
+import { getTrackProvider, getTrackSourceId } from "../lib/music/providers";
 import { getDeckReadiness } from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import {
@@ -44,7 +45,7 @@ import {
   HostSessionData,
   SerializedCalledEntry,
 } from "../lib/host/session";
-import { trackEvent } from "../lib/analytics/trackEvent";
+import { trackEvent } from "../lib/usage/events";
 import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown, Edit3 } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -58,10 +59,13 @@ const REVEAL_BEFORE_CHAIN_MS = 3000;
 const DEFAULT_CROSSFADE_MS = 1500;
 const CROSSFADE_SESSION_KEY = "bingo.host.crossfadeOverlapMs";
 
-function trackToClip(track: Track): Clip | null {
-  if (!track.youtubeVideoId) return null;
+function trackToClip(track: Track): PlayableClip | null {
+  const sourceId = getTrackSourceId(track);
+  if (!sourceId) return null;
   return {
-    videoId: track.youtubeVideoId,
+    provider: getTrackProvider(track),
+    sourceId,
+    previewUrl: track.media?.provider === "deezer" ? track.media.previewUrl ?? undefined : undefined,
     startTime: track.startTime,
     endTime: track.endTime,
     trackId: track.id,
@@ -420,14 +424,14 @@ export const HostPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (!isMobile) return;
+    if (!isMobile || deck?.provider !== "youtube") return;
     if (!showVideo) {
       attachPlayersToViewport(null);
       return;
     }
     attachPlayersToViewport(videoViewportRef.current);
     return () => attachPlayersToViewport(null);
-  }, [isMobile, showVideo, playerState?.isReady]);
+  }, [deck?.provider, isMobile, showVideo, playerState?.isReady]);
 
   useEffect(() => {
     return subscribeToPlayerState((state) => {
@@ -656,8 +660,8 @@ export const HostPage: React.FC = () => {
       onStop={stopPlayback}
       onToggleMute={toggleMute}
       onVolumeChange={setVolume}
-      onToggleVideo={toggleVideo}
-      showVideo={showVideo}
+      onToggleVideo={deck.provider === "youtube" ? toggleVideo : () => {}}
+      showVideo={deck.provider === "youtube" && showVideo}
       playerState={playerState}
       isPlaying={isPlaying}
       currentTrack={currentCall?.track ?? null}
@@ -696,8 +700,8 @@ export const HostPage: React.FC = () => {
           const thumbUrl =
             !hideAnswer &&
             (item.track.albumArtUrl ||
-              (item.track.youtubeVideoId
-                ? getYoutubeThumbnailUrl(item.track.youtubeVideoId, "hqdefault")
+              (item.track.media?.provider === "youtube"
+                ? getYoutubeThumbnailUrl(item.track.media.id, "hqdefault")
                 : ""));
           return (
             <div
@@ -807,7 +811,7 @@ export const HostPage: React.FC = () => {
           <div className="host-board-mobile-stack">
             {answerCard}
 
-            <HostInlineVideoPanel visible={showVideo} viewportRef={videoViewportRef} />
+            <HostInlineVideoPanel visible={deck.provider === "youtube" && showVideo} viewportRef={videoViewportRef} />
 
             <div className="host-controls">{hostControls}</div>
 

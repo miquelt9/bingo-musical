@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { RouteLabel, trackEvent } from "../lib/analytics/trackEvent";
+import { RouteLabel, trackEvent } from "../lib/usage/events";
 
 function routeLabelFromPath(pathname: string): RouteLabel {
   if (pathname === "/") return "home";
@@ -13,7 +13,7 @@ function routeLabelFromPath(pathname: string): RouteLabel {
   return "home";
 }
 
-export function useRouteAnalytics(): void {
+export function useRouteUsage(): void {
   const { pathname } = useLocation();
 
   useEffect(() => {

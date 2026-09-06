@@ -34,7 +34,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
   onSave,
 }) => {
   const [inputValue, setInputValue] = useState(
-    track.youtubeVideoId ? `https://www.youtube.com/watch?v=${track.youtubeVideoId}` : ""
+    track.media?.provider === "youtube" ? `https://www.youtube.com/watch?v=${track.media.id}` : ""
   );
   const [error, setError] = useState<string | null>(null);
   const [isCheckingAudio, setIsCheckingAudio] = useState(false);
@@ -54,7 +54,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setInputValue(
-      track.youtubeVideoId ? `https://www.youtube.com/watch?v=${track.youtubeVideoId}` : ""
+      track.media?.provider === "youtube" ? `https://www.youtube.com/watch?v=${track.media.id}` : ""
     );
     setError(null);
     setSearchQuery(defaultSearchQuery(track));
@@ -194,7 +194,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
     if (!inputValue.trim()) {
       onSave({
         ...track,
-        youtubeVideoId: null,
+        media: null,
         matchStatus: "pending",
       });
       onClose();
@@ -208,7 +208,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
 
     onSave({
       ...track,
-      youtubeVideoId: parsedId,
+      media: { provider: "youtube", id: parsedId },
       matchStatus: "manual",
     });
     onClose();

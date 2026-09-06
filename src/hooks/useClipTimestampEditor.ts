@@ -14,6 +14,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
   const elementId = `yt-clip-editor-${track.id}-${reactId.replace(/:/g, "")}`;
 
   const playerRef = useRef<YT.Player | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewRafRef = useRef<number | null>(null);
   const pollTimerRef = useRef<number | null>(null);
 
@@ -26,9 +27,15 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
 
-  const hasVideo = Boolean(track.youtubeVideoId);
+  const isDeezer = track.media?.provider === "deezer";
+  const deezerMedia = track.media?.provider === "deezer" ? track.media : null;
+  const sourceId = track.media?.id;
+  const hasVideo = Boolean(sourceId && (!isDeezer || deezerMedia?.previewUrl));
   const clipDuration = Math.max(0, draftEnd - draftStart);
-  const isValid = draftStart >= 0 && draftEnd >= draftStart + MIN_CLIP_SECONDS;
+  const maxDuration = isDeezer ? (videoDuration || (deezerMedia?.previewDurationMs ?? 30000) / 1000) : 0;
+  const isValid = draftStart >= 0
+    && draftEnd >= draftStart + MIN_CLIP_SECONDS
+    && (!isDeezer || (draftStart <= maxDuration && draftEnd <= maxDuration));
 
   const stopPreview = useCallback(() => {
     if (previewRafRef.current !== null) {
@@ -38,6 +45,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     setIsPreviewing(false);
     try {
       playerRef.current?.pauseVideo();
+      audioRef.current?.pause();
     } catch {
       // ignore
     }
@@ -55,6 +63,10 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
       // ignore
     }
     playerRef.current = null;
+    if (audioRef.current) {
+      audioRef.current.remove();
+      audioRef.current = null;
+    }
     setIsPlayerReady(false);
     setIsLoadingPlayer(false);
   }, [stopPreview]);
@@ -70,7 +82,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
   }, [isOpen, track.startTime, track.endTime, track.id]);
 
   useEffect(() => {
-    if (!isOpen || !hasVideo || !track.youtubeVideoId) {
+    if (!isOpen || !hasVideo || !sourceId) {
       destroyPlayer();
       return;
     }
@@ -81,13 +93,40 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
 
     const initPlayer = async () => {
       try {
+        if (deezerMedia?.previewUrl) {
+          const container = document.getElementById(elementId);
+          if (!container) throw new Error("Audio editor container is unavailable.");
+          const audio = document.createElement("audio");
+          audio.className = "w-full";
+          audio.controls = true;
+          audio.preload = "metadata";
+          audio.src = deezerMedia.previewUrl;
+          audio.onloadedmetadata = () => {
+            if (cancelled) return;
+            const knownDuration = (deezerMedia.previewDurationMs ?? 30000) / 1000;
+            setVideoDuration(Math.min(audio.duration || knownDuration, knownDuration));
+            audio.currentTime = Math.min(track.startTime, knownDuration);
+            setCurrentTime(audio.currentTime);
+            setIsPlayerReady(true);
+            setIsLoadingPlayer(false);
+          };
+          audio.onerror = () => {
+            if (cancelled) return;
+            setPlayerError("Failed to load the Deezer preview. The preview URL may have expired.");
+            setIsLoadingPlayer(false);
+          };
+          container.replaceChildren(audio);
+          audioRef.current = audio;
+          audio.load();
+          return;
+        }
         await loadYoutubeApi();
         if (cancelled) return;
 
         const player = new window.YT!.Player(elementId, {
           width: "100%",
           height: "100%",
-          videoId: track.youtubeVideoId!,
+          videoId: sourceId,
           playerVars: {
             autoplay: 0,
             controls: 1,
@@ -136,13 +175,18 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
       cancelled = true;
       destroyPlayer();
     };
-  }, [isOpen, hasVideo, track.youtubeVideoId, track.startTime, elementId, destroyPlayer]);
+  }, [isOpen, hasVideo, sourceId, isDeezer, track.media, track.startTime, elementId, destroyPlayer]);
 
   useEffect(() => {
     if (!isOpen || !isPlayerReady) return;
 
     pollTimerRef.current = window.setInterval(() => {
       const player = playerRef.current;
+      const audio = audioRef.current;
+      if (isDeezer && audio) {
+        setCurrentTime(audio.currentTime || 0);
+        return;
+      }
       if (!player || typeof player.getCurrentTime !== "function") return;
       const time = player.getCurrentTime() ?? 0;
       setCurrentTime(time);
@@ -158,12 +202,13 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
         pollTimerRef.current = null;
       }
     };
-  }, [isOpen, isPlayerReady]);
+  }, [isOpen, isPlayerReady, isDeezer]);
 
   const handleSetStart = useCallback(() => {
     const player = playerRef.current;
-    if (!player || typeof player.getCurrentTime !== "function") return;
-    const nextStart = Math.max(0, Math.floor(player.getCurrentTime() ?? 0));
+    const current = isDeezer ? audioRef.current?.currentTime : player?.getCurrentTime?.();
+    if (current === undefined) return;
+    const nextStart = Math.max(0, Math.floor(current ?? 0));
     const maxStart = videoDuration > 0 ? Math.max(0, videoDuration - MIN_CLIP_SECONDS) : draftEnd - MIN_CLIP_SECONDS;
     const clampedStart = videoDuration > 0 ? Math.min(nextStart, maxStart) : nextStart;
     setDraftStart(clampedStart);
@@ -173,30 +218,31 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
         : clampedStart + MIN_CLIP_SECONDS;
       setDraftEnd(nextEnd);
     }
-  }, [videoDuration, draftEnd]);
+  }, [videoDuration, draftEnd, isDeezer]);
 
   const handleSetEnd = useCallback(() => {
     const player = playerRef.current;
-    if (!player || typeof player.getCurrentTime !== "function") return;
-    let nextEnd = Math.max(draftStart + MIN_CLIP_SECONDS, Math.floor(player.getCurrentTime() ?? 0));
+    const current = isDeezer ? audioRef.current?.currentTime : player?.getCurrentTime?.();
+    if (current === undefined) return;
+    let nextEnd = Math.max(draftStart + MIN_CLIP_SECONDS, Math.floor(current ?? 0));
     if (videoDuration > 0) {
       nextEnd = Math.min(nextEnd, videoDuration);
     }
     setDraftEnd(nextEnd);
-  }, [draftStart, videoDuration]);
+  }, [draftStart, videoDuration, isDeezer]);
 
   const handleSeek = useCallback((seconds: number) => {
-    const player = playerRef.current;
-    if (!player || typeof player.seekTo !== "function") return;
     const max = videoDuration > 0 ? videoDuration : seconds;
     const clamped = Math.max(0, Math.min(seconds, max));
-    player.seekTo(clamped, true);
+    if (isDeezer && audioRef.current) audioRef.current.currentTime = clamped;
+    else playerRef.current?.seekTo(clamped, true);
     setCurrentTime(clamped);
-  }, [videoDuration]);
+  }, [videoDuration, isDeezer]);
 
   const handlePreview = useCallback(() => {
     const player = playerRef.current;
-    if (!player || !isValid) return;
+    const audio = audioRef.current;
+    if ((!player && !audio) || !isValid) return;
 
     if (isPreviewing) {
       stopPreview();
@@ -204,11 +250,29 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     }
 
     setIsPreviewing(true);
-    player.seekTo(draftStart, true);
-    player.playVideo();
+    if (audio) {
+      audio.currentTime = draftStart;
+      void audio.play().catch(() => {
+        setPlayerError("The browser blocked preview playback. Press play on the audio control.");
+        stopPreview();
+      });
+    } else {
+      player?.seekTo(draftStart, true);
+      player?.playVideo();
+    }
 
     const watchEnd = () => {
       const p = playerRef.current;
+      const a = audioRef.current;
+      if (a) {
+        if (a.currentTime >= draftEnd - 0.2) {
+          a.pause();
+          stopPreview();
+          return;
+        }
+        previewRafRef.current = requestAnimationFrame(watchEnd);
+        return;
+      }
       if (!p || typeof p.getCurrentTime !== "function") {
         stopPreview();
         return;

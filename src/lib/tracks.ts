@@ -1,4 +1,4 @@
-import { Track } from "../types/deck";
+import { MusicProvider, Track, TrackMedia } from "../types/deck";
 
 export function defaultClipWindow(durationMs = 180000): { startTime: number; endTime: number } {
   const durationSec = Math.max(1, Math.floor(durationMs / 1000));
@@ -7,19 +7,51 @@ export function defaultClipWindow(durationMs = 180000): { startTime: number; end
   return { startTime, endTime };
 }
 
+export function defaultDeezerClipWindow(previewDurationMs = 30000): { startTime: number; endTime: number } {
+  const durationSec = Math.max(1, Math.min(30, Math.floor(previewDurationMs / 1000)));
+  return { startTime: 0, endTime: durationSec };
+}
+
+export function getTrackPreviewDurationMs(track: Pick<Track, "media" | "durationMs">): number {
+  if (track.media?.provider === "deezer") {
+    return Math.max(1000, Math.min(30000, track.media.previewDurationMs ?? 30000));
+  }
+  return Math.max(1000, track.durationMs);
+}
+
 export function createTrack(input: {
   title: string;
   artist: string;
   album?: string;
   albumArtUrl?: string;
   durationMs?: number;
+  provider?: MusicProvider;
+  media?: TrackMedia | null;
   youtubeVideoId?: string | null;
   youtubeTitle?: string;
+  deezerTrackId?: string;
+  deezerPreviewUrl?: string | null;
+  deezerPreviewDurationMs?: number;
+  deezerUrl?: string;
   matchStatus?: Track["matchStatus"];
 }): Track {
   const durationMs = input.durationMs ?? 180000;
-  const { startTime, endTime } = defaultClipWindow(durationMs);
-  const youtubeVideoId = input.youtubeVideoId ?? null;
+  const media = input.media !== undefined
+    ? input.media
+    : input.deezerTrackId
+      ? {
+          provider: "deezer" as const,
+          id: input.deezerTrackId,
+          previewUrl: input.deezerPreviewUrl ?? null,
+          previewDurationMs: input.deezerPreviewDurationMs ?? 30000,
+          providerUrl: input.deezerUrl,
+        }
+      : input.youtubeVideoId
+        ? { provider: "youtube" as const, id: input.youtubeVideoId, providerTitle: input.youtubeTitle }
+        : null;
+  const { startTime, endTime } = media?.provider === "deezer"
+    ? defaultDeezerClipWindow(media.previewDurationMs)
+    : defaultClipWindow(durationMs);
 
   return {
     id: `track-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -28,11 +60,10 @@ export function createTrack(input: {
     album: input.album?.trim() || "",
     albumArtUrl: input.albumArtUrl?.trim() || "",
     durationMs,
-    youtubeVideoId,
-    youtubeTitle: input.youtubeTitle,
+    media,
     startTime,
     endTime,
-    matchStatus: input.matchStatus ?? (youtubeVideoId ? "matched" : "pending"),
+    matchStatus: input.matchStatus ?? (media ? "matched" : "pending"),
   };
 }
 

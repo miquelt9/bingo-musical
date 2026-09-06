@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Play, Square, AlertCircle, Loader2 } from "lucide-react";
 import { Track } from "../../types/deck";
 import {
-  playClip,
-  stopPlayback,
-  subscribeToPlayerState,
-  PlayerPlaybackState,
-} from "../../lib/youtube/player";
+  playClip as playProviderClip,
+  stopPlayback as stopProviderPlayback,
+  subscribeToPlayerState as subscribeToProviderState,
+  PlayerPlaybackState as ProviderPlaybackState,
+} from "../../lib/player/player";
 import { usePlayerUI } from "../../state/PlayerUIContext";
 
 interface ClipPreviewButtonProps {
@@ -22,11 +22,11 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
   size = "md",
   showLabel = false,
 }) => {
-  const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
+  const [playerState, setPlayerState] = useState<ProviderPlaybackState | null>(null);
   const { requestPlayerEngine } = usePlayerUI();
 
   useEffect(() => {
-    return subscribeToPlayerState((state) => {
+    return subscribeToProviderState((state) => {
       setPlayerState(state);
     });
   }, []);
@@ -43,14 +43,16 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!track.youtubeVideoId) return;
+    if (!track.media) return;
 
     if (isPlaying || isLoading) {
-      stopPlayback();
+      stopProviderPlayback();
     } else {
-      requestPlayerEngine();
-      playClip({
-        videoId: track.youtubeVideoId,
+      requestPlayerEngine(track.media.provider);
+      playProviderClip({
+        provider: track.media.provider,
+        sourceId: track.media.id,
+        previewUrl: track.media.provider === "deezer" ? track.media.previewUrl ?? undefined : undefined,
         startTime: track.startTime,
         endTime: track.endTime,
         trackId: track.id,
@@ -60,7 +62,7 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
     }
   };
 
-  const hasVideo = Boolean(track.youtubeVideoId);
+  const hasVideo = Boolean(track.media && (track.media.provider === "youtube" || track.media.previewUrl));
 
   const sizeClasses = {
     sm: "px-2.5 py-1 text-xs gap-1.5 h-8",
@@ -81,10 +83,10 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
       disabled={!hasVideo}
       title={
         !hasVideo
-          ? "No YouTube video matched yet"
+          ? "No playable source matched yet"
           : isPlaying
           ? "Stop snippet preview"
-          : `Play ${durationSec}s snippet (${track.startTime}s - ${track.endTime}s)`
+          : `Play ${durationSec}s ${track.media?.provider === "deezer" ? "Deezer preview" : "YouTube snippet"}`
       }
       className={`relative inline-flex items-center justify-center font-medium pc-button select-none overflow-hidden ${
         sizeClasses[size]

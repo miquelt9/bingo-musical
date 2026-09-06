@@ -4,7 +4,7 @@ import { Button, Window } from "@miquelt9/pc-ui";
 import { AlertCircle, Upload } from "lucide-react";
 import { BackButton } from "../components/ui/BackButton";
 import { useDeck } from "../state/DeckContext";
-import { trackEvent } from "../lib/analytics/trackEvent";
+import { trackEvent } from "../lib/usage/events";
 
 export const ImportPage: React.FC = () => {
   const { importDeck } = useDeck();

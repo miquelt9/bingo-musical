@@ -66,8 +66,13 @@ Rebuild/redeploy the frontend after setting the secret.
 | `GET` | `/api/decks/:shareId` | Fetch stored deck export JSON |
 | `POST` | `/api/events` | Record anonymous usage event (returns `204`) |
 | `GET` | `/api/health` | Health check |
+| `GET` | `/api/deezer/search?q=...&limit=8` | Normalized Deezer catalog search metadata |
+| `POST` | `/api/deezer/batch-search` | Match up to 40 title/artist pairs in one rate-limited request |
+| `GET` | `/api/deezer/track/:id` | Normalized Deezer track metadata |
 
-Share ids are the first 10 characters of a SHA-256 hash (base64url) of a canonical JSON payload: deck name plus each song’s title, artist, optional album, YouTube video id, and clip start/end. Volatile fields such as `exportedAt` and local track ids are excluded. Legacy random ids remain valid until TTL expiry.
+Share ids are the first 10 characters of a SHA-256 hash (base64url) of a canonical JSON payload: deck name, provider, each song’s title, artist, optional album, provider media id, and clip start/end. Volatile fields such as `exportedAt`, preview URLs, and local track ids are excluded. Legacy random ids remain valid until TTL expiry.
+
+Deezer endpoints return metadata and the provider’s short preview URL only. The Worker does not proxy or download audio. Requests are rate limited and metadata responses are cached briefly at Cloudflare’s edge.
 
 Shared decks expire after 1 year (KV TTL).
 

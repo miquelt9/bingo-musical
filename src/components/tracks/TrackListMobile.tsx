@@ -41,7 +41,7 @@ function getErrorStatus(
       icon: <AlertCircle className="w-4 h-4 shrink-0" />,
     };
   }
-  if (track.matchStatus === "pending" || !track.youtubeVideoId) {
+  if (track.matchStatus === "pending" || !track.media) {
     return {
       label: "Pending",
       icon: <Clock className="w-4 h-4 shrink-0 opacity-60" />,
@@ -77,11 +77,11 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
       {tracks.map((track) => {
         const thumb =
           track.albumArtUrl ||
-          (track.youtubeVideoId ? getYoutubeThumbnailUrl(track.youtubeVideoId, "mqdefault") : null);
+          (track.media?.provider === "youtube" ? getYoutubeThumbnailUrl(track.media.id, "mqdefault") : null);
         const isBlocked = isTrackBlocked(track);
         const isReady =
           (track.matchStatus === "matched" || track.matchStatus === "manual") && !isBlocked;
-        const hasVideo = Boolean(track.youtubeVideoId);
+        const hasVideo = Boolean(track.media && (track.media.provider === "youtube" || track.media.previewUrl));
         const errorStatus = getErrorStatus(track, isBlocked);
 
         const statusButton = errorStatus ? (
@@ -101,7 +101,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
         const overflowItems = [
           {
             icon: <Edit2 className="w-4 h-4" />,
-            label: isBlocked ? "Fix video" : "Change video",
+            label: isBlocked ? "Fix source" : "Change source",
             onClick: () => onEditVideo(track),
             disabled: isBusy,
           },
@@ -147,7 +147,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
                 disabled={isBusy}
                 onClick={() => onEditVideo(track)}
-                title={isBlocked ? "Fix unavailable video" : "Link or change YouTube video"}
+                title={isBlocked ? "Fix unavailable source" : "Link or change source"}
               >
                 <Edit2 className="w-4 h-4" />
                 <span>Fix</span>
@@ -178,7 +178,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 className={`${actionBtnClass} ${actionBtnSize} pc-button--primary`}
                 disabled={isBusy}
                 onClick={() => onEditVideo(track)}
-                title={isBlocked ? "Fix unavailable video" : "Link or change YouTube video"}
+                title={isBlocked ? "Fix unavailable source" : "Link or change source"}
               >
                 <Edit2 className="w-4 h-4" />
                 Fix
@@ -197,10 +197,10 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 className={`${actionBtnClass} ${actionBtnSize}`}
                 disabled={isBusy}
                 onClick={() => onEditVideo(track)}
-                title="Change YouTube video"
+                title="Change source"
               >
                 <Edit2 className="w-4 h-4" />
-                Change video
+                Change source
               </button>
             )}
             {onDeleteTrack && (

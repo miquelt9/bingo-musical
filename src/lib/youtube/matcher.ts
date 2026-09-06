@@ -88,7 +88,7 @@ export async function batchMatchTracks(
   const results = [...tracks];
   const pendingIndices = results
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => !t.youtubeVideoId || t.matchStatus === "pending" || t.matchStatus === "failed");
+    .filter(({ t }) => !t.media || t.media.provider !== "youtube" || t.matchStatus === "pending" || t.matchStatus === "failed");
 
   let completed = tracks.length - pendingIndices.length;
   let matched = tracks.filter((t) => t.matchStatus === "matched" || t.matchStatus === "manual").length;
@@ -110,8 +110,9 @@ export async function batchMatchTracks(
       if (match.videoId) {
         results[current.idx] = {
           ...track,
-          youtubeVideoId: match.videoId,
-          youtubeTitle: match.videoTitle,
+          media: match.videoId
+            ? { provider: "youtube", id: match.videoId, providerTitle: match.videoTitle }
+            : null,
           matchStatus: "matched",
         };
         matched++;

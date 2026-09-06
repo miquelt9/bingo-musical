@@ -54,9 +54,14 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
     );
   }
 
+  const youtubeId = track.media?.provider === "youtube" ? track.media.id : null;
+  const providerUrl = track.media?.provider === "deezer"
+    ? track.media.providerUrl
+    : youtubeId ? getYoutubeWatchUrl(youtubeId, track.startTime) : null;
+  const providerLabel = track.media?.provider === "deezer" ? "Deezer" : "YouTube";
   const thumbUrl =
     track.albumArtUrl ||
-    (track.youtubeVideoId ? getYoutubeThumbnailUrl(track.youtubeVideoId, "hqdefault") : "");
+    (youtubeId ? getYoutubeThumbnailUrl(youtubeId, "hqdefault") : "");
 
   const clipDuration = track.endTime - track.startTime;
 
@@ -105,31 +110,31 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
               <div>
                 <p className="font-bold text-pc-error">Audio Playback Restricted</p>
                 <p className="text-[11px] text-pc-error mt-0.5">
-                  The video owner restricted this song from playing outside YouTube. You can play it directly in a new tab:
+                  This {providerLabel} source is not available for in-game playback. You can open it directly in a new tab:
                 </p>
               </div>
             </div>
-            {track.youtubeVideoId && (
+            {providerUrl && (
               <div className="flex justify-end">
                 <a
-                  href={getYoutubeWatchUrl(track.youtubeVideoId, track.startTime)}
+                  href={providerUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="pc-button shrink-0 text-xs inline-flex items-center gap-1.5 font-bold w-full sm:w-auto justify-center"
-                  title="Open video directly on YouTube in new tab"
+                  title={`Open ${providerLabel} source in new tab`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Play in YouTube ({track.startTime}s)</span>
+                  <span>Open in {providerLabel}</span>
                 </a>
               </div>
             )}
           </div>
         )}
 
-        {!track.youtubeVideoId && (
+        {(!track.media || (track.media.provider === "deezer" && !track.media.previewUrl)) && (
           <div className="p-2 pc-bevel-inset text-xs text-pc-warning flex items-center gap-2 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>This track does not have a linked YouTube video.</span>
+            <span>{track.media?.provider === "deezer" ? "This track does not have a usable Deezer preview." : "This track does not have a linked playback source."}</span>
           </div>
         )}
 
@@ -162,13 +167,13 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
                     <Music2 className="w-12 h-12" />
                   </div>
                 )}
-                {track.youtubeVideoId && (
+                {providerUrl && (
                   <a
-                    href={getYoutubeWatchUrl(track.youtubeVideoId, track.startTime)}
+                    href={providerUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="pc-button absolute bottom-1 right-1"
-                    title="Open YouTube video in new tab"
+                    title={`Open ${providerLabel} source in new tab`}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>

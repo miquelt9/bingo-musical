@@ -13,6 +13,9 @@ import { fetchSharedDeckPayload, isShareApiConfigured, publishSharedDeck } from 
 import { buildSharedDeckUrl, shareDeckNative } from "../lib/share/deckShare";
 import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
+import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
+import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
+import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 
 interface ShareDeckTarget {
   deck: Deck;
@@ -45,11 +48,38 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
 
+  const hydrateDefaultDeezerSample = useCallback(async () => {
+    if (!isDeezerApiConfigured()) return;
+
+    const stored = getStoredDecks();
+    const sample = stored.find((deck) => deck.id === SAMPLE_DEEZER_DECK.id);
+    if (!sample || sample.provider !== "deezer" || sample.tracks.every((track) => track.media?.provider === "deezer" && track.media.previewUrl)) {
+      return;
+    }
+
+    try {
+      const tracks = await batchMatchDeezerTracks(sample.tracks, 2);
+      const changed = tracks.some((track, index) => JSON.stringify(track) !== JSON.stringify(sample.tracks[index]));
+      if (!changed) return;
+
+      const saved = persistDeck({
+        ...sample,
+        tracks,
+        updatedAt: new Date().toISOString(),
+      });
+      setDecks(getStoredDecks());
+      setActiveDeck((current) => current?.id === saved.id ? saved : current);
+    } catch {
+      // The starter remains available for manual matching when the Worker or Deezer is offline.
+    }
+  }, []);
+
   const refreshDecks = useCallback(() => {
     const loaded = getStoredDecks();
     setDecks(loaded);
     setIsLoading(false);
-  }, []);
+    void hydrateDefaultDeezerSample();
+  }, [hydrateDefaultDeezerSample]);
 
   useEffect(() => {
     refreshDecks();
@@ -150,7 +180,29 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const importSharedDeck = async (shareId: string): Promise<Deck> => {
     const payload = await fetchSharedDeckPayload(shareId);
-    const imported = importDeckFromData(payload);
+    let imported = importDeckFromData(payload);
+    if (imported.provider === "deezer") {
+      const missing = imported.tracks.filter((track) => track.media?.provider === "deezer" && !track.media.previewUrl);
+      const resolved = await Promise.all(missing.map(async (track) => {
+        try {
+          return { sourceId: track.media!.id, hit: await resolveDeezerTrack(track.media!.id) };
+        } catch {
+          return null;
+        }
+      }));
+      const bySourceId = new Map(resolved.filter((item): item is NonNullable<typeof item> => item !== null).map((item) => [item.sourceId, item.hit]));
+      if (bySourceId.size > 0) {
+        imported = updateDeck({
+          ...imported,
+          tracks: imported.tracks.map((track) => {
+            const hit = track.media?.provider === "deezer" ? bySourceId.get(track.media.id) : undefined;
+            if (!hit) return track;
+            const resolvedTrack = deezerHitToTrack(hit);
+            return { ...track, album: resolvedTrack.album, albumArtUrl: resolvedTrack.albumArtUrl, durationMs: resolvedTrack.durationMs, media: resolvedTrack.media, startTime: resolvedTrack.startTime, endTime: resolvedTrack.endTime, matchStatus: "matched" as const };
+          }),
+        });
+      }
+    }
     refreshDecks();
     setActiveDeck(imported);
     return imported;

@@ -45,8 +45,7 @@ export function hitToTrack(
     album: catalog?.album || "",
     albumArtUrl: catalog?.artworkUrl || hit.thumbnailUrl || getYoutubeThumbnailUrl(hit.videoId),
     durationMs: catalog?.durationMs || (hit.lengthSeconds || 180) * 1000,
-    youtubeVideoId: hit.videoId,
-    youtubeTitle: hit.title,
+    media: { provider: "youtube", id: hit.videoId, providerTitle: hit.title },
     matchStatus: "matched",
   });
 }

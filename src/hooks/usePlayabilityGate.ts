@@ -43,7 +43,7 @@ export function usePlayabilityGate(
   const tracksSignature = useMemo(
     () =>
       tracks
-        .map((track) => `${track.id}:${track.youtubeVideoId ?? ""}:${track.matchStatus}`)
+        .map((track) => `${track.id}:${track.media?.provider ?? ""}:${track.media?.id ?? ""}:${track.media?.provider === "deezer" ? track.media.previewUrl ?? "" : ""}:${track.matchStatus}`)
         .join("|"),
     [tracks]
   );
@@ -69,7 +69,7 @@ export function usePlayabilityGate(
       const knownIssues = getKnownPlayabilityIssues(tracks);
       const pendingVerificationCount = tracks.filter(
         (track) =>
-          track.youtubeVideoId && (forceRecheck || isTrackNeedsVerification(track))
+          track.media?.provider === "youtube" && (forceRecheck || isTrackNeedsVerification(track))
       ).length;
 
       if (knownIssues.length > 0) {

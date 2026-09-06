@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { batchMatchTracks, BatchMatchProgress } from "../lib/youtube/matcher";
+import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
 import { getUnplayableTracks, BatchValidationProgress } from "../lib/youtube/validator";
 import { ensureDeckPlayable } from "../lib/youtube/playabilityGate";
 import { useDeck } from "../state/DeckContext";
 import { useToast } from "../state/ToastContext";
-import { Deck } from "../types/deck";
+import { Deck, Track } from "../types/deck";
 
 interface UseAutoFixBlockedOptions {
   onDeckUpdate?: (deck: Deck) => void;
@@ -47,7 +48,7 @@ export function useAutoFixBlocked(
       if (blockedTrackIds.has(t.id)) {
         return {
           ...t,
-          youtubeVideoId: null,
+          media: null,
           matchStatus: "pending" as const,
         };
       }
@@ -58,10 +59,7 @@ export function useAutoFixBlocked(
     cancelMatchingRef.current = false;
 
     try {
-      const updatedTracks = await batchMatchTracks(
-        preparedTracks,
-        2,
-        (progress, updatedTrack) => {
+      const onProgress = (progress: BatchMatchProgress, updatedTrack: Track) => {
           setMatchProgress(progress);
           const latestDeck = deckRef.current;
           if (!latestDeck) return;
@@ -69,9 +67,10 @@ export function useAutoFixBlocked(
             t.id === updatedTrack.id ? updatedTrack : t
           );
           applyDeckUpdate({ ...latestDeck, tracks: nextTracks });
-        },
-        () => cancelMatchingRef.current
-      );
+        };
+      const updatedTracks = currentDeck.provider === "deezer"
+        ? await batchMatchDeezerTracks(preparedTracks, 2, onProgress, () => cancelMatchingRef.current)
+        : await batchMatchTracks(preparedTracks, 2, onProgress, () => cancelMatchingRef.current);
 
       const finalDeck = { ...currentDeck, tracks: updatedTracks };
       applyDeckUpdate(finalDeck);
@@ -92,7 +91,9 @@ export function useAutoFixBlocked(
         showToast({
           title: "Fix all songs complete",
           icon: <ShieldCheck className="w-3.5 h-3.5" />,
-          message: "All songs verified! Replaced restricted tracks with playable alternatives.",
+          message: currentDeck.provider === "deezer"
+            ? "All songs verified! Replaced tracks without previews with playable alternatives."
+            : "All songs verified! Replaced restricted tracks with playable alternatives.",
           duration: 8000,
         });
       } else {

@@ -41,7 +41,7 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
           <p className="text-sm mb-2 truncate">{track.artist}</p>
 
           {!editor.hasVideo ? (
-            <p className="text-sm mb-4">Link a YouTube video before editing clip timestamps.</p>
+            <p className="text-sm mb-4">{track.media?.provider === "deezer" ? "This Deezer track has no preview to edit." : "Link a YouTube video before editing clip timestamps."}</p>
           ) : (
             <>
               <div className="pc-clip-editor-video pc-bevel-inset overflow-hidden bg-black mb-2">

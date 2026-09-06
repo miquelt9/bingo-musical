@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { clampVideoWindowBounds, VideoWindowBounds } from "../../lib/videoWindow";
-import { attachPlayersToViewport } from "../../lib/youtube/player";
+import { attachPlayersToViewport } from "../../lib/player/player";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 
 const TITLEBAR_HEIGHT = 30;

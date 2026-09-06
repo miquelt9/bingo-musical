@@ -12,11 +12,12 @@ export const DeckNotFoundPage: React.FC = () => {
   const handleCreateDeck = () => {
     const now = new Date().toISOString();
     const saved = createDeck({
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: getNextDeckName(decks.map((d) => d.name)),
       createdAt: now,
       updatedAt: now,
+      provider: "youtube",
       source: { type: "manual" },
       tracks: [],
     });

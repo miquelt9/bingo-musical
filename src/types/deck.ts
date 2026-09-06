@@ -1,5 +1,21 @@
 export type MatchStatus = "pending" | "matched" | "failed" | "manual";
 
+export type MusicProvider = "youtube" | "deezer";
+
+export type TrackMedia =
+  | {
+      provider: "youtube";
+      id: string;
+      providerTitle?: string;
+    }
+  | {
+      provider: "deezer";
+      id: string;
+      previewUrl: string | null;
+      previewDurationMs?: number;
+      providerUrl?: string;
+    };
+
 export interface Track {
   id: string;
   title: string;
@@ -7,26 +23,28 @@ export interface Track {
   album?: string;
   albumArtUrl: string;
   durationMs: number;
-  youtubeVideoId: string | null;
-  youtubeTitle?: string;
+  media: TrackMedia | null;
   startTime: number;       // seconds (e.g. 30)
   endTime: number;         // seconds (e.g. 45)
   matchStatus: MatchStatus;
 }
 
 export interface DeckSource {
-  type: "spotify-playlist" | "youtube-playlist" | "song-list" | "manual" | "sample";
+  type: "spotify-playlist" | "youtube-playlist" | "song-list" | "manual" | "sample" | "converted";
   playlistId?: string;
   url?: string;
   name?: string;
+  provider?: MusicProvider;
+  convertedFrom?: MusicProvider;
 }
 
 export interface Deck {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
+  provider: MusicProvider;
   source?: DeckSource;
   tracks: Track[];
 }

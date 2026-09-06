@@ -15,7 +15,7 @@ import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBann
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
-import { trackEvent } from "../lib/analytics/trackEvent";
+import { trackEvent } from "../lib/usage/events";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import {

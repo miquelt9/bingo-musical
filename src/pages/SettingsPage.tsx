@@ -6,7 +6,7 @@ import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
 import { useToast } from "../state/ToastContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
+import { SAMPLE_DEEZER_DECK, SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
 import {
@@ -72,13 +72,13 @@ export const SettingsPage: React.FC = () => {
   }, [isMobile]);
 
   const handleResetSampleDeck = () => {
-    saveStoredDecks([SAMPLE_POP_HITS_DECK]);
+    saveStoredDecks([SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK]);
     refreshDecks();
     setShowResetModal(false);
     showToast({
       title: "Data reset",
       icon: <Check className="w-3.5 h-3.5" />,
-      message: "All decks were replaced with the default Sample Pop Hits deck.",
+      message: "All decks were replaced with the default YouTube and Deezer sample decks.",
       duration: 8000,
     });
   };
@@ -142,12 +142,14 @@ export const SettingsPage: React.FC = () => {
         Your decks stay in this browser. We don&apos;t run accounts or keep your song lists on a server.
       </p>
       <p>
-        Clips play through YouTube embeds you choose. Search and matching may call public music APIs
-        and YouTube-related services. YouTube may show its own ads — that&apos;s normal for embedded
-        playback.
+        Clips play through YouTube embeds or Deezer&apos;s short preview URLs. Deezer search metadata is
+        requested through the configured Worker, while the browser loads the returned preview directly;
+        the app never requests full-length audio. Search and matching may call public music APIs and
+        YouTube-related services. YouTube may show its own ads — that&apos;s normal for embedded playback.
       </p>
       <p>
-        Not affiliated with YouTube, Google, or any music platform. A hobby tool for casual games at
+        Deezer previews are normally limited to the first 30 seconds and can be unavailable or blocked
+        by provider CORS or terms. Not affiliated with YouTube, Google, Deezer, or any music platform. A hobby tool for casual games at
         home.
       </p>
       <p className="text-muted">

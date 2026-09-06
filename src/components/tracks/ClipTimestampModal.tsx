@@ -40,10 +40,10 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
       <p className="text-sm mb-3">{track.artist}</p>
 
       {!editor.hasVideo ? (
-        <p className="text-sm mb-4">Link a YouTube video before editing clip timestamps.</p>
+        <p className="text-sm mb-4">{track.media?.provider === "deezer" ? "This Deezer track has no preview to edit." : "Link a YouTube video before editing clip timestamps."}</p>
       ) : (
         <>
-          <div className="relative aspect-video w-full pc-bevel-inset overflow-hidden bg-black mb-3">
+          <div className={`relative ${track.media?.provider === "deezer" ? "w-full" : "aspect-video"} pc-bevel-inset overflow-hidden bg-black mb-3`}>
             <div id={editor.elementId} className="absolute inset-0" />
             {(editor.isLoadingPlayer || !editor.isPlayerReady) && !editor.playerError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60">

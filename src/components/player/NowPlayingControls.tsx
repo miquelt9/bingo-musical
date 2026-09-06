@@ -1,6 +1,6 @@
 import React from "react";
 import { Music, Volume2, VolumeX, Square, Play, Pause, ChevronDown, ChevronUp } from "lucide-react";
-import { PlayerPlaybackState } from "../../lib/youtube/player";
+import { PlayerPlaybackState } from "../../lib/player/player";
 
 interface NowPlayingControlsProps {
   playerState: PlayerPlaybackState | null;
@@ -33,7 +33,7 @@ export const NowPlayingControls: React.FC<NowPlayingControlsProps> = ({
         <Music className={`w-5 h-5 shrink-0 ${isPlaying ? "animate-bounce" : ""}`} />
         <div className="min-w-0 flex-1">
           <p className={`font-bold truncate ${compact ? "text-xs" : "text-sm max-w-xs sm:max-w-md"}`}>
-            {playerState?.currentClip?.title || "Playing YouTube Snippet"}
+            {playerState?.currentClip?.title || "Playing audio snippet"}
           </p>
           {!compact && (
             <p className="text-xs truncate max-w-xs sm:max-w-md">

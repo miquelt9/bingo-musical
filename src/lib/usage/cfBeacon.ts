@@ -2,7 +2,7 @@
  * Loads Cloudflare Web Analytics in production only (cookieless, no localStorage).
  * Register the site in Cloudflare dashboard → Web Analytics → manual JS setup.
  */
-export function initWebAnalytics(): void {
+export function initCfBeacon(): void {
   if (!import.meta.env.PROD) return;
 
   const token = import.meta.env.VITE_CF_WEB_ANALYTICS_TOKEN?.trim();

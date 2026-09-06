@@ -2,6 +2,7 @@ import { Track } from "../../types/deck";
 import { cellCount, normalizeGridSize } from "../bingo/generateCards";
 import { canStartGame, isTrackNeedsVerification } from "../youtube/playabilityGate";
 import { getUnplayableTracks, isTrackUnplayable } from "../youtube/validator";
+import { getTrackProvider, isTrackPlayable } from "../music/providers";
 
 export type DeckHealth = "ready" | "needs_fix" | "empty" | "too_few";
 
@@ -48,16 +49,16 @@ export function getLargestValidGridSize(trackCount: number): number {
   return 3;
 }
 
-/** matched = has youtubeVideoId; ready = matched and not embed-blocked */
+/** A track is ready when its selected provider has a usable playback source. */
 export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
   const total = tracks.length;
   const blockedCount = getUnplayableTracks(tracks).length;
-  const unmatchedCount = tracks.filter((t) => !t.youtubeVideoId).length;
+  const unmatchedCount = tracks.filter((t) => !t.media).length;
   const readyCount = tracks.filter(
-    (t) => t.youtubeVideoId && t.matchStatus !== "failed" && !isTrackUnplayable(t)
+    (t) => isTrackPlayable(t) && !isTrackUnplayable(t)
   ).length;
   const needsVerificationCount = tracks.filter(
-    (t) => t.youtubeVideoId && t.matchStatus !== "failed" && isTrackNeedsVerification(t)
+    (t) => getTrackProvider(t) === "youtube" && isTrackNeedsVerification(t)
   ).length;
 
   const minHostTracks = Math.max(MIN_HOST_TRACKS, getMinTracksForGrid(gridSize));

@@ -324,7 +324,7 @@ export async function validateTracksEmbeddability(
   const validTracks: Track[] = [];
   const invalidTracks: Array<{ track: Track; validation: EmbedValidationResult }> = [];
 
-  const pending = tracks.filter((t) => Boolean(t.youtubeVideoId));
+  const pending = tracks.filter((t) => t.media?.provider === "youtube");
   let completed = tracks.length - pending.length;
   let valid = 0;
   let invalid = 0;
@@ -334,9 +334,9 @@ export async function validateTracksEmbeddability(
     while (nextIdx < pending.length) {
       if (shouldCancel && shouldCancel()) break;
       const track = pending[nextIdx++];
-      if (!track.youtubeVideoId) continue;
+      if (!track.media || track.media.provider !== "youtube") continue;
 
-      const res = await checkVideoEmbeddable(track.youtubeVideoId);
+      const res = await checkVideoEmbeddable(track.media.id);
       if (shouldCancel && shouldCancel()) break;
 
       completed++;
@@ -378,10 +378,11 @@ export function isVideoEmbedBlocked(videoId: string | null | undefined): boolean
   return Boolean(cached && !cached.embeddable);
 }
 
-/** A track needs attention when it has no video, failed matching, or a known embed block. */
+/** A track needs attention when its selected provider cannot play it. */
 export function isTrackUnplayable(track: Track): boolean {
-  if (track.matchStatus === "failed" || !track.youtubeVideoId) return true;
-  return isVideoEmbedBlocked(track.youtubeVideoId);
+  if (track.matchStatus === "failed" || !track.media) return true;
+  if (track.media.provider === "deezer") return !track.media.previewUrl;
+  return isVideoEmbedBlocked(track.media.id);
 }
 
 export function getUnplayableTracks(tracks: Track[]): Track[] {

@@ -1,12 +1,14 @@
 import { Deck } from "../../types/deck";
 import { GITHUB_REPO_URL } from "../app/meta";
 
-export const SAMPLE_POP_HITS_DECK: Deck = {
-  schemaVersion: 1,
+// Kept in the old field shape intentionally so the first-load migration is exercised.
+export const SAMPLE_POP_HITS_DECK = {
+  schemaVersion: 2,
   id: "deck-sample-pop-classics",
   name: "All-Time Pop & Rock Classics (Sample Deck)",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
+  provider: "youtube",
   source: {
     type: "sample",
     name: "Sample 80s, 90s & 2000s Hits",
@@ -404,4 +406,72 @@ export const SAMPLE_POP_HITS_DECK: Deck = {
       matchStatus: "matched",
     },
   ],
+} as unknown as Deck;
+
+/**
+ * Deezer starter deck with the same song metadata as the YouTube sample.
+ * Deezer IDs are preselected; preview URLs are resolved through the configured
+ * Worker when the app loads the starter deck.
+ */
+export const SAMPLE_DEEZER_DECK: Deck = {
+  schemaVersion: 2,
+  id: "deck-sample-deezer-classics",
+  name: "All-Time Pop & Rock Classics (Deezer)",
+  createdAt: "2025-01-01T00:00:00.000Z",
+  updatedAt: "2025-01-01T00:00:00.000Z",
+  provider: "deezer",
+  source: {
+    type: "sample",
+    name: "Sample 80s, 90s & 2000s Hits",
+    url: GITHUB_REPO_URL,
+    provider: "deezer",
+  },
+  tracks: SAMPLE_POP_HITS_DECK.tracks.map((track, index) => ({
+    id: `deezer-sample-${index + 1}`,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    albumArtUrl: "",
+    durationMs: track.durationMs,
+    media: {
+      provider: "deezer" as const,
+      id: [
+        "4091937401",
+        "4603408",
+        "884025",
+        "14408104",
+        "487484142",
+        "75981528",
+        "664107",
+        "72194071",
+        "1079668",
+        "576431",
+        "538660022",
+        "625643",
+        "1144863",
+        "126848613",
+        "596034702",
+        "664507",
+        "374283061",
+        "14525086",
+        "13141170",
+        "540175",
+        "3133738",
+        "1109731",
+        "628266",
+        "953097",
+        "3157972",
+        "66609426",
+        "92734438",
+        "908604612",
+        "1124841682",
+        "89077555",
+      ][index],
+      previewUrl: null,
+      previewDurationMs: 30000,
+    },
+    startTime: 0,
+    endTime: 30,
+    matchStatus: "pending",
+  })),
 };

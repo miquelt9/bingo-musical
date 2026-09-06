@@ -22,9 +22,9 @@ export interface DeckPlayabilityResult {
 
 /** True when embed status has not been cached yet (needs network check). */
 export function isTrackNeedsVerification(track: Track): boolean {
-  if (!track.youtubeVideoId) return false;
+  if (!track.media || track.media.provider !== "youtube") return false;
   if (track.matchStatus === "failed") return false;
-  return getCachedEmbedStatus(track.youtubeVideoId) === null;
+  return getCachedEmbedStatus(track.media.id) === null;
 }
 
 /** False if any track is unplayable or still needs verification. */
@@ -38,8 +38,14 @@ export function getPlayabilityIssues(tracks: Track[]): InvalidTrackEntry[] {
   const issues: InvalidTrackEntry[] = [];
 
   for (const track of tracks) {
-    if (!track.youtubeVideoId) {
-      issues.push({ track, reason: "No YouTube video matched" });
+    if (!track.media) {
+      issues.push({ track, reason: "No playback source matched" });
+      continue;
+    }
+    if (track.media.provider === "deezer") {
+      if (track.matchStatus === "failed" || !track.media.previewUrl) {
+        issues.push({ track, reason: "No Deezer preview is available" });
+      }
       continue;
     }
     if (track.matchStatus === "failed") {
@@ -50,7 +56,7 @@ export function getPlayabilityIssues(tracks: Track[]): InvalidTrackEntry[] {
       issues.push({ track, reason: "Audio compatibility not yet verified" });
       continue;
     }
-    const cached = getCachedEmbedStatus(track.youtubeVideoId);
+    const cached = getCachedEmbedStatus(track.media.id);
     if (cached && !cached.embeddable) {
       issues.push({
         track,
@@ -102,7 +108,7 @@ export async function ensureDeckPlayable(
   const concurrency = options?.concurrency ?? 6;
 
   const tracksNeedingCheck = tracks.filter((t) => {
-    if (!t.youtubeVideoId) return false;
+    if (!t.media || t.media.provider !== "youtube") return false;
     if (options?.forceRecheck) return true;
     return isTrackNeedsVerification(t);
   });
@@ -121,7 +127,7 @@ export async function ensureDeckPlayable(
         while (nextIdx < tracksNeedingCheck.length) {
           if (options?.shouldCancel?.()) break;
           const track = tracksNeedingCheck[nextIdx++];
-          const res = await checkVideoEmbeddable(track.youtubeVideoId!, true);
+        const res = await checkVideoEmbeddable(track.media!.id, true);
           completed++;
           if (res.embeddable) valid++;
           else {
@@ -175,8 +181,8 @@ export async function ensureDeckPlayable(
       );
 
       for (const track of tracksNeedingCheck) {
-        if (!track.youtubeVideoId) continue;
-        const cached = getCachedEmbedStatus(track.youtubeVideoId);
+        if (!track.media || track.media.provider !== "youtube") continue;
+        const cached = getCachedEmbedStatus(track.media.id);
         if (cached && !cached.embeddable) {
           validationInvalid.push({ track, validation: cached });
         }

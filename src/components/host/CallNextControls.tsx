@@ -2,7 +2,8 @@ import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
 import { Shuffle, SlidersHorizontal, Music2, ChevronDown, Monitor } from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
-import { PlayerPlaybackState } from "../../lib/youtube/player";
+import { PlayerPlaybackState } from "../../lib/player/player";
+import { getTrackProvider, getTrackSourceId } from "../../lib/music/providers";
 import { Track } from "../../types/deck";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 
@@ -19,7 +20,9 @@ function buildDisplayPlayerState(
     isReady: playerState?.isReady ?? false,
     state: "unstarted",
     currentClip: {
-      videoId: currentTrack.youtubeVideoId!,
+      provider: getTrackProvider(currentTrack),
+      sourceId: getTrackSourceId(currentTrack) || "",
+      previewUrl: currentTrack.media?.provider === "deezer" ? currentTrack.media.previewUrl ?? undefined : undefined,
       startTime: currentTrack.startTime,
       endTime: currentTrack.endTime,
       trackId: currentTrack.id,
@@ -96,7 +99,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   const progressPercent = totalCount > 0 ? (calledCount / totalCount) * 100 : 0;
 
   const handlePlayPause = () => {
-    if (!currentTrack?.youtubeVideoId) return;
+    if (!currentTrack?.media) return;
 
     if (isPlaying) {
       onTogglePlayPause();
@@ -107,7 +110,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
     }
   };
 
-  const hasPlayableTrack = Boolean(currentTrack?.youtubeVideoId);
+  const hasPlayableTrack = Boolean(currentTrack?.media && (currentTrack.media.provider === "youtube" || currentTrack.media.previewUrl));
 
   const advancedOptions = (
     <div className="flex flex-col gap-3 text-xs">
@@ -268,7 +271,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
                   <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
                 </>
               )}
-              <p className="text-[11px] text-pc-warning mt-0.5">No YouTube video linked for this track</p>
+              <p className="text-[11px] text-pc-warning mt-0.5">No {currentTrack?.media?.provider === "deezer" ? "Deezer preview" : "YouTube video"} linked for this track</p>
             </div>
           </div>
         ) : (

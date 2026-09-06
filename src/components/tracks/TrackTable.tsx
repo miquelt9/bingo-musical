@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Modal } from "@miquelt9/pc-ui";
-import { Track } from "../../types/deck";
+import { MusicProvider, Track } from "../../types/deck";
 import { ClipTimestampModal } from "./ClipTimestampModal";
 import { ClipTimestampModalMobile } from "./ClipTimestampModalMobile";
 import { ManualYoutubeModal } from "./ManualYoutubeModal";
+import { ManualDeezerModal } from "./ManualDeezerModal";
 import { TrackListMobile } from "./TrackListMobile";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { isVideoEmbedBlocked } from "../../lib/youtube/validator";
@@ -16,6 +17,7 @@ import {
 
 interface TrackTableProps {
   deckId?: string;
+  provider?: MusicProvider;
   tracks: Track[];
   onUpdateTrack: (updatedTrack: Track) => void;
   onDeleteTrack?: (trackId: string) => void;
@@ -69,6 +71,7 @@ function AutoMatchButton({
 
 export const TrackTable: React.FC<TrackTableProps> = ({
   deckId,
+  provider = "youtube",
   tracks,
   onUpdateTrack,
   onDeleteTrack,
@@ -99,11 +102,12 @@ export const TrackTable: React.FC<TrackTableProps> = ({
 
   const isTrackBlocked = (track: Track): boolean => {
     if (track.matchStatus === "failed") return true;
-    return isVideoEmbedBlocked(track.youtubeVideoId);
+    return isVideoEmbedBlocked(track.media?.provider === "youtube" ? track.media.id : null) ||
+      (track.media?.provider === "deezer" && !track.media.previewUrl);
   };
 
   const isTrackReady = (track: Track) =>
-    (track.matchStatus === "matched" || track.matchStatus === "manual") && !isTrackBlocked(track);
+    Boolean(track.media) && (track.matchStatus === "matched" || track.matchStatus === "manual") && !isTrackBlocked(track);
 
   const matchedCount = tracks.filter((t) => isTrackReady(t)).length;
   const blockedCount = tracks.filter((t) => isTrackBlocked(t)).length;
@@ -246,9 +250,9 @@ export const TrackTable: React.FC<TrackTableProps> = ({
       {isMatching && matchProgress && (
         <div className="mb-4 p-3 pc-bevel-inset text-xs">
           <div className="flex items-center justify-between mb-2 font-medium">
-            <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 animate-spin" />
-              <span>Matching songs with verified YouTube audio...</span>
+                  <span>Matching songs with verified {provider === "deezer" ? "Deezer previews" : "YouTube audio"}...</span>
             </span>
             <span className="flex items-center gap-2">
               <span className="font-mono">
@@ -292,17 +296,29 @@ export const TrackTable: React.FC<TrackTableProps> = ({
 
       </div>
 
-      {/* Edit YouTube Modal */}
+      {/* Edit provider source modal */}
       {editingTrack && (
-        <ManualYoutubeModal
-          track={editingTrack}
-          isOpen={Boolean(editingTrack)}
-          onClose={() => setEditingTrack(null)}
-          onSave={(updated) => {
-            onUpdateTrack(updated);
-            setEditingTrack(null);
-          }}
-        />
+        provider === "deezer" ? (
+          <ManualDeezerModal
+            track={editingTrack}
+            isOpen
+            onClose={() => setEditingTrack(null)}
+            onSave={(updated) => {
+              onUpdateTrack(updated);
+              setEditingTrack(null);
+            }}
+          />
+        ) : (
+          <ManualYoutubeModal
+            track={editingTrack}
+            isOpen
+            onClose={() => setEditingTrack(null)}
+            onSave={(updated) => {
+              onUpdateTrack(updated);
+              setEditingTrack(null);
+            }}
+          />
+        )
       )}
 
       {timestampEditingTrack && (isMobile ? (

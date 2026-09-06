@@ -3,17 +3,19 @@ import { Link, useNavigate } from "react-router-dom";
 import { Window, Modal } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
-import { Deck } from "../types/deck";
+import { Deck, MusicProvider } from "../types/deck";
 import {
   formatReadinessPrimary,
   formatReadinessSecondary,
   getDeckReadiness,
   getNextDeckName,
 } from "../lib/decks/readiness";
-import { SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
+import { SAMPLE_DEEZER_DECK, SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
+import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { ConvertDeckModal } from "../components/decks/ConvertDeckModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
@@ -26,6 +28,9 @@ import {
   Share2,
   X,
   Sparkles,
+  ArrowRightLeft,
+  Music2,
+  Disc3,
 } from "lucide-react";
 
 const ONBOARDING_KEY = "mb_onboarding_dismissed";
@@ -65,6 +70,7 @@ export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
+  const [deckToConvert, setDeckToConvert] = useState<Deck | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
@@ -72,7 +78,7 @@ export const HomePage: React.FC = () => {
 
   useEffect(() => {
     const uncached = decks.flatMap((d) =>
-      d.tracks.filter((t) => t.youtubeVideoId && !getCachedEmbedStatus(t.youtubeVideoId))
+      d.tracks.filter((t) => t.media?.provider === "youtube" && !getCachedEmbedStatus(t.media.id))
     );
     if (uncached.length === 0) return;
 
@@ -102,14 +108,15 @@ export const HomePage: React.FC = () => {
     setShowOnboarding(false);
   };
 
-  const handleCreateEmptyDeck = () => {
+  const handleCreateEmptyDeck = (provider: MusicProvider = "youtube") => {
     const now = new Date().toISOString();
     const saved = createDeck({
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: getNextDeckName(decks.map((d) => d.name)),
       createdAt: now,
       updatedAt: now,
+      provider,
       source: { type: "manual" },
       tracks: [],
     });
@@ -117,8 +124,8 @@ export const HomePage: React.FC = () => {
   };
 
   const handleRestoreSample = () => {
-    const others = decks.filter((d) => d.id !== SAMPLE_DECK_ID);
-    saveStoredDecks([SAMPLE_POP_HITS_DECK, ...others]);
+    const others = decks.filter((d) => d.id !== SAMPLE_DECK_ID && d.id !== SAMPLE_DEEZER_DECK.id);
+    saveStoredDecks([SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK, ...others]);
     window.location.reload();
   };
 
@@ -159,6 +166,13 @@ export const HomePage: React.FC = () => {
         icon: <Copy className="w-4 h-4" />,
         label: "Duplicate",
         onClick: () => duplicateDeck(deck.id),
+      },
+      {
+        icon: <ArrowRightLeft className="w-4 h-4" />,
+        label: "Convert deck",
+        onClick: () => setDeckToConvert(deck),
+        disabled: emptyDeck,
+        title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
       },
       {
         icon: <Printer className="w-4 h-4" />,
@@ -225,6 +239,7 @@ export const HomePage: React.FC = () => {
             <div className="home-deck-card-info min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className="home-deck-card-title text-sm font-semibold truncate">{deck.name}</h3>
+                <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
                 {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
               </div>
               {healthBadge}
@@ -257,6 +272,7 @@ export const HomePage: React.FC = () => {
           <div className="home-deck-card-info min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
               <h3 className="home-deck-card-title text-sm font-semibold truncate">{deck.name}</h3>
+              <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
               {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
             </div>
             {healthBadge}
@@ -281,6 +297,9 @@ export const HomePage: React.FC = () => {
               title="Duplicate deck"
             >
               <Copy className="w-4 h-4" />
+            </button>
+            <button type="button" className="pc-button" onClick={() => setDeckToConvert(deck)} disabled={emptyDeck} title="Convert deck">
+              <ArrowRightLeft className="w-4 h-4" />
             </button>
             <button type="button" className="pc-button" onClick={() => setDeckToDelete(deck)} title="Delete deck">
               <Trash2 className="w-4 h-4" />
@@ -362,8 +381,11 @@ export const HomePage: React.FC = () => {
             <button type="button" className="pc-button pc-button--primary" onClick={handleRestoreSample}>
               Restore sample deck
             </button>
-            <button type="button" className="pc-button" onClick={handleCreateEmptyDeck}>
-              Create deck
+            <button type="button" className="pc-button" onClick={() => handleCreateEmptyDeck("youtube")}>
+              Create YouTube deck
+            </button>
+            <button type="button" className="pc-button" onClick={() => handleCreateEmptyDeck("deezer")}>
+              Create Deezer deck
             </button>
             <Link to="/import" className="pc-button">
               Import JSON
@@ -373,11 +395,31 @@ export const HomePage: React.FC = () => {
       )}
 
       <div className="home-decks-grid">
-        <button type="button" className="home-deck-add" onClick={handleCreateEmptyDeck}>
+        <div className="home-deck-add home-deck-add--providers">
           <Plus className="w-5 h-5 shrink-0 opacity-80" aria-hidden />
           <span className="font-semibold text-sm">Empty deck</span>
-          <span className="text-xs text-muted">Add songs in the editor</span>
-        </button>
+          <span className="text-xs text-muted">Choose a music provider</span>
+          <div className="home-deck-add-options">
+            <button
+              type="button"
+              className="home-deck-add-option"
+              onClick={() => handleCreateEmptyDeck("youtube")}
+            >
+              <Music2 className="w-5 h-5 opacity-80" aria-hidden />
+              <span className="font-semibold text-xs">YouTube</span>
+              <span className="text-[11px] text-muted">Video clips</span>
+            </button>
+            <button
+              type="button"
+              className="home-deck-add-option"
+              onClick={() => handleCreateEmptyDeck("deezer")}
+            >
+              <Disc3 className="w-5 h-5 opacity-80" aria-hidden />
+              <span className="font-semibold text-xs">Deezer</span>
+              <span className="text-[11px] text-muted">30-second previews</span>
+            </button>
+          </div>
+        </div>
 
         {sortedDecks.map(renderDeckCard)}
       </div>
@@ -400,6 +442,18 @@ export const HomePage: React.FC = () => {
             undone.
           </p>
         </Modal>
+      )}
+      {deckToConvert && (
+        <ConvertDeckModal
+          deck={deckToConvert}
+          isOpen
+          onClose={() => setDeckToConvert(null)}
+          onCreate={(converted) => {
+            const saved = createDeck(converted);
+            setDeckToConvert(null);
+            navigate(`/deck/${saved.id}`);
+          }}
+        />
       )}
     </Window>
   );

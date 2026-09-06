@@ -1,7 +1,7 @@
 # Musical Bingo Creator 🎵 🎱
 
 A desktop-first static SPA for creating, editing, printing, and hosting interactive Musical Bingo games.
-Built with **Vite, React, TypeScript, Tailwind CSS, [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui), jsPDF, and the YouTube IFrame API**.
+Built with **Vite, React, TypeScript, Tailwind CSS, [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui), jsPDF, the YouTube IFrame API, and Deezer preview metadata**.
 
 Hosted serverless on GitHub Pages with zero backend dependencies and no Google account requirement.
 
@@ -13,6 +13,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Search a song or artist with public catalog autocomplete (iTunes, then Deezer/MusicBrainz).
   - Selecting a song searches YouTube with `Artist Title official audio`.
   - Paste a YouTube video or playlist URL if you already have the clip.
+  - Create provider-specific YouTube or Deezer decks. Deezer uses only the catalog’s short preview (normally 30 seconds), with no Deezer login.
   - Paste a bulk song list (`Artist - Title`, one per line) and match clips in the editor.
   - Decks auto-save as you add songs from search.
 - 🔍 **Smart YouTube Matcher:**
@@ -20,19 +21,22 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Direct 1-click manual YouTube link or Video ID override with instant thumbnail validation.
   - Cancellable batch auto-match and embed validation.
   - **Fix all songs** for blocked videos — finds and replaces restricted clips from the deck or taskbar notice.
+  - Deezer tracks without a preview remain visible but cannot be added as playable tracks.
 - 🛡️ **Playability gating:**
   - Verifies YouTube embed permissions (via noembed.com) before hosting or printing cards.
   - Surfaces blocked or unmatched tracks with a filterable list in the editor.
 - ✂️ **Interactive Track & Snippet Editor:**
   - Customizable start/end timestamps per track.
   - Built-in singleton YouTube preview player with precision pause-at-end bounding.
+  - Hidden dual-slot HTML audio playback for Deezer previews, including pause/resume, chaining, and crossfade fallback.
 - 🗄️ **Local Persistence & Deck Portability:**
   - Save full decks in browser `localStorage`.
   - Export decks as portable `.json` files.
   - Import JSON decks with instant schema validation and pre-matched YouTube IDs.
   - **Share decks** via a short link (`#/share/abc123`) or the native share sheet; JSON file export remains as a fallback.
+  - Shared decks retain their provider and can be converted into a new YouTube or Deezer copy with review for ambiguous matches.
   - Dedicated **Import** page (`#/import`) for `.json` files and **Shared deck** page (`#/share/:id`) for links.
-  - Built-in sample deck for testing without any external account.
+  - Built-in YouTube sample deck and Deezer starter deck for testing without any external account; the Deezer starter is matched automatically when the Worker is configured.
   - Empty decks created by mistake are discarded automatically when you navigate away.
 - 🖨️ **Printable Bingo Cards & High-Resolution Vector PDF:**
   - Configurable **3×3 to 6×6** grids with adjustable **bingo percent** (how much of the deck appears on each card).
@@ -79,7 +83,7 @@ Then open **Deck**, trim clips if needed, resolve any blocked songs, print cards
 npm run dev
 ```
 
-Visit [http://localhost:5173](http://localhost:5173) in your desktop browser.
+Visit [http://localhost:5173](http://localhost:5173) in your desktop browser. YouTube works without a Worker; Deezer search/resolution requires `VITE_SHARE_API_URL` pointing at the configured Worker.
 
 ### 4. Build for Production
 
@@ -132,7 +136,7 @@ If link sharing is not configured, the share dialog falls back to downloading a 
 - **UI:** [@miquelt9/pc-ui](https://github.com/miquelt9/pc-ui) (Win9x desktop shell) + Tailwind CSS + Lucide Icons
 - **Routing:** React Router DOM (HashRouter for GitHub Pages)
 - **PDF Generation:** jsPDF
-- **Audio/Video Playback:** YouTube IFrame Player API
+- **Audio/Video Playback:** YouTube IFrame Player API and Deezer preview URLs through hidden HTML audio elements
 - **Persistence:** Browser `localStorage` (decks, preferences, embed cache) + `sessionStorage` (host game & card settings) + JSON import/export
 - **Effects:** canvas-confetti
 
@@ -144,15 +148,16 @@ This project is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-Playback uses the YouTube embedded player only — the app does not host or download music. **YouTube may show ads before or during embedded clips**; this app cannot remove them. Hosts signed in with YouTube Premium in the same browser may see fewer or no ads, but ad-free playback is not guaranteed. It is intended for private or social games at home; bars, ticketed events, or commercial venues may require music performance licenses in your country, which is the organizer's responsibility.
+Playback uses YouTube embeds and Deezer’s short preview URLs only — the app does not host, proxy, or download music and never requests full-length Deezer audio. **YouTube may show ads before or during embedded clips**; this app cannot remove them. Deezer previews are limited to the available short snippet (normally the first 30 seconds), may be unavailable or affected by [provider CORS behavior](https://en.deezercommunity.com/other-devices-49/api-access-control-allow-origin-80021), and must be used in accordance with [Deezer’s developer terms](https://cdn-content.dzcdn.net/pdf/CGU-developers.pdf). It is intended for private or social games at home; bars, ticketed events, or commercial venues may require music performance licenses in your country, which is the organizer's responsibility.
 
 ## Privacy
 
-Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), noembed.com, and GitHub Pages hosting. We use cookieless Cloudflare Web Analytics for aggregate traffic and anonymous feature-usage counts via our share Worker. There are no user accounts. See **Settings → Privacy** in the app for the full notice.
+Decks, theme, and embed cache stay in your browser (`localStorage`). Active host games and card-print settings use `sessionStorage` until you close the tab. When you search or play clips, your browser may contact YouTube, public Invidious/Piped instances, catalog APIs (iTunes, Deezer, MusicBrainz), the configured share Worker, noembed.com, Deezer preview hosts, and GitHub Pages hosting. Deezer metadata requests go through the share Worker; the browser loads the returned short preview URL directly. We use cookieless Cloudflare Web Analytics for aggregate traffic and anonymous feature-usage counts via our share Worker. There are no user accounts. See **Settings → Privacy** in the app for the full notice.
 
 ## Third-party services
 
 - **YouTube** — embedded playback via the IFrame Player API (ads may appear during clips)
+- **Deezer** — catalog metadata via the Worker and short preview URLs (normally 30 seconds; no full-track playback)
 - **Invidious / Piped** — public instances for YouTube search and metadata (no official YouTube API key)
 - **iTunes, Deezer, MusicBrainz** — song title autocomplete
 - **noembed.com** — YouTube embed permission checks

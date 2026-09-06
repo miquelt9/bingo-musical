@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Track } from "../../types/deck";
+import { MusicProvider, Track } from "../../types/deck";
 import {
   YoutubeSearchHit,
   resolveYoutubeQuery,
@@ -19,12 +19,23 @@ import {
   getCachedEmbedStatus,
 } from "../../lib/youtube/validator";
 import { AlertCircle, Check, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
+import { ClipPreviewButton } from "./ClipPreviewButton";
+import { DeezerSongSearch } from "./DeezerSongSearch";
 
 interface SongSearchProps {
+  provider?: MusicProvider;
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void;
   onAddTracks?: (tracks: Track[]) => void;
   onAfterAdd?: () => void;
+}
+
+/** Stable-id track so preview play/stop state survives re-renders. */
+function hitToPreviewTrack(hit: YoutubeSearchHit, playable: boolean): Track {
+  const track = hitToTrack(hit);
+  track.id = hit.videoId;
+  if (!playable) track.media = null;
+  return track;
 }
 
 const VIEWPORT_MARGIN = 8;
@@ -94,7 +105,7 @@ function withLyricsSuffix(query: string): string {
   return `${trimmed} lyrics`;
 }
 
-export const SongSearch: React.FC<SongSearchProps> = ({
+const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   existingVideoIds = [],
   onAddTrack,
   onAddTracks,
@@ -673,6 +684,7 @@ export const SongSearch: React.FC<SongSearchProps> = ({
               const isBlocked = embedStatus ? !embedStatus.embeddable : false;
               const isCheckingThis = isCheckingEmbeds && !embedStatus;
               const isAddingThis = addingVideoId === hit.videoId;
+              const canPreview = Boolean(embedStatus?.embeddable) && !isCheckingThis;
 
               return (
                 <div
@@ -709,26 +721,33 @@ export const SongSearch: React.FC<SongSearchProps> = ({
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    disabled={added || isBlocked || isAddingThis || isCheckingThis}
-                    onClick={() => void addHit(hit)}
-                    className={`pc-button shrink-0 text-xs ${added ? "active" : isBlocked ? "" : "pc-button--primary"}`}
-                    title={
-                      isBlocked
-                        ? embedStatus?.reason || "This video cannot be embedded in the game"
-                        : undefined
-                    }
-                  >
-                    {isAddingThis ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : added ? (
-                      <Check className="w-3.5 h-3.5" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5" />
-                    )}
-                    {added ? "Added" : isBlocked ? "Blocked" : "Add"}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <ClipPreviewButton
+                      track={hitToPreviewTrack(hit, canPreview)}
+                      size="sm"
+                      showLabel
+                    />
+                    <button
+                      type="button"
+                      disabled={added || isBlocked || isAddingThis || isCheckingThis}
+                      onClick={() => void addHit(hit)}
+                      className={`pc-button shrink-0 text-xs ${added ? "active" : isBlocked ? "" : "pc-button--primary"}`}
+                      title={
+                        isBlocked
+                          ? embedStatus?.reason || "This video cannot be embedded in the game"
+                          : undefined
+                      }
+                    >
+                      {isAddingThis ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : added ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      {added ? "Added" : isBlocked ? "Blocked" : "Add"}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -737,4 +756,18 @@ export const SongSearch: React.FC<SongSearchProps> = ({
       )}
     </div>
   );
+};
+
+export const SongSearch: React.FC<SongSearchProps> = (props) => {
+  if (props.provider === "deezer") {
+    return (
+      <DeezerSongSearch
+        existingIds={props.existingVideoIds}
+        onAddTrack={props.onAddTrack}
+        onAddTracks={props.onAddTracks}
+        onAfterAdd={props.onAfterAdd}
+      />
+    );
+  }
+  return <YoutubeSongSearch {...props} />;
 };

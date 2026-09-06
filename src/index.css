@@ -965,6 +965,45 @@
   background: var(--pc-button-hover-bg);
 }
 
+.home-deck-add--providers {
+  cursor: default;
+}
+
+.home-deck-add-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.home-deck-add-option {
+  display: flex;
+  min-width: 0;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 1px solid var(--pc-bevel-dark);
+  background: var(--pc-window-body-bg);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.home-deck-add-option:hover,
+.home-deck-add-option:focus-visible {
+  background: var(--pc-button-hover-bg);
+}
+
+.home-deck-add-option:focus-visible {
+  outline: 2px solid var(--pc-titlebar-bg);
+  outline-offset: 1px;
+}
+
 .home-deck-card {
   min-width: 0;
   padding: 20px var(--pc-space-5, 16px) 18px;
@@ -1350,4 +1389,16 @@
 .pc-rainbow-attention--active > .pc-button:active::before,
 .pc-auto-match-rainbow--active > .pc-button:active::before {
   filter: brightness(0.9);
+}
+
+/* Deezer previews are controlled by the shared player UI, not visible audio chrome. */
+.deezer-audio-engine-fallback {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  left: -10px;
+  bottom: -10px;
 }

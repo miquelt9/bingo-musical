@@ -16,6 +16,7 @@ import { useToast } from "../../state/ToastContext";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
 import { YoutubePlayerEngine } from "../player/YoutubePlayerEngine";
+import { DeezerAudioEngine } from "../player/DeezerAudioEngine";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import {
   subscribeToPlayerState,
@@ -25,7 +26,7 @@ import {
   resumePlayback,
   setVolume,
   toggleMute,
-} from "../../lib/youtube/player";
+} from "../../lib/player/player";
 import { readHostSessionRaw } from "../../lib/host/session";
 
 const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,6 +41,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     videoWindowBounds,
     setVideoWindowBounds,
     engineRequested,
+    requestedProvider,
     requestPlayerEngine,
   } = usePlayerUI();
   const isMobile = useIsMobile();
@@ -203,14 +205,23 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {isHostRoute && !isMobile && (
         <DraggableVideoWindow
-          visible={showVideo && isHostRoute}
+          visible={showVideo && isHostRoute && activeDeck?.provider === "youtube"}
           bounds={videoWindowBounds}
           onBoundsChange={setVideoWindowBounds}
           onClose={() => setShowVideo(false)}
         />
       )}
 
-      {(isHostRoute || hasActiveClip || engineRequested) && <YoutubePlayerEngine />}
+      {(isHostRoute || hasActiveClip || engineRequested) && (
+        <>
+          {(playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider ?? "youtube") === "youtube" && (
+            <YoutubePlayerEngine />
+          )}
+          {(playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider) === "deezer" && (
+            <DeezerAudioEngine />
+          )}
+        </>
+      )}
 
       <Taskbar className="print:hidden">
         <NavLink

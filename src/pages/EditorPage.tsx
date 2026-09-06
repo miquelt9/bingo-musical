@@ -4,8 +4,10 @@ import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
+import { ConvertDeckModal } from "../components/decks/ConvertDeckModal";
 import { SongSearch } from "../components/tracks/SongSearch";
 import { batchMatchTracks, BatchMatchProgress } from "../lib/youtube/matcher";
+import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
 import {
   validateTracksEmbeddability,
   BatchValidationProgress,
@@ -31,6 +33,7 @@ import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
+import { getTrackSourceId } from "../lib/music/providers";
 import {
   Edit3,
   Printer,
@@ -40,13 +43,14 @@ import {
   Check,
   AlertTriangle,
   Sparkles,
+  ArrowRightLeft,
 } from "lucide-react";
 
 export const EditorPage: React.FC = () => {
   const { id, deck: routeDeck, notFound } = useDeckRoute();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeDeck, updateDeck, shareDeck } = useDeck();
+  const { activeDeck, updateDeck, createDeck, shareDeck } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
@@ -64,6 +68,7 @@ export const EditorPage: React.FC = () => {
   const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
+  const [showConvertModal, setShowConvertModal] = useState(false);
   const [addSongRainbowDismissed, setAddSongRainbowDismissed] = useState(false);
   const [hostGateOpen, setHostGateOpen] = useState(false);
   const [hostGateChecking, setHostGateChecking] = useState(false);
@@ -111,7 +116,9 @@ export const EditorPage: React.FC = () => {
       title: `${count} song${count > 1 ? "s" : ""} cannot play audio in the game`,
       icon: <AlertTriangle className="w-3.5 h-3.5" />,
       message:
-        "Some videos have playback restrictions outside YouTube. Use Fix all songs to find and replace them with working versions.",
+        deck.provider === "deezer"
+          ? "Some tracks do not have a usable Deezer preview. Use Fix all songs to search for playable alternatives."
+          : "Some videos have playback restrictions outside YouTube. Use Fix all songs to find and replace them with working versions.",
       duration: 12000,
       actions: [
         {
@@ -145,7 +152,7 @@ export const EditorPage: React.FC = () => {
     if (backgroundVerifyRef.current === deck.id) return;
 
     const uncached = deck.tracks.filter(
-      (t) => t.youtubeVideoId && !getCachedEmbedStatus(t.youtubeVideoId)
+      (t) => t.media?.provider === "youtube" && !getCachedEmbedStatus(t.media.id)
     );
     if (uncached.length === 0) {
       backgroundVerifyRef.current = deck.id;
@@ -182,21 +189,19 @@ export const EditorPage: React.FC = () => {
     cancelMatchingRef.current = false;
 
     try {
-      const updatedTracks = await batchMatchTracks(
-        deck.tracks,
-        2,
-        (progress, updatedTrack) => {
-          setMatchProgress(progress);
-          setDeck((current) => {
-            if (!current) return null;
-            const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
-            const nextDeck = { ...current, tracks: nextTracks };
-            updateDeck(nextDeck);
-            return nextDeck;
-          });
-        },
-        () => cancelMatchingRef.current
-      );
+      const onProgress = (progress: BatchMatchProgress, updatedTrack: Track) => {
+        setMatchProgress(progress);
+        setDeck((current) => {
+          if (!current) return null;
+          const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
+          const nextDeck = { ...current, tracks: nextTracks };
+          updateDeck(nextDeck);
+          return nextDeck;
+        });
+      };
+      const updatedTracks = deck.provider === "deezer"
+        ? await batchMatchDeezerTracks(deck.tracks, 2, onProgress, () => cancelMatchingRef.current)
+        : await batchMatchTracks(deck.tracks, 2, onProgress, () => cancelMatchingRef.current);
 
       setDeck((current) => {
         if (!current) return null;
@@ -269,7 +274,14 @@ export const EditorPage: React.FC = () => {
   };
 
   const handleAddTrack = (track: Track) => {
-    if (track.youtubeVideoId && deck.tracks.some((t) => t.youtubeVideoId === track.youtubeVideoId)) {
+    const sourceId = getTrackSourceId(track);
+    const duplicate = deck.tracks.some((existing) => {
+      const sameSource = sourceId && getTrackSourceId(existing) === sourceId;
+      const sameMetadata = existing.artist.trim().toLowerCase() === track.artist.trim().toLowerCase()
+        && existing.title.trim().toLowerCase() === track.title.trim().toLowerCase();
+      return Boolean(sameSource || sameMetadata);
+    });
+    if (duplicate) {
       return;
     }
     const newDeck = { ...deck, tracks: [track, ...deck.tracks] };
@@ -283,11 +295,15 @@ export const EditorPage: React.FC = () => {
   };
 
   const handleAddTracks = (tracks: Track[]) => {
-    const seen = new Set(deck.tracks.map((t) => t.youtubeVideoId).filter(Boolean));
+    const seen = new Set(deck.tracks.map((t) => getTrackSourceId(t)).filter((id): id is string => Boolean(id)));
+    const metadata = new Set(deck.tracks.map((t) => `${t.artist.trim().toLowerCase()}\u0000${t.title.trim().toLowerCase()}`));
     const fresh = tracks.filter((track) => {
-      if (!track.youtubeVideoId) return true;
-      if (seen.has(track.youtubeVideoId)) return false;
-      seen.add(track.youtubeVideoId);
+      const sourceId = getTrackSourceId(track);
+      const key = `${track.artist.trim().toLowerCase()}\u0000${track.title.trim().toLowerCase()}`;
+      if (sourceId && seen.has(sourceId)) return false;
+      if (metadata.has(key)) return false;
+      if (sourceId) seen.add(sourceId);
+      metadata.add(key);
       return true;
     });
     if (fresh.length === 0) return;
@@ -486,6 +502,10 @@ export const EditorPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button type="button" onClick={() => setShowConvertModal(true)} disabled={emptyDeck} title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Create a copy using the other music provider"}>
+              <ArrowRightLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Convert deck</span>
+            </Button>
             <span
               className={`pc-rainbow-attention${showAddSongRainbow ? " pc-rainbow-attention--active" : ""}`}
             >
@@ -500,6 +520,7 @@ export const EditorPage: React.FC = () => {
 
       <TrackTable
         deckId={deck.id}
+        provider={deck.provider}
         tracks={deck.tracks}
         onUpdateTrack={handleUpdateTrack}
         onDeleteTrack={handleDeleteTrack}
@@ -576,14 +597,29 @@ export const EditorPage: React.FC = () => {
           onClose={() => setShowAddTrackModal(false)}
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
         >
-          <p className="text-xs mb-3">Find clips by song name or paste a YouTube link — results appear here.</p>
+        <p className="text-xs mb-3">
+          {deck.provider === "deezer"
+            ? "Search Deezer tracks or paste a track URL. Only tracks with a short preview can be added."
+            : "Find clips by song name or paste a YouTube link — results appear here."}
+        </p>
           <SongSearch
-            existingVideoIds={deck.tracks.map((t) => t.youtubeVideoId)}
+            provider={deck.provider}
+            existingVideoIds={deck.tracks.map((t) => getTrackSourceId(t))}
             onAddTrack={handleAddTrack}
             onAddTracks={handleAddTracks}
           />
         </PcModal>
       )}
+
+      <ConvertDeckModal
+        deck={deck}
+        isOpen={showConvertModal}
+        onClose={() => setShowConvertModal(false)}
+        onCreate={(converted) => {
+          const saved = createDeck(converted);
+          navigate(`/deck/${saved.id}`);
+        }}
+      />
     </div>
   );
 };

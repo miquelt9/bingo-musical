@@ -6,6 +6,9 @@ import { BackButton } from "../components/ui/BackButton";
 import { useDeck } from "../state/DeckContext";
 import { fetchSharedDeckPayload, isShareApiConfigured } from "../lib/share/sharedDecksApi";
 import { validateDeckSchema } from "../lib/storage/decks";
+import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
+import { deezerHitToTrack, resolveDeezerTrack } from "../lib/deezer/api";
+import { getProviderLabel } from "../lib/music/providers";
 
 export const SharedDeckPage: React.FC = () => {
   const { shareId } = useParams<{ shareId: string }>();
@@ -66,6 +69,38 @@ export const SharedDeckPage: React.FC = () => {
     return validation.deck;
   }, [payload]);
 
+  useEffect(() => {
+    if (!preview || preview.provider !== "deezer") return;
+    const missing = preview.tracks.filter((track) => track.media?.provider === "deezer" && !track.media.previewUrl);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(missing.map(async (track) => {
+      try {
+        return { sourceId: track.media!.id, hit: await resolveDeezerTrack(track.media!.id) };
+      } catch {
+        return null;
+      }
+    })).then((resolved) => {
+      if (cancelled) return;
+      const byId = new Map(resolved.filter((item): item is NonNullable<typeof item> => item !== null).map((item) => [item.sourceId, item.hit]));
+      if (byId.size === 0) return;
+      setPayload((current: unknown) => {
+        const validation = validateDeckSchema(current);
+        if (!validation.deck) return current;
+        return {
+          ...validation.deck,
+          tracks: validation.deck.tracks.map((track) => {
+            const hit = track.media?.provider === "deezer" ? byId.get(track.media.id) : undefined;
+            if (!hit) return track;
+            const resolvedTrack = deezerHitToTrack(hit);
+            return { ...track, album: resolvedTrack.album, albumArtUrl: resolvedTrack.albumArtUrl, durationMs: resolvedTrack.durationMs, media: resolvedTrack.media, startTime: resolvedTrack.startTime, endTime: resolvedTrack.endTime, matchStatus: "matched" as const };
+          }),
+        };
+      });
+    });
+    return () => { cancelled = true; };
+  }, [preview]);
+
   const handleImport = async () => {
     if (!shareId) return;
     setIsImporting(true);
@@ -109,7 +144,7 @@ export const SharedDeckPage: React.FC = () => {
                 <div>
                   <h2 className="font-bold text-base">{preview.name}</h2>
                   <p className="text-sm mt-1">
-                    {preview.tracks.length} song{preview.tracks.length === 1 ? "" : "s"}
+                    {getProviderLabel(preview.provider)} · {preview.tracks.length} song{preview.tracks.length === 1 ? "" : "s"}
                   </p>
                 </div>
               </div>
@@ -119,8 +154,9 @@ export const SharedDeckPage: React.FC = () => {
               <p className="text-xs font-bold mb-2">Songs</p>
               <ul className="text-xs space-y-1">
                 {preview.tracks.slice(0, 12).map((track) => (
-                  <li key={track.id}>
-                    {track.artist} — {track.title}
+                  <li key={track.id} className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>
+                    {track.media ? <ClipPreviewButton track={track} size="sm" /> : <span className="text-pc-warning">Unavailable</span>}
                   </li>
                 ))}
                 {preview.tracks.length > 12 ? (
