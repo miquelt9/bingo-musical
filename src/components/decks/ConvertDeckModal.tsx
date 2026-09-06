@@ -3,10 +3,10 @@ import { Button } from "@miquelt9/pc-ui";
 import { AlertCircle, Check, Loader2, RefreshCw } from "lucide-react";
 import { Deck, MusicProvider, Track } from "../../types/deck";
 import { createTrack } from "../../lib/tracks";
-import { deezerHitToTrack, DeezerTrackHit, searchDeezerTracks } from "../../lib/deezer/api";
+import { deezerHitToTrack, DeezerTrackHit, searchDeezerTracksBatch } from "../../lib/deezer/api";
 import { deezerMatchConfidence, normalizeMusicText } from "../../lib/deezer/matcher";
 import { YoutubeSearchHit, guessTitleArtist, searchYoutubeVideos } from "../../lib/youtube/search";
-import { checkVideoEmbeddable } from "../../lib/youtube/validator";
+import { checkVideoEmbeddable, getCachedEmbedStatus } from "../../lib/youtube/validator";
 import { getProviderLabel } from "../../lib/music/providers";
 import { PcModal } from "../ui/PcModal";
 
@@ -28,12 +28,40 @@ interface ConvertDeckModalProps {
   onCreate: (deck: Deck) => void;
 }
 
+const YOUTUBE_TRACK_DELAY_MS = 350;
+
 function sameText(a: string, b: string): boolean {
   return normalizeMusicText(a) === normalizeMusicText(b);
 }
 
 function randomId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function rowFromCandidates(source: Track, candidates: Candidate[]): ConversionRow {
+  const playable = candidates.filter((candidate) => candidate.playable && candidate.confidence === "high");
+  const selected = playable.length === 1 ? candidates.indexOf(playable[0]) : null;
+  return {
+    source,
+    candidates,
+    selected,
+    status: selected === null ? (candidates.length ? "review" : "unmatched") : "matched",
+  };
+}
+
+function deezerCandidatesForTrack(track: Track, hits: DeezerTrackHit[]): Candidate[] {
+  return hits
+    .map((hit) => ({
+      provider: "deezer" as const,
+      hit,
+      playable: Boolean(hit.previewUrl),
+      confidence: deezerMatchConfidence(track, hit),
+    }))
+    .filter((candidate) => candidate.confidence !== "none");
 }
 
 async function findYoutubeCandidates(track: Track): Promise<Candidate[]> {
@@ -45,24 +73,13 @@ async function findYoutubeCandidates(track: Track): Promise<Candidate[]> {
     const artistMatches = sameText(track.artist, guessed.artist) || sameText(track.artist, hit.author);
     const confidence = titleMatches && artistMatches ? "high" : titleMatches || artistMatches ? "ambiguous" : "none";
     if (confidence === "none") continue;
-    const validation = await checkVideoEmbeddable(hit.videoId);
-    candidates.push({ provider: "youtube", hit, playable: validation.embeddable, confidence });
+
+    const cached = getCachedEmbedStatus(hit.videoId);
+    const playable = cached ? cached.embeddable : (await checkVideoEmbeddable(hit.videoId)).embeddable;
+    candidates.push({ provider: "youtube", hit, playable, confidence });
     if (candidates.length >= 5) break;
   }
   return candidates;
-}
-
-async function findCandidates(track: Track, provider: MusicProvider): Promise<Candidate[]> {
-  if (provider === "deezer") {
-    const hits = await searchDeezerTracks(`${track.artist} ${track.title}`, 8);
-    return hits.map((hit) => ({
-      provider: "deezer" as const,
-      hit,
-      playable: Boolean(hit.previewUrl),
-      confidence: deezerMatchConfidence(track, hit),
-    })).filter((candidate) => candidate.confidence !== "none");
-  }
-  return findYoutubeCandidates(track);
 }
 
 export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen, onClose, onCreate }) => {
@@ -70,32 +87,63 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
   const [rows, setRows] = useState<ConversionRow[]>([]);
   const [isMatching, setIsMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressLabel, setProgressLabel] = useState("Searching…");
 
   useEffect(() => {
     if (!isOpen) return;
     setRows(deck.tracks.map((source) => ({ source, candidates: [], selected: null, status: "loading" })));
     setError(null);
     setIsMatching(true);
+    setProgressLabel(targetProvider === "deezer" ? "Batching Deezer search…" : "Searching…");
     let cancelled = false;
+
     const run = async () => {
-      for (let i = 0; i < deck.tracks.length; i += 1) {
-        if (cancelled) return;
+      if (targetProvider === "deezer") {
         try {
-          const candidates = await findCandidates(deck.tracks[i], targetProvider);
-          const playable = candidates.filter((candidate) => candidate.playable && candidate.confidence === "high");
-          const selected = playable.length === 1 ? candidates.indexOf(playable[0]) : null;
-          setRows((current) => current.map((row, rowIndex) => rowIndex === i
-            ? { ...row, candidates, selected, status: selected === null ? (candidates.length ? "review" : "unmatched") : "matched" }
-            : row));
+          const batchHits = await searchDeezerTracksBatch(deck.tracks);
+          if (cancelled) return;
+          setRows(deck.tracks.map((source, index) =>
+            rowFromCandidates(source, deezerCandidatesForTrack(source, batchHits[index] ?? []))
+          ));
         } catch (err) {
           if (!cancelled) {
-            setRows((current) => current.map((row, rowIndex) => rowIndex === i ? { ...row, status: "unmatched" } : row));
+            setRows(deck.tracks.map((source) => ({
+              source,
+              candidates: [],
+              selected: null,
+              status: "unmatched" as const,
+            })));
+            setError((err as Error).message || "Deezer batch search failed.");
+          }
+        }
+        if (!cancelled) setIsMatching(false);
+        return;
+      }
+
+      for (let i = 0; i < deck.tracks.length; i += 1) {
+        if (cancelled) return;
+        setProgressLabel(`Searching ${i + 1} / ${deck.tracks.length}…`);
+        try {
+          const candidates = await findYoutubeCandidates(deck.tracks[i]);
+          if (cancelled) return;
+          setRows((current) => current.map((row, rowIndex) =>
+            rowIndex === i ? rowFromCandidates(deck.tracks[i], candidates) : row
+          ));
+        } catch (err) {
+          if (!cancelled) {
+            setRows((current) => current.map((row, rowIndex) =>
+              rowIndex === i ? { ...row, status: "unmatched" } : row
+            ));
             setError((err as Error).message || "Some provider searches failed.");
           }
+        }
+        if (i < deck.tracks.length - 1 && !cancelled) {
+          await sleep(YOUTUBE_TRACK_DELAY_MS);
         }
       }
       if (!cancelled) setIsMatching(false);
     };
+
     void run();
     return () => { cancelled = true; };
   }, [deck, isOpen, targetProvider]);
@@ -155,7 +203,10 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
     <PcModal title={`Convert deck to ${getProviderLabel(targetProvider)}`} onClose={isMatching ? () => {} : onClose} className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <div className="space-y-3 text-xs">
         <p>Conversion creates a new copy. The original deck and its host session are not changed.</p>
-        <p className="font-semibold">{completed} / {rows.length} songs searched{isMatching ? "…" : ""} · {unresolved} need review</p>
+        <p className="font-semibold">
+          {completed} / {rows.length} songs searched{isMatching ? "…" : ""} · {unresolved} need review
+          {isMatching ? ` · ${progressLabel}` : ""}
+        </p>
         {error && <p className="pc-bevel-inset p-2 text-pc-warning flex items-center gap-2"><AlertCircle className="w-4 h-4" />{error}</p>}
         <div className="space-y-2 max-h-[52vh] overflow-y-auto">
           {rows.map((row, rowIndex) => (

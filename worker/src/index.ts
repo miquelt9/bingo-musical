@@ -20,10 +20,18 @@ const MAX_SONGS = 150;
 const SHARE_TTL_SECONDS = 60 * 60 * 24 * 365;
 const SHARE_KEY_PREFIX = "share:";
 const RATE_LIMIT_PREFIX = "rl:";
-const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_SEC = 60;
+const RATE_LIMITS = {
+  deezer: 30,
+  share: 10,
+  events: 20,
+} as const;
+type RateLimitBucket = keyof typeof RATE_LIMITS;
 const SHARE_ID_RETRIES = 5;
 const DEEZER_API = "https://api.deezer.com";
+const DEEZER_EDGE_CACHE_TTL = 86400;
+const DEEZER_META_CACHE_TTL_SECONDS = 60 * 60 * 24 * 3;
+const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/";
 
 const ALLOWED_EVENTS = new Set([
   "host_started",
@@ -86,8 +94,79 @@ function emptyResponse(request: Request, env: Env, status = 204): Response {
   });
 }
 
-function errorResponse(request: Request, env: Env, message: string, status: number): Response {
-  return jsonResponse(request, env, { error: message }, status);
+function errorResponse(
+  request: Request,
+  env: Env,
+  message: string,
+  status: number,
+  extraHeaders?: HeadersInit
+): Response {
+  const response = jsonResponse(request, env, { error: message }, status);
+  if (extraHeaders) {
+    const headers = new Headers(extraHeaders);
+    headers.forEach((value, key) => response.headers.set(key, value));
+  }
+  return response;
+}
+
+function rateLimitResponse(request: Request, env: Env, message: string): Response {
+  return errorResponse(request, env, message, 429, { "Retry-After": String(RATE_LIMIT_WINDOW_SEC) });
+}
+
+function normalizeCacheText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function deezerCacheRequest(key: string): Request {
+  return new Request(`${DEEZER_CACHE_PREFIX}${key}`, { method: "GET" });
+}
+
+async function readDeezerCache<T>(key: string): Promise<T | null> {
+  try {
+    const cached = await caches.default.match(deezerCacheRequest(key));
+    if (!cached) return null;
+    return await cached.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeDeezerCache(key: string, body: unknown): Promise<void> {
+  try {
+    const response = new Response(JSON.stringify(body), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`,
+      },
+    });
+    await caches.default.put(deezerCacheRequest(key), response);
+  } catch {
+    // Cache writes are best-effort; upstream results still return to the client.
+  }
+}
+
+async function deezerSearchCacheKey(query: string, limit: number): Promise<string> {
+  const hash = await sha256Hex(`${normalizeCacheText(query)}|${limit}`);
+  return `search:${hash}`;
+}
+
+async function deezerTrackCacheKey(id: string): Promise<string> {
+  return `track:${id}`;
+}
+
+async function deezerRelatedCacheKey(id: string, limit: number): Promise<string> {
+  return `related:${id}:${limit}`;
 }
 
 function trackUsageEvent(env: Env, event: string, route?: string): void {
@@ -169,25 +248,37 @@ function normalizeDeezerTrack(item: DeezerApiTrack): Record<string, unknown> | n
 }
 
 async function handleDeezerSearch(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env))) {
-    return errorResponse(request, env, "Too many Deezer requests. Please try again later.", 429);
+  if (!(await checkRateLimit(request, env, "deezer"))) {
+    return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() || "";
   if (query.length < 2) return errorResponse(request, env, "Search query is too short.", 400);
   const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "8", 10) || 8));
+  const cacheKey = await deezerSearchCacheKey(query, limit);
 
   try {
+    const cached = await readDeezerCache<{ data: Record<string, unknown>[]; total: number }>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
     const upstream = await fetch(`${DEEZER_API}/search?q=${encodeURIComponent(query)}&limit=${limit}`, {
-      cf: { cacheTtl: 300, cacheEverything: true },
+      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
     });
     if (!upstream.ok) return errorResponse(request, env, `Deezer search failed (${upstream.status}).`, 502);
     const body = await upstream.json() as { data?: DeezerApiTrack[]; total?: number };
     const data = Array.isArray(body.data)
       ? body.data.map(normalizeDeezerTrack).filter((item): item is Record<string, unknown> => item !== null)
       : [];
-    const response = jsonResponse(request, env, { data, total: body.total ?? data.length }, 200);
-    response.headers.set("Cache-Control", "public, max-age=300");
+    const payload = { data, total: body.total ?? data.length };
+    await writeDeezerCache(cacheKey, payload);
+    const response = jsonResponse(request, env, payload, 200);
+    response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
     return response;
   } catch {
     return errorResponse(request, env, "Could not reach Deezer right now.", 502);
@@ -196,29 +287,40 @@ async function handleDeezerSearch(request: Request, env: Env): Promise<Response>
 
 async function searchDeezerCatalog(title: string, artist: string, id?: string): Promise<Record<string, unknown>[]> {
   if (id) {
+    const cacheKey = await deezerTrackCacheKey(id);
+    const cached = await readDeezerCache<Record<string, unknown>>(cacheKey);
+    if (cached) return [cached];
+
     const upstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
-      cf: { cacheTtl: 300, cacheEverything: true },
+      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
     });
     if (!upstream.ok) return [];
     const item = await upstream.json() as DeezerApiTrack & { error?: unknown };
     const normalized = normalizeDeezerTrack(item);
+    if (normalized) await writeDeezerCache(cacheKey, normalized);
     return normalized ? [normalized] : [];
   }
 
   const query = `${artist} ${title}`.trim();
+  const cacheKey = await deezerSearchCacheKey(query, 8);
+  const cached = await readDeezerCache<{ data: Record<string, unknown>[] }>(cacheKey);
+  if (cached?.data) return cached.data;
+
   const upstream = await fetch(`${DEEZER_API}/search?q=${encodeURIComponent(query)}&limit=8`, {
-    cf: { cacheTtl: 300, cacheEverything: true },
+    cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
   });
   if (!upstream.ok) return [];
   const body = await upstream.json() as { data?: DeezerApiTrack[] };
-  return Array.isArray(body.data)
+  const data = Array.isArray(body.data)
     ? body.data.map(normalizeDeezerTrack).filter((item): item is Record<string, unknown> => item !== null)
     : [];
+  await writeDeezerCache(cacheKey, { data, total: data.length });
+  return data;
 }
 
 async function handleDeezerBatchSearch(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env))) {
-    return errorResponse(request, env, "Too many Deezer requests. Please try again later.", 429);
+  if (!(await checkRateLimit(request, env, "deezer"))) {
+    return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
 
   const contentLength = Number(request.headers.get("Content-Length") ?? "0");
@@ -269,21 +371,32 @@ async function handleDeezerBatchSearch(request: Request, env: Env): Promise<Resp
 }
 
 async function handleDeezerTrack(request: Request, env: Env, id: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env))) {
-    return errorResponse(request, env, "Too many Deezer requests. Please try again later.", 429);
+  if (!(await checkRateLimit(request, env, "deezer"))) {
+    return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
   if (!/^\d+$/.test(id)) return errorResponse(request, env, "Invalid Deezer track id.", 400);
+  const cacheKey = await deezerTrackCacheKey(id);
 
   try {
+    const cached = await readDeezerCache<Record<string, unknown>>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
     const upstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
-      cf: { cacheTtl: 300, cacheEverything: true },
+      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
     });
     if (!upstream.ok) return errorResponse(request, env, "Deezer track not found.", 404);
     const item = await upstream.json() as DeezerApiTrack & { error?: unknown };
     const normalized = normalizeDeezerTrack(item);
     if (!normalized) return errorResponse(request, env, "Deezer track is unavailable.", 404);
+    await writeDeezerCache(cacheKey, normalized);
     const response = jsonResponse(request, env, normalized, 200);
-    response.headers.set("Cache-Control", "public, max-age=300");
+    response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
     return response;
   } catch {
     return errorResponse(request, env, "Could not reach Deezer right now.", 502);
@@ -291,17 +404,26 @@ async function handleDeezerTrack(request: Request, env: Env, id: string): Promis
 }
 
 async function handleDeezerTrackRelated(request: Request, env: Env, id: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env))) {
-    return errorResponse(request, env, "Too many Deezer requests. Please try again later.", 429);
+  if (!(await checkRateLimit(request, env, "deezer"))) {
+    return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
   if (!/^\d+$/.test(id)) return errorResponse(request, env, "Invalid Deezer track id.", 400);
 
   const url = new URL(request.url);
   const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "12", 10) || 12));
+  const cacheKey = await deezerRelatedCacheKey(id, limit);
 
   try {
+    const cached = await readDeezerCache<{ data: Record<string, unknown>[]; total: number }>(cacheKey);
+    if (cached) {
+      const response = jsonResponse(request, env, cached, 200);
+      response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
+      response.headers.set("X-Cache", "HIT");
+      return response;
+    }
+
     const trackUpstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
-      cf: { cacheTtl: 300, cacheEverything: true },
+      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
     });
     if (!trackUpstream.ok) return errorResponse(request, env, "Deezer track not found.", 404);
     const track = await trackUpstream.json() as DeezerApiTrack & { error?: unknown };
@@ -315,7 +437,7 @@ async function handleDeezerTrackRelated(request: Request, env: Env, id: string):
 
     const radioUpstream = await fetch(
       `${DEEZER_API}/artist/${encodeURIComponent(artistId)}/radio?limit=${limit}`,
-      { cf: { cacheTtl: 300, cacheEverything: true } }
+      { cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true } }
     );
     if (!radioUpstream.ok) {
       return errorResponse(request, env, `Deezer artist radio failed (${radioUpstream.status}).`, 502);
@@ -328,8 +450,11 @@ async function handleDeezerTrackRelated(request: Request, env: Env, id: string):
           .filter((item) => item.id !== id)
           .slice(0, limit)
       : [];
-    const response = jsonResponse(request, env, { data, total: data.length }, 200);
-    response.headers.set("Cache-Control", "public, max-age=300");
+    const payload = { data, total: data.length };
+    await writeDeezerCache(cacheKey, payload);
+    const response = jsonResponse(request, env, payload, 200);
+    response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
+    response.headers.set("X-Cache", "MISS");
     return response;
   } catch {
     return errorResponse(request, env, "Could not reach Deezer right now.", 502);
@@ -344,13 +469,14 @@ function getClientIp(request: Request): string {
   );
 }
 
-async function checkRateLimit(request: Request, env: Env): Promise<boolean> {
+async function checkRateLimit(request: Request, env: Env, bucket: RateLimitBucket): Promise<boolean> {
   const ip = getClientIp(request);
   const window = Math.floor(Date.now() / 60000);
-  const key = `${RATE_LIMIT_PREFIX}${ip}:${window}`;
+  const key = `${RATE_LIMIT_PREFIX}${bucket}:${ip}:${window}`;
+  const max = RATE_LIMITS[bucket];
   const current = await env.SHARED_DECKS.get(key);
   const count = current ? Number.parseInt(current, 10) : 0;
-  if (!Number.isFinite(count) || count >= RATE_LIMIT_MAX) {
+  if (!Number.isFinite(count) || count >= max) {
     return false;
   }
   await env.SHARED_DECKS.put(key, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW_SEC });
@@ -411,8 +537,8 @@ async function allocateContentAddressedShareId(
 }
 
 async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env))) {
-    return errorResponse(request, env, "Too many share requests. Please try again later.", 429);
+  if (!(await checkRateLimit(request, env, "share"))) {
+    return rateLimitResponse(request, env, "Too many share requests. Please try again later.");
   }
 
   const contentLength = Number(request.headers.get("Content-Length") ?? "0");
@@ -466,8 +592,8 @@ async function handleGetDeck(request: Request, env: Env, shareId: string): Promi
 }
 
 async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env))) {
-    return errorResponse(request, env, "Too many requests. Please try again later.", 429);
+  if (!(await checkRateLimit(request, env, "events"))) {
+    return rateLimitResponse(request, env, "Too many requests. Please try again later.");
   }
 
   const contentLength = Number(request.headers.get("Content-Length") ?? "0");

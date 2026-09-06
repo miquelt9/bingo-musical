@@ -2,6 +2,9 @@ import { Track } from "../../types/deck";
 import { createTrack, defaultDeezerClipWindow } from "../tracks";
 
 const API_URL = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
+const DEFAULT_TIMEOUT_MS = 5000;
+const BATCH_TIMEOUT_MS = 45000;
+const MAX_RETRIES = 2;
 
 export interface DeezerTrackHit {
   provider: "deezer";
@@ -37,29 +40,80 @@ export function looksLikeDeezerInput(value: string): boolean {
   return Boolean(parseDeezerTrackId(value));
 }
 
-async function fetchJson<T>(path: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
-  if (!API_URL) throw new Error("Deezer search is unavailable until the music service is configured.");
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 5000);
-  const onAbort = () => controller.abort();
-  signal?.addEventListener("abort", onAbort, { once: true });
-  try {
-    const response = await fetch(`${API_URL}${path}`, { ...init, signal: controller.signal });
-    if (!response.ok) {
-      let message = `Deezer request failed (${response.status}).`;
-      try {
-        const body = await response.json() as { error?: string };
-        if (body.error) message = body.error;
-      } catch {
-        // Keep the status-based message.
-      }
-      throw new Error(message);
-    }
-    return await response.json() as T;
-  } finally {
-    window.clearTimeout(timeout);
-    signal?.removeEventListener("abort", onAbort);
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(response: Response): number {
+  const raw = response.headers.get("Retry-After");
+  if (!raw) return 1500;
+  const asSeconds = Number.parseInt(raw, 10);
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+    return Math.min(60_000, Math.max(250, asSeconds * 1000));
   }
+  const asDate = Date.parse(raw);
+  if (Number.isFinite(asDate)) {
+    return Math.min(60_000, Math.max(250, asDate - Date.now()));
+  }
+  return 1500;
+}
+
+async function fetchJson<T>(
+  path: string,
+  signal?: AbortSignal,
+  init?: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<T> {
+  if (!API_URL) throw new Error("Deezer search is unavailable until the music service is configured.");
+
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const onAbort = () => controller.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      const response = await fetch(`${API_URL}${path}`, { ...init, signal: controller.signal });
+      if (response.status === 429) {
+        if (attempt >= MAX_RETRIES) {
+          let message = "Too many Deezer requests. Please try again later.";
+          try {
+            const body = await response.json() as { error?: string };
+            if (body.error) message = body.error;
+          } catch {
+            // Keep default message.
+          }
+          throw new Error(message);
+        }
+        await sleep(parseRetryAfterMs(response));
+        continue;
+      }
+      if (!response.ok) {
+        let message = `Deezer request failed (${response.status}).`;
+        try {
+          const body = await response.json() as { error?: string };
+          if (body.error) message = body.error;
+        } catch {
+          // Keep the status-based message.
+        }
+        throw new Error(message);
+      }
+      return await response.json() as T;
+    } catch (err) {
+      lastError = err as Error;
+      if (signal?.aborted || (err as Error).name === "AbortError") throw err;
+      // Do not retry application/HTTP errors other than 429 (handled above).
+      if (!(err instanceof TypeError) || attempt >= MAX_RETRIES) throw err;
+      await sleep(500 * (attempt + 1));
+    } finally {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+    }
+  }
+
+  throw lastError ?? new Error("Deezer request failed.");
 }
 
 function mapHit(item: Partial<DeezerTrackHit>): DeezerTrackHit | null {
@@ -109,7 +163,8 @@ export async function searchDeezerTracksBatch(
             artist: track.artist,
           })),
         }),
-      }
+      },
+      BATCH_TIMEOUT_MS
     );
     results.push(...(body.data || []).map((items) =>
       (items || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null)
