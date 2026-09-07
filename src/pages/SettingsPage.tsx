@@ -142,26 +142,15 @@ export const SettingsPage: React.FC = () => {
         Your decks stay in this browser. We don&apos;t run accounts or keep your song lists on a server.
       </p>
       <p>
-        Clips play through YouTube embeds or Deezer&apos;s short preview URLs. Deezer and YouTube
-        search metadata are requested through the configured Worker, while the browser loads Deezer
-        previews and YouTube embeds directly; the app never requests full-length audio. Catalog
-        matching may also call iTunes or MusicBrainz. YouTube may show its own ads — that&apos;s
-        normal for embedded playback.
+        Songs play as YouTube clips or short Deezer previews. The app never plays full tracks.
+        YouTube may show its own ads — that&apos;s normal.
       </p>
       <p>
-        Deezer previews are normally limited to the first 30 seconds and can be unavailable or blocked
-        by provider CORS or terms. Under{" "}
-        <a
-          href="https://developers.deezer.com/termsofuse"
-          target="_blank"
-          rel="noreferrer"
-          className="pc-link inline-flex items-center gap-0.5"
-        >
-          Deezer&apos;s developer terms
-          <ExternalLink className="w-3 h-3" />
-        </a>
-        , those previews are for non-commercial private / family / home use only. Bars, ticketed events,
-        or other commercial venues are outside that scope and remain the organizer&apos;s responsibility.
+        Deezer previews are usually about 30 seconds and aren&apos;t always available. They&apos;re meant
+        for personal, family, or home use only — not bars, ticketed events, or other commercial settings.
+        That&apos;s the organizer&apos;s responsibility.
+      </p>
+      <p>
         Not affiliated with YouTube, Google, Deezer, or any music platform.
       </p>
       <p className="text-muted">
