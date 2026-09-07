@@ -127,11 +127,16 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   const [isCheckingEmbeds, setIsCheckingEmbeds] = useState(false);
   const [addingVideoId, setAddingVideoId] = useState<string | null>(null);
   const [lyricsFallbackUsed, setLyricsFallbackUsed] = useState(false);
+  const [searchPage, setSearchPage] = useState(1);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const blurTimer = useRef<number | null>(null);
   const skipCatalogQuery = useRef<string | null>(null);
   const youtubeAbort = useRef<AbortController | null>(null);
   const lastYoutubeSearchQueryRef = useRef("");
   const lyricsFallbackAttemptedRef = useRef(false);
+  const hitsRef = useRef<YoutubeSearchHit[]>([]);
+  hitsRef.current = hits;
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const usingKeyboardNav = useRef(false);
@@ -282,13 +287,17 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
     setPlaylistName(undefined);
     setShowSuggestions(false);
     setEmbedStatuses(new Map());
+    setSearchPage(1);
+    setHasMoreResults(false);
+    setIsLoadingMore(false);
 
     try {
       if (catalog) {
-        const ytHits = await searchYoutubeVideos(catalogYoutubeQuery(catalog), 8, controller.signal);
+        const ytHits = await searchYoutubeVideos(catalogYoutubeQuery(catalog), 8, controller.signal, 1);
         if (controller.signal.aborted) return;
         setKind("search");
         setHits(ytHits);
+        setHasMoreResults(ytHits.length >= 8);
         if (ytHits.length === 0) {
           setError(`No YouTube clips found for ${catalog.artist} — ${catalog.title}. Try another match or paste a YouTube link.`);
         }
@@ -300,6 +309,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
       setKind(result.kind);
       setHits(result.hits);
       setPlaylistName(result.playlistName);
+      setHasMoreResults(result.kind === "search" && result.hits.length >= 8);
       if (result.hits.length === 0) {
         setError("No matching videos found. Try a song name like “Queen Bohemian Rhapsody”, or paste a YouTube link.");
       }
@@ -308,6 +318,40 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
       setError((err as Error).message || "Search failed. Try again in a moment.");
     } finally {
       if (!controller.signal.aborted) setIsSearching(false);
+    }
+  };
+
+  const loadMoreYoutubeResults = async () => {
+    if (isLoadingMore || isSearching || kind !== "search") return;
+    const baseQuery = selectedCatalog
+      ? catalogYoutubeQuery(selectedCatalog)
+      : lastYoutubeSearchQueryRef.current || query.trim();
+    if (!baseQuery) return;
+
+    const nextPage = searchPage + 1;
+    youtubeAbort.current?.abort();
+    const controller = new AbortController();
+    youtubeAbort.current = controller;
+    setIsLoadingMore(true);
+    setError(null);
+
+    try {
+      const moreHits = await searchYoutubeVideos(baseQuery, 8, controller.signal, nextPage);
+      if (controller.signal.aborted) return;
+      const seen = new Set(hitsRef.current.map((hit) => hit.videoId));
+      const unique = moreHits.filter((hit) => !seen.has(hit.videoId));
+      if (unique.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      setHits((prev) => [...prev, ...unique]);
+      setSearchPage(nextPage);
+      setHasMoreResults(moreHits.length >= 8);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setError((err as Error).message || "Could not load more results.");
+    } finally {
+      if (!controller.signal.aborted) setIsLoadingMore(false);
     }
   };
 
@@ -752,6 +796,17 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
                 </div>
               );
             })}
+            {kind === "search" && hasMoreResults && (
+              <button
+                type="button"
+                onClick={() => void loadMoreYoutubeResults()}
+                disabled={isLoadingMore || isSearching || isCheckingEmbeds}
+                className="pc-button w-full inline-flex items-center justify-center gap-2"
+              >
+                {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                {isLoadingMore ? "Finding more…" : "Find more"}
+              </button>
+            )}
           </div>
         </div>
       )}

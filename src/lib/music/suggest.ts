@@ -19,7 +19,10 @@ import { checkHitsEmbeddability } from "../youtube/validator";
 import { getTrackSourceId } from "./providers";
 
 export const SUGGEST_RESULT_CAP = 16;
+export const SUGGEST_PAGE_SIZE = 8;
 export const SUGGEST_SEED_CAP = 5;
+/** How many candidates to pull before filtering excludes (related / catalog). */
+const SUGGEST_FETCH_HEADROOM = 32;
 
 export type SuggestHit =
   | { provider: "deezer"; hit: DeezerTrackHit }
@@ -99,13 +102,14 @@ async function suggestDeezer(
   signal?: AbortSignal
 ): Promise<SuggestHit[]> {
   const byId = new Map<string, DeezerTrackHit>();
+  const relatedLimit = Math.min(20, Math.max(limit * 2, SUGGEST_FETCH_HEADROOM));
 
   for (const seed of seeds) {
     if (signal?.aborted) break;
     try {
       const seedId = await resolveDeezerSeedId(seed, signal);
       if (!seedId) continue;
-      const related = await fetchDeezerRelatedTracks(seedId, Math.min(12, limit), signal);
+      const related = await fetchDeezerRelatedTracks(seedId, relatedLimit, signal);
       for (const hit of related) {
         if (exclude.has(hit.id) || byId.has(hit.id)) continue;
         if (!hit.previewUrl) continue;
@@ -140,7 +144,13 @@ async function collectCatalogSuggestions(
     ),
   ].slice(0, SUGGEST_SEED_CAP);
 
-  for (const artist of artistQueries) {
+  // Try primary artist name, then a looser "artist songs" query for more headroom on "Find more".
+  const queries = [
+    ...artistQueries,
+    ...artistQueries.map((artist) => `${artist} songs`),
+  ];
+
+  for (const artist of queries) {
     if (signal?.aborted || bySong.size >= limit) break;
     try {
       const songs = await searchCatalogSongs(artist, signal);
@@ -148,7 +158,7 @@ async function collectCatalogSuggestions(
         const key = songIdentityKey(song.artist, song.title);
         if (key === "::" || excludeSongs.has(key) || bySong.has(key)) continue;
         // Keep results that look like the queried artist (avoid total query noise).
-        const seedArtist = normalizeArtistKey(artist);
+        const seedArtist = normalizeArtistKey(firstArtistName(artist.replace(/\s+songs$/i, "")));
         const songArtist = normalizeArtistKey(firstArtistName(song.artist));
         if (
           seedArtist &&
@@ -194,7 +204,8 @@ async function suggestYoutube(
   limit: number,
   signal?: AbortSignal
 ): Promise<SuggestHit[]> {
-  const catalogSongs = await collectCatalogSuggestions(seeds, excludeSongs, Math.max(limit * 2, 12), signal);
+  const catalogTarget = Math.max(limit * 4, SUGGEST_FETCH_HEADROOM);
+  const catalogSongs = await collectCatalogSuggestions(seeds, excludeSongs, catalogTarget, signal);
   if (catalogSongs.length === 0 || signal?.aborted) return [];
 
   const results: SuggestHit[] = [];
@@ -232,7 +243,9 @@ async function suggestYoutube(
 }
 
 export async function suggestSongs(options: SuggestSongsOptions): Promise<SuggestHit[]> {
-  const limit = Math.max(1, Math.min(SUGGEST_RESULT_CAP, options.limit ?? SUGGEST_RESULT_CAP));
+  // Allow incremental "Find more" batches (page-sized) without clamping to the initial cap only.
+  const maxLimit = Math.max(SUGGEST_RESULT_CAP, SUGGEST_PAGE_SIZE * 3);
+  const limit = Math.max(1, Math.min(maxLimit, options.limit ?? SUGGEST_RESULT_CAP));
   const seeds = options.seeds.slice(0, SUGGEST_SEED_CAP);
   if (seeds.length === 0) return [];
 

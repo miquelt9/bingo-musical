@@ -52,11 +52,17 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
 
   const [searchQuery, setSearchQuery] = useState(() => defaultSearchQuery(track));
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [searchPage, setSearchPage] = useState(1);
   const [searchHits, setSearchHits] = useState<YoutubeSearchHit[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [embedStatuses, setEmbedStatuses] = useState<Map<string, EmbedValidationResult>>(new Map());
   const [isCheckingEmbeds, setIsCheckingEmbeds] = useState(false);
   const searchAbort = useRef<AbortController | null>(null);
+  const lastSearchQueryRef = useRef("");
+  const searchHitsRef = useRef<YoutubeSearchHit[]>([]);
+  searchHitsRef.current = searchHits;
 
   const parsedId = parseYoutubeVideoId(inputValue);
   const thumbUrl = parsedId ? getYoutubeThumbnailUrl(parsedId, "hqdefault") : null;
@@ -71,6 +77,9 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
     setSearchHits([]);
     setSearchError(null);
     setEmbedStatuses(new Map());
+    setHasMoreResults(false);
+    setSearchPage(1);
+    setIsLoadingMore(false);
   }, [isOpen, track]);
 
   useEffect(() => {
@@ -170,14 +179,19 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
     searchAbort.current = controller;
 
     setIsSearching(true);
+    setIsLoadingMore(false);
     setSearchError(null);
     setSearchHits([]);
     setEmbedStatuses(new Map());
+    setSearchPage(1);
+    setHasMoreResults(false);
+    lastSearchQueryRef.current = nextQuery;
 
     try {
-      const hits = await searchYoutubeVideos(nextQuery, 8, controller.signal);
+      const hits = await searchYoutubeVideos(nextQuery, 8, controller.signal, 1);
       if (controller.signal.aborted) return;
       setSearchHits(hits);
+      setHasMoreResults(hits.length >= 8);
       if (hits.length === 0) {
         setSearchError("No matching videos found. Try different keywords or paste a YouTube link above.");
       }
@@ -186,6 +200,37 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
       setSearchError((err as Error).message || "Search failed. Try again in a moment.");
     } finally {
       if (!controller.signal.aborted) setIsSearching(false);
+    }
+  };
+
+  const loadMoreYoutubeResults = async () => {
+    const nextQuery = lastSearchQueryRef.current.trim();
+    if (!nextQuery || isLoadingMore || isSearching) return;
+
+    const nextPage = searchPage + 1;
+    searchAbort.current?.abort();
+    const controller = new AbortController();
+    searchAbort.current = controller;
+    setIsLoadingMore(true);
+    setSearchError(null);
+
+    try {
+      const moreHits = await searchYoutubeVideos(nextQuery, 8, controller.signal, nextPage);
+      if (controller.signal.aborted) return;
+      const seen = new Set(searchHitsRef.current.map((hit) => hit.videoId));
+      const unique = moreHits.filter((hit) => !seen.has(hit.videoId));
+      if (unique.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      setSearchHits((prev) => [...prev, ...unique]);
+      setSearchPage(nextPage);
+      setHasMoreResults(moreHits.length >= 8);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setSearchError((err as Error).message || "Could not load more results.");
+    } finally {
+      if (!controller.signal.aborted) setIsLoadingMore(false);
     }
   };
 
@@ -443,6 +488,17 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
                     </div>
                   );
                 })}
+                {hasMoreResults && (
+                  <button
+                    type="button"
+                    onClick={() => void loadMoreYoutubeResults()}
+                    disabled={isLoadingMore || isSearching || isCheckingEmbeds}
+                    className="pc-button w-full inline-flex items-center justify-center gap-2"
+                  >
+                    {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    {isLoadingMore ? "Finding more…" : "Find more"}
+                  </button>
+                )}
               </div>
             </div>
           )}

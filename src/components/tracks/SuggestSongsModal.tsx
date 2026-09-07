@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Loader2, Plus, Volume2 } from "lucide-react";
+import { AlertCircle, Check, Loader2, Plus, Search, Volume2 } from "lucide-react";
 import { MusicProvider, Track } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { formatDuration } from "../../lib/youtube/search";
 import {
   SuggestHit,
+  SUGGEST_PAGE_SIZE,
+  SUGGEST_RESULT_CAP,
+  songIdentityKey,
   suggestHitId,
   suggestHitPlayable,
   suggestHitToTrack,
@@ -50,6 +53,16 @@ function hitArtUrl(item: SuggestHit): string {
   return item.catalog?.artworkUrl || item.hit.thumbnailUrl;
 }
 
+function hitAsTrackIdentity(item: SuggestHit): Pick<Track, "title" | "artist"> {
+  if (item.provider === "deezer") {
+    return { title: item.hit.title, artist: item.hit.artist };
+  }
+  return {
+    title: item.catalog?.title || item.hit.title,
+    artist: item.catalog?.artist || item.hit.author,
+  };
+}
+
 export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
   provider,
   seeds,
@@ -62,6 +75,8 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
 }) => {
   const [hits, setHits] = useState<SuggestHit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set());
@@ -69,9 +84,11 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
   const seedsRef = useRef(seeds);
   const excludeRef = useRef(existingIds);
   const excludeTracksRef = useRef(existingTracks);
+  const hitsRef = useRef<SuggestHit[]>([]);
   seedsRef.current = seeds;
   excludeRef.current = existingIds;
   excludeTracksRef.current = existingTracks;
+  hitsRef.current = hits;
   const alreadyInDeck = new Set([
     ...existingIds.filter((id): id is string => Boolean(id)),
     ...addedIds,
@@ -84,9 +101,11 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
     const controller = new AbortController();
     abortRef.current = controller;
     setIsLoading(true);
+    setIsLoadingMore(false);
     setError(null);
     setHits([]);
     setAddedIds(new Set());
+    setHasMoreResults(false);
 
     const snapshotSeeds = seedsRef.current;
     const snapshotExclude = excludeRef.current;
@@ -99,10 +118,12 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
           seeds: snapshotSeeds,
           excludeIds: snapshotExclude,
           excludeTracks: snapshotExcludeTracks,
+          limit: SUGGEST_RESULT_CAP,
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
         setHits(next);
+        setHasMoreResults(next.length >= SUGGEST_PAGE_SIZE);
         if (next.length === 0) {
           setError(`No similar ${getProviderLabel(provider)} songs found. Try adding more songs first.`);
         }
@@ -117,6 +138,58 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
 
     return () => controller.abort();
   }, [provider, seedKey]);
+
+  const loadMoreSuggestions = async () => {
+    if (isLoading || isLoadingMore || !hasMoreResults) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsLoadingMore(true);
+    setError(null);
+
+    const shown = hitsRef.current;
+    const shownIds = shown.map(suggestHitId);
+    const shownTracks = shown.map(hitAsTrackIdentity);
+
+    try {
+      const next = await suggestSongs({
+        provider,
+        seeds: seedsRef.current,
+        excludeIds: [...excludeRef.current, ...shownIds],
+        excludeTracks: [...excludeTracksRef.current, ...shownTracks],
+        limit: SUGGEST_PAGE_SIZE,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+
+      const seenIds = new Set(shownIds);
+      const seenSongs = new Set(
+        shownTracks.map((track) => songIdentityKey(track.artist, track.title)).filter((key) => key !== "::")
+      );
+      const unique = next.filter((item) => {
+        const id = suggestHitId(item);
+        if (seenIds.has(id)) return false;
+        const identity = hitAsTrackIdentity(item);
+        const key = songIdentityKey(identity.artist, identity.title);
+        if (key !== "::" && seenSongs.has(key)) return false;
+        return true;
+      });
+
+      if (unique.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      setHits((current) => [...current, ...unique]);
+      setHasMoreResults(next.length >= SUGGEST_PAGE_SIZE);
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setError((err as Error).message || "Could not load more suggestions.");
+      }
+    } finally {
+      if (!controller.signal.aborted) setIsLoadingMore(false);
+    }
+  };
 
   const addHit = (item: SuggestHit) => {
     const id = suggestHitId(item);
@@ -140,6 +213,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
     if (onAddTracks) onAddTracks(tracks);
     else tracks.forEach(onAddTrack);
     setHits([]);
+    setHasMoreResults(false);
     setAddedIds((current) => {
       const next = new Set(current);
       playable.forEach((item) => next.add(suggestHitId(item)));
@@ -246,6 +320,17 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
                 </div>
               );
             })}
+            {hasMoreResults && (
+              <button
+                type="button"
+                onClick={() => void loadMoreSuggestions()}
+                disabled={isLoadingMore}
+                className="pc-button w-full inline-flex items-center justify-center gap-2"
+              >
+                {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                {isLoadingMore ? "Finding more…" : "Find more"}
+              </button>
+            )}
           </div>
         </div>
       )}

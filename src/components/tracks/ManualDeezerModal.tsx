@@ -41,6 +41,9 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
   const [searchQuery, setSearchQuery] = useState(() => defaultSearchQuery(track));
   const [hits, setHits] = useState<DeezerTrackHit[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [nextIndex, setNextIndex] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const [pasteValue, setPasteValue] = useState("");
@@ -52,6 +55,9 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
 
   const searchAbort = useRef<AbortController | null>(null);
   const resolveAbort = useRef<AbortController | null>(null);
+  const lastSearchQueryRef = useRef("");
+  const hitsRef = useRef<DeezerTrackHit[]>([]);
+  hitsRef.current = hits;
 
   useEffect(() => {
     return () => {
@@ -67,6 +73,9 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
     setSearchQuery(query);
     setHits([]);
     setSearchError(null);
+    setHasMoreResults(false);
+    setNextIndex(0);
+    setIsLoadingMore(false);
     setPasteValue(
       track.media?.provider === "deezer" ? track.media.providerUrl || track.media.id : ""
     );
@@ -80,12 +89,15 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
     const controller = new AbortController();
     searchAbort.current = controller;
     setIsSearching(true);
+    lastSearchQueryRef.current = query;
 
     void (async () => {
       try {
-        const nextHits = await searchDeezerTracks(query, 8, controller.signal);
+        const nextHits = await searchDeezerTracks(query, 8, controller.signal, 0);
         if (controller.signal.aborted) return;
         setHits(nextHits);
+        setNextIndex(nextHits.length);
+        setHasMoreResults(nextHits.length >= 8);
         if (nextHits.length === 0) {
           setSearchError("No Deezer tracks found. Try different keywords or paste a Deezer link below.");
         }
@@ -111,16 +123,22 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
     searchAbort.current = controller;
 
     setIsSearching(true);
+    setIsLoadingMore(false);
     setSearchError(null);
     setHits([]);
+    setHasMoreResults(false);
+    setNextIndex(0);
 
     try {
       const trackId = parseDeezerTrackId(nextQuery);
       const nextHits = trackId
         ? [await resolveDeezerTrack(trackId, controller.signal)]
-        : await searchDeezerTracks(nextQuery, 8, controller.signal);
+        : await searchDeezerTracks(nextQuery, 8, controller.signal, 0);
       if (controller.signal.aborted) return;
+      lastSearchQueryRef.current = trackId ? "" : nextQuery;
       setHits(nextHits);
+      setNextIndex(nextHits.length);
+      setHasMoreResults(!trackId && nextHits.length >= 8);
       if (nextHits.length === 0) {
         setSearchError("No Deezer tracks found. Try different keywords or paste a Deezer link below.");
       }
@@ -129,6 +147,40 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
       setSearchError((err as Error).message || "Deezer search failed.");
     } finally {
       if (!controller.signal.aborted) setIsSearching(false);
+    }
+  };
+
+  const loadMoreResults = async () => {
+    const value = lastSearchQueryRef.current.trim();
+    if (!value || isLoadingMore || isSearching) return;
+
+    searchAbort.current?.abort();
+    const controller = new AbortController();
+    searchAbort.current = controller;
+    setIsLoadingMore(true);
+    setSearchError(null);
+
+    try {
+      const moreHits = await searchDeezerTracks(value, 8, controller.signal, nextIndex);
+      if (controller.signal.aborted) return;
+      if (moreHits.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      const seen = new Set(hitsRef.current.map((hit) => hit.id));
+      const unique = moreHits.filter((hit) => !seen.has(hit.id));
+      if (unique.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      setHits((current) => [...current, ...unique]);
+      setNextIndex((current) => current + moreHits.length);
+      setHasMoreResults(moreHits.length >= 8);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setSearchError((err as Error).message || "Could not load more results.");
+    } finally {
+      if (!controller.signal.aborted) setIsLoadingMore(false);
     }
   };
 
@@ -306,6 +358,17 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
                       </div>
                     );
                   })}
+                  {hasMoreResults && (
+                    <button
+                      type="button"
+                      onClick={() => void loadMoreResults()}
+                      disabled={isLoadingMore || isSearching}
+                      className="pc-button w-full inline-flex items-center justify-center gap-2"
+                    >
+                      {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      {isLoadingMore ? "Finding more…" : "Find more"}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

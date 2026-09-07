@@ -220,8 +220,8 @@ async function writeDeezerCache(key: string, body: unknown): Promise<void> {
   }
 }
 
-async function deezerSearchCacheKey(query: string, limit: number): Promise<string> {
-  const hash = await sha256Hex(`${normalizeCacheText(query)}|${limit}`);
+async function deezerSearchCacheKey(query: string, limit: number, index = 0): Promise<string> {
+  const hash = await sha256Hex(`${normalizeCacheText(query)}|${limit}|${index}`);
   return `search:${hash}`;
 }
 
@@ -271,8 +271,8 @@ async function writeYoutubeCache(key: string, body: unknown): Promise<void> {
   }
 }
 
-async function youtubeSearchCacheKey(query: string, limit: number): Promise<string> {
-  const hash = await sha256Hex(`${normalizeCacheText(query)}|${limit}`);
+async function youtubeSearchCacheKey(query: string, limit: number, page = 1): Promise<string> {
+  const hash = await sha256Hex(`${normalizeCacheText(query)}|${limit}|${page}`);
   return `yt-search:${hash}`;
 }
 
@@ -434,26 +434,17 @@ async function fetchJsonUpstream(url: string, timeoutMs = 4500): Promise<unknown
   }
 }
 
-async function searchYoutubeUpstream(query: string, limit: number): Promise<YoutubeHit[] | null> {
+async function searchYoutubeUpstream(
+  query: string,
+  limit: number,
+  page = 1
+): Promise<YoutubeHit[] | null> {
+  const safePage = Math.max(1, page);
   const tasks: Array<() => Promise<YoutubeHit[] | null>> = [
-    ...YOUTUBE_PIPED.map((instance) => async () => {
-      const data = await fetchJsonUpstream(
-        `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`
-      );
-      if (!data || typeof data !== "object") return null;
-      const items = Array.isArray((data as { items?: unknown }).items)
-        ? (data as { items: unknown[] }).items
-        : Array.isArray(data)
-          ? data
-          : [];
-      const hits = items
-        .map((item) => mapPipedHit(item as Parameters<typeof mapPipedHit>[0]))
-        .filter((h): h is YoutubeHit => Boolean(h));
-      return hits.length > 0 ? hits.slice(0, limit) : null;
-    }),
+    // Prefer Invidious when paginating — it supports an explicit page param.
     ...YOUTUBE_INVIDIOUS.map((instance) => async () => {
       const data = await fetchJsonUpstream(
-        `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video`
+        `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&page=${safePage}`
       );
       if (!Array.isArray(data)) return null;
       const hits = data
@@ -461,6 +452,24 @@ async function searchYoutubeUpstream(query: string, limit: number): Promise<Yout
         .filter((h): h is YoutubeHit => Boolean(h));
       return hits.length > 0 ? hits.slice(0, limit) : null;
     }),
+    // Piped has no reliable page offset; only use it for the first page.
+    ...(safePage === 1
+      ? YOUTUBE_PIPED.map((instance) => async () => {
+          const data = await fetchJsonUpstream(
+            `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`
+          );
+          if (!data || typeof data !== "object") return null;
+          const items = Array.isArray((data as { items?: unknown }).items)
+            ? (data as { items: unknown[] }).items
+            : Array.isArray(data)
+              ? data
+              : [];
+          const hits = items
+            .map((item) => mapPipedHit(item as Parameters<typeof mapPipedHit>[0]))
+            .filter((h): h is YoutubeHit => Boolean(h));
+          return hits.length > 0 ? hits.slice(0, limit) : null;
+        })
+      : []),
   ];
   return raceYoutubeFirst(tasks, 3);
 }
@@ -590,7 +599,8 @@ async function handleYoutubeSearch(request: Request, env: Env): Promise<Response
   const query = url.searchParams.get("q")?.trim() || "";
   if (query.length < 2) return errorResponse(request, env, "Search query is too short.", 400);
   const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "8", 10) || 8));
-  const cacheKey = await youtubeSearchCacheKey(query, limit);
+  const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  const cacheKey = await youtubeSearchCacheKey(query, limit, page);
 
   try {
     const cached = await readYoutubeCache<{ data: YoutubeHit[] }>(cacheKey);
@@ -601,7 +611,7 @@ async function handleYoutubeSearch(request: Request, env: Env): Promise<Response
       return response;
     }
 
-    const hits = await searchYoutubeUpstream(query, limit);
+    const hits = await searchYoutubeUpstream(query, limit, page);
     if (!hits) return errorResponse(request, env, "No YouTube results available right now.", 502);
     const payload = { data: hits };
     await writeYoutubeCache(cacheKey, payload);
@@ -790,7 +800,8 @@ async function handleDeezerSearch(request: Request, env: Env): Promise<Response>
   const query = url.searchParams.get("q")?.trim() || "";
   if (query.length < 2) return errorResponse(request, env, "Search query is too short.", 400);
   const limit = Math.min(20, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "8", 10) || 8));
-  const cacheKey = await deezerSearchCacheKey(query, limit);
+  const index = Math.max(0, Number.parseInt(url.searchParams.get("index") || "0", 10) || 0);
+  const cacheKey = await deezerSearchCacheKey(query, limit, index);
 
   try {
     const cached = await readDeezerCache<{ data: Record<string, unknown>[]; total: number }>(cacheKey);
@@ -801,9 +812,12 @@ async function handleDeezerSearch(request: Request, env: Env): Promise<Response>
       return response;
     }
 
-    const upstream = await fetch(`${DEEZER_API}/search?q=${encodeURIComponent(query)}&limit=${limit}`, {
-      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
-    });
+    const upstream = await fetch(
+      `${DEEZER_API}/search?q=${encodeURIComponent(query)}&limit=${limit}&index=${index}`,
+      {
+        cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
+      }
+    );
     if (!upstream.ok) return errorResponse(request, env, `Deezer search failed (${upstream.status}).`, 502);
     const body = await upstream.json() as { data?: DeezerApiTrack[]; total?: number };
     const data = Array.isArray(body.data)

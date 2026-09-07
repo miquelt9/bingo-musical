@@ -133,11 +133,18 @@ function mapHit(item: Partial<DeezerTrackHit>): DeezerTrackHit | null {
   };
 }
 
-export async function searchDeezerTracks(query: string, limit = 8, signal?: AbortSignal): Promise<DeezerTrackHit[]> {
+export async function searchDeezerTracks(
+  query: string,
+  limit = 8,
+  signal?: AbortSignal,
+  index = 0
+): Promise<DeezerTrackHit[]> {
   const q = query.trim();
   if (q.length < 2) return [];
+  const safeLimit = Math.max(1, Math.min(20, limit));
+  const safeIndex = Math.max(0, index);
   const body = await fetchJson<{ data?: Partial<DeezerTrackHit>[] }>(
-    `/api/deezer/search?q=${encodeURIComponent(q)}&limit=${Math.max(1, Math.min(20, limit))}`,
+    `/api/deezer/search?q=${encodeURIComponent(q)}&limit=${safeLimit}&index=${safeIndex}`,
     signal
   );
   return (body.data || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null);

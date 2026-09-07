@@ -142,11 +142,13 @@ async function searchInvidious(
   instance: string,
   query: string,
   limit: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  page = 1
 ): Promise<YoutubeSearchHit[] | null> {
   try {
+    const safePage = Math.max(1, page);
     const res = await fetchWithTimeout(
-      `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&page=1`,
+      `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&page=${safePage}`,
       4000,
       signal
     );
@@ -164,8 +166,11 @@ async function searchPiped(
   instance: string,
   query: string,
   limit: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  page = 1
 ): Promise<YoutubeSearchHit[] | null> {
+  // Piped has no reliable page offset; only serve the first page.
+  if (page > 1) return null;
   try {
     const res = await fetchWithTimeout(
       `${instance}/search?q=${encodeURIComponent(query)}&filter=videos`,
@@ -214,10 +219,12 @@ async function fetchWorkerJson<T>(
 async function searchYoutubeViaWorker(
   query: string,
   limit: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  page = 1
 ): Promise<YoutubeSearchHit[] | null> {
+  const safePage = Math.max(1, page);
   const body = await fetchWorkerJson<{ data?: Partial<YoutubeSearchHit>[] }>(
-    `/api/youtube/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    `/api/youtube/search?q=${encodeURIComponent(query)}&limit=${limit}&page=${safePage}`,
     signal
   );
   if (!body || !Array.isArray(body.data)) return null;
@@ -228,35 +235,42 @@ async function searchYoutubeViaWorker(
 async function searchYoutubeViaFallback(
   query: string,
   limit: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  page = 1
 ): Promise<YoutubeSearchHit[]> {
+  const safePage = Math.max(1, page);
   const last = getLastYoutubeBackend();
   if (last) {
     const hits =
       last.kind === "piped"
-        ? await searchPiped(last.url, query, limit, signal)
-        : await searchInvidious(last.url, query, limit, signal);
+        ? await searchPiped(last.url, query, limit, signal, safePage)
+        : await searchInvidious(last.url, query, limit, signal, safePage);
     if (hits) return hits;
   }
 
   const backends = getYoutubeBackends();
   const skip = last?.url;
-  const tasks: Array<(taskSignal: AbortSignal) => Promise<YoutubeSearchHit[] | null>> = [
-    ...backends.piped
-      .filter((instance) => instance !== skip)
-      .map((instance) => async (taskSignal: AbortSignal) => {
-        const hits = await searchPiped(instance, query, limit, taskSignal);
-        if (hits) rememberYoutubeBackend("piped", instance);
-        return hits;
-      }),
-    ...backends.invidious
-      .filter((instance) => instance !== skip)
-      .map((instance) => async (taskSignal: AbortSignal) => {
-        const hits = await searchInvidious(instance, query, limit, taskSignal);
-        if (hits) rememberYoutubeBackend("invidious", instance);
-        return hits;
-      }),
-  ];
+  // Prefer Invidious when paginating past page 1.
+  const invidiousTasks = backends.invidious
+    .filter((instance) => instance !== skip)
+    .map((instance) => async (taskSignal: AbortSignal) => {
+      const hits = await searchInvidious(instance, query, limit, taskSignal, safePage);
+      if (hits) rememberYoutubeBackend("invidious", instance);
+      return hits;
+    });
+  const pipedTasks =
+    safePage === 1
+      ? backends.piped
+          .filter((instance) => instance !== skip)
+          .map((instance) => async (taskSignal: AbortSignal) => {
+            const hits = await searchPiped(instance, query, limit, taskSignal, safePage);
+            if (hits) rememberYoutubeBackend("piped", instance);
+            return hits;
+          })
+      : [];
+
+  const tasks: Array<(taskSignal: AbortSignal) => Promise<YoutubeSearchHit[] | null>> =
+    safePage > 1 ? [...invidiousTasks, ...pipedTasks] : [...pipedTasks, ...invidiousTasks];
 
   const hits = await raceFirstSuccess(tasks, { parentSignal: signal, concurrency: 1 });
   return hits ?? [];
@@ -265,15 +279,17 @@ async function searchYoutubeViaFallback(
 export async function searchYoutubeVideos(
   query: string,
   limit = 8,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  page = 1
 ): Promise<YoutubeSearchHit[]> {
   const q = query.trim();
   if (!q) return [];
+  const safePage = Math.max(1, page);
 
-  const fromWorker = await searchYoutubeViaWorker(q, limit, signal);
+  const fromWorker = await searchYoutubeViaWorker(q, limit, signal, safePage);
   if (fromWorker) return rankYoutubeHits(fromWorker, q).slice(0, limit);
 
-  const fallback = await searchYoutubeViaFallback(q, limit, signal);
+  const fallback = await searchYoutubeViaFallback(q, limit, signal, safePage);
   return rankYoutubeHits(fallback, q).slice(0, limit);
 }
 

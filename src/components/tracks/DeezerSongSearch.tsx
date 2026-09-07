@@ -36,9 +36,15 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<DeezerTrackHit[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [nextIndex, setNextIndex] = useState(0);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastSearchQueryRef = useRef("");
+  const hitsRef = useRef<DeezerTrackHit[]>([]);
+  hitsRef.current = hits;
   const alreadyInDeck = new Set(existingIds.filter((id): id is string => Boolean(id)));
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -67,6 +73,7 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
     if (onAddTracks) onAddTracks(tracks);
     else tracks.forEach(onAddTrack);
     setHits([]);
+    setHasMoreResults(false);
     onAfterAdd?.();
   };
 
@@ -78,20 +85,57 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
     const controller = new AbortController();
     abortRef.current = controller;
     setIsSearching(true);
+    setIsLoadingMore(false);
     setError(null);
+    setHasMoreResults(false);
+    setNextIndex(0);
     try {
       const trackId = parseDeezerTrackId(value);
       const nextHits = trackId
         ? [await resolveDeezerTrack(trackId, controller.signal)]
-        : await searchDeezerTracks(value, 8, controller.signal);
+        : await searchDeezerTracks(value, 8, controller.signal, 0);
       if (!controller.signal.aborted) {
+        lastSearchQueryRef.current = trackId ? "" : value;
         setHits(nextHits);
+        setNextIndex(nextHits.length);
+        setHasMoreResults(!trackId && nextHits.length >= 8);
         if (nextHits.length === 0) setError("No Deezer tracks found. Try another search.");
       }
     } catch (err) {
       if (!controller.signal.aborted) setError((err as Error).message || "Deezer search failed.");
     } finally {
       if (!controller.signal.aborted) setIsSearching(false);
+    }
+  };
+
+  const loadMoreResults = async () => {
+    const value = lastSearchQueryRef.current.trim();
+    if (!value || isLoadingMore || isSearching) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsLoadingMore(true);
+    setError(null);
+    try {
+      const moreHits = await searchDeezerTracks(value, 8, controller.signal, nextIndex);
+      if (controller.signal.aborted) return;
+      if (moreHits.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      const seen = new Set(hitsRef.current.map((hit) => hit.id));
+      const unique = moreHits.filter((hit) => !seen.has(hit.id));
+      if (unique.length === 0) {
+        setHasMoreResults(false);
+        return;
+      }
+      setHits((current) => [...current, ...unique]);
+      setNextIndex((current) => current + moreHits.length);
+      setHasMoreResults(moreHits.length >= 8);
+    } catch (err) {
+      if (!controller.signal.aborted) setError((err as Error).message || "Could not load more results.");
+    } finally {
+      if (!controller.signal.aborted) setIsLoadingMore(false);
     }
   };
 
@@ -155,6 +199,17 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
                 </div>
               );
             })}
+            {hasMoreResults && (
+              <button
+                type="button"
+                onClick={() => void loadMoreResults()}
+                disabled={isLoadingMore || isSearching}
+                className="pc-button w-full inline-flex items-center justify-center gap-2"
+              >
+                {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                {isLoadingMore ? "Finding more…" : "Find more"}
+              </button>
+            )}
           </div>
         </div>
       )}
