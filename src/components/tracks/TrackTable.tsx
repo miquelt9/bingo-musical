@@ -13,7 +13,6 @@ import {
   Search,
   Sparkles,
   Music2,
-  Wrench,
 } from "lucide-react";
 
 interface TrackTableProps {
@@ -24,7 +23,6 @@ interface TrackTableProps {
   onDeleteTrack?: (trackId: string) => void;
   onFindSimilar?: (track: Track) => void;
   onAutoMatchAll?: () => void;
-  onAutoFixBlocked?: () => void;
   isMatching?: boolean;
   matchProgress?: { total: number; completed: number; matched: number; failed: number } | null;
   initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
@@ -79,7 +77,6 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   onDeleteTrack,
   onFindSimilar,
   onAutoMatchAll,
-  onAutoFixBlocked,
   isMatching = false,
   matchProgress = null,
   initialStatusFilter = "all",
@@ -139,7 +136,6 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     Boolean(track.media) && (track.matchStatus === "matched" || track.matchStatus === "manual") && !isTrackBlocked(track);
 
   const matchedCount = tracks.filter((t) => isTrackReady(t)).length;
-  const blockedCount = tracks.filter((t) => isTrackBlocked(t)).length;
   const needsAttentionCount = tracks.length - matchedCount;
   const needsAttention = needsAttentionCount > 0;
   const showAutoMatchRainbow = needsAttention && !autoMatchRainbowDismissed;
@@ -207,17 +203,6 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              {onAutoFixBlocked && blockedCount > 0 && (
-                <button
-                  type="button"
-                  onClick={onAutoFixBlocked}
-                  disabled={isMatching}
-                  className="pc-button flex-1 min-h-[44px]"
-                >
-                  <Wrench className="w-4 h-4" />
-                  Fix all songs
-                </button>
-              )}
               {onAutoMatchAll && (
                 <AutoMatchButton
                   showRainbow={showAutoMatchRainbow}
@@ -250,17 +235,6 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {onAutoFixBlocked && blockedCount > 0 && (
-                <button
-                  type="button"
-                  onClick={onAutoFixBlocked}
-                  disabled={isMatching}
-                  className="pc-button"
-                >
-                  <Wrench className="w-4 h-4" />
-                  Fix all songs
-                </button>
-              )}
               {onAutoMatchAll && (
                 <AutoMatchButton
                   showRainbow={showAutoMatchRainbow}

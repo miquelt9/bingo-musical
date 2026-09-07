@@ -10,10 +10,12 @@ import {
 import {
   filterSearchHitsForDisplay,
   formatDuration,
+  hitToTrack,
   searchYoutubeVideos,
   YoutubeSearchHit,
 } from "../../lib/youtube/search";
 import { PcModal } from "../ui/PcModal";
+import { ClipPreviewButton } from "./ClipPreviewButton";
 import { Check, AlertCircle, Loader2, AlertTriangle, Search } from "lucide-react";
 
 interface ManualYoutubeModalProps {
@@ -25,6 +27,14 @@ interface ManualYoutubeModalProps {
 
 function defaultSearchQuery(track: Track): string {
   return `${track.artist} - ${track.title} official audio`;
+}
+
+/** Stable-id track so preview play/stop state survives re-renders. */
+function hitToPreviewTrack(hit: YoutubeSearchHit, playable: boolean): Track {
+  const preview = hitToTrack(hit);
+  preview.id = hit.videoId;
+  if (!playable) preview.media = null;
+  return preview;
 }
 
 export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
@@ -366,6 +376,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
                   const isBlocked = embedStatus ? !embedStatus.embeddable : false;
                   const isCheckingThis = isCheckingEmbeds && !embedStatus;
                   const isSelected = parsedId === hit.videoId;
+                  const canPreview = Boolean(embedStatus?.embeddable) && !isCheckingThis;
 
                   return (
                     <div
@@ -402,25 +413,33 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
                           </p>
                         )}
                       </div>
-                      <Button
-                        type="button"
-                        variant={isSelected ? undefined : "primary"}
-                        disabled={isBlocked || isCheckingThis}
-                        onClick={() => handleSelectHit(hit)}
-                        className="shrink-0 text-xs"
-                        title={isBlocked ? embedStatus?.reason || "This video cannot be embedded in the game" : undefined}
-                      >
-                        {isSelected ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            Selected
-                          </>
-                        ) : isBlocked ? (
-                          "Blocked"
-                        ) : (
-                          "Select"
-                        )}
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <ClipPreviewButton
+                          track={hitToPreviewTrack(hit, canPreview)}
+                          size="sm"
+                          showLabel
+                          className="!h-8 !min-h-8"
+                        />
+                        <Button
+                          type="button"
+                          variant={isSelected ? undefined : "primary"}
+                          disabled={isBlocked || isCheckingThis}
+                          onClick={() => handleSelectHit(hit)}
+                          className="shrink-0 text-xs !h-8 !min-h-8"
+                          title={isBlocked ? embedStatus?.reason || "This video cannot be embedded in the game" : undefined}
+                        >
+                          {isSelected ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              Selected
+                            </>
+                          ) : isBlocked ? (
+                            "Blocked"
+                          ) : (
+                            "Select"
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}

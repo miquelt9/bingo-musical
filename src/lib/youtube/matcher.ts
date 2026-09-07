@@ -1,6 +1,6 @@
 import { Track } from "../../types/deck";
 import { searchYoutubeVideos, YoutubeSearchHit } from "./search";
-import { findFirstEmbeddableHit } from "./validator";
+import { findFirstEmbeddableHit, isTrackUnplayable } from "./validator";
 
 export interface MatchResult {
   videoId: string | null;
@@ -88,7 +88,13 @@ export async function batchMatchTracks(
   const results = [...tracks];
   const pendingIndices = results
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => !t.media || t.media.provider !== "youtube" || t.matchStatus === "pending" || t.matchStatus === "failed");
+    .filter(({ t }) =>
+      !t.media
+      || t.media.provider !== "youtube"
+      || t.matchStatus === "pending"
+      || t.matchStatus === "failed"
+      || isTrackUnplayable(t)
+    );
 
   let completed = tracks.length - pendingIndices.length;
   let matched = tracks.filter((t) => t.matchStatus === "matched" || t.matchStatus === "manual").length;

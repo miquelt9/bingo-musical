@@ -9,6 +9,7 @@ import {
 } from "../../lib/player/player";
 import { usePlayerUI } from "../../state/PlayerUIContext";
 import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../../lib/deezer/previewUrl";
+import { isTrackUnplayable } from "../../lib/youtube/validator";
 
 interface ClipPreviewButtonProps {
   track: Track;
@@ -51,6 +52,8 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
 
   const durationSec = Math.max(1, track.endTime - track.startTime);
   const progressPercent = isCurrentTrack ? (playerState?.progress ?? 0) * 100 : 0;
+  const needsAttention = isTrackUnplayable(track);
+  const isDisabled = needsAttention && !isPlaying && !isLoading;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -61,6 +64,8 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
       setIsRefreshing(false);
       return;
     }
+
+    if (needsAttention) return;
 
     setRefreshFailed(false);
 
@@ -98,10 +103,6 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
     })();
   };
 
-  const hasVideo = Boolean(
-    track.media && (track.media.provider === "youtube" || track.media.id)
-  );
-
   const sizeClasses = {
     sm: "px-2.5 py-1 text-xs gap-1.5 h-8",
     md: "px-3.5 py-1.5 text-sm gap-2 h-9",
@@ -114,21 +115,27 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
     lg: "w-5 h-5",
   };
 
+  const disabledTitle = !track.media
+    ? "No playable source matched yet"
+    : track.media.provider === "deezer" && !track.media.previewUrl
+      ? "No Deezer preview available"
+      : "Can't preview — this clip needs attention";
+
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={!hasVideo}
+      disabled={isDisabled}
       title={
-        !hasVideo
-          ? "No playable source matched yet"
+        isDisabled
+          ? disabledTitle
           : isPlaying
           ? "Stop snippet preview"
           : `Play ${durationSec}s ${track.media?.provider === "deezer" ? "Deezer preview" : "YouTube snippet"}`
       }
       className={`relative inline-flex items-center justify-center font-medium pc-button select-none overflow-hidden ${
         sizeClasses[size]
-      } ${!hasVideo ? "opacity-50" : ""} ${isPlaying ? "active" : ""} ${className}`}
+      } ${isDisabled ? "opacity-50" : ""} ${isPlaying ? "active" : ""} ${className}`}
     >
       {isPlaying && (
         <span
@@ -141,7 +148,7 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
         {isLoading ? (
           <Loader2 className={`${iconSizes[size]} animate-spin`} />
         ) : hasError ? (
-          <AlertCircle className={iconSizes[size]} />
+          <AlertCircle className={`${iconSizes[size]}`} />
         ) : isPlaying ? (
           <Square className={`${iconSizes[size]} fill-current`} />
         ) : (

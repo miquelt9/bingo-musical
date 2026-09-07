@@ -560,7 +560,6 @@ export const EditorPage: React.FC = () => {
         onDeleteTrack={handleDeleteTrack}
         onFindSimilar={handleFindSimilar}
         onAutoMatchAll={handleAutoMatchAll}
-        onAutoFixBlocked={handleAutoFixBlocked}
         isMatching={isTrackBusy}
         matchProgress={matchProgress}
         initialStatusFilter={initialStatusFilter}
