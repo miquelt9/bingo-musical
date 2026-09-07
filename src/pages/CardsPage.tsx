@@ -29,7 +29,6 @@ import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { buildSharedDeckUrl } from "../lib/share/deckShare";
 import {
-  computeShareIdForDeck,
   isShareApiConfigured,
   publishSharedDeck,
 } from "../lib/share/sharedDecksApi";
@@ -209,10 +208,9 @@ export const CardsPage: React.FC = () => {
 
     void (async () => {
       try {
-        const predictedId = await computeShareIdForDeck(deck);
-        const url = buildSharedDeckUrl(predictedId);
-        await publishSharedDeck(deck);
+        const { shareId } = await publishSharedDeck(deck);
         if (cancelled) return;
+        const url = buildSharedDeckUrl(shareId);
         setShareUrl(url);
         const qr = await generateQrDataUrl(url, 160);
         if (cancelled) return;

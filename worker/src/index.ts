@@ -19,7 +19,6 @@ const MAX_DEEZER_BATCH_SONGS = 40;
 const MAX_SONGS = 150;
 const SHARE_TTL_SECONDS = 60 * 60 * 24 * 365;
 const SHARE_KEY_PREFIX = "share:";
-const RATE_LIMIT_PREFIX = "rl:";
 const RATE_LIMIT_WINDOW_SEC = 60;
 const RATE_LIMITS = {
   deezer: 30,
@@ -29,6 +28,15 @@ const RATE_LIMITS = {
 } as const;
 type RateLimitBucket = keyof typeof RATE_LIMITS;
 const SHARE_ID_RETRIES = 5;
+/** Soft per-isolate counters — avoids burning Free-tier KV writes on every API hit. */
+const rateLimitCounters = new Map<string, number>();
+const SHARE_UNAVAILABLE_MESSAGE = "Sharing temporarily unavailable. Please try again later, or export the deck as JSON.";
+class ShareWriteError extends Error {
+  constructor(message = SHARE_UNAVAILABLE_MESSAGE) {
+    super(message);
+    this.name = "ShareWriteError";
+  }
+}
 const DEEZER_API = "https://api.deezer.com";
 /** Keep under Deezer signed preview URL TTL (~15 min). Search/related meta only. */
 const DEEZER_EDGE_CACHE_TTL = 300;
@@ -592,7 +600,7 @@ async function fetchYoutubePlaylistUpstream(
 }
 
 async function handleYoutubeSearch(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "youtube"))) {
+  if (!checkRateLimit(request, "youtube")) {
     return rateLimitResponse(request, env, "Too many YouTube search requests. Please try again later.");
   }
   const url = new URL(request.url);
@@ -625,7 +633,7 @@ async function handleYoutubeSearch(request: Request, env: Env): Promise<Response
 }
 
 async function handleYoutubeVideo(request: Request, env: Env, videoId: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "youtube"))) {
+  if (!checkRateLimit(request, "youtube")) {
     return rateLimitResponse(request, env, "Too many YouTube requests. Please try again later.");
   }
   if (!isYoutubeVideoId(videoId)) return errorResponse(request, env, "Invalid YouTube video id.", 400);
@@ -653,7 +661,7 @@ async function handleYoutubeVideo(request: Request, env: Env, videoId: string): 
 }
 
 async function handleYoutubeRelated(request: Request, env: Env, videoId: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "youtube"))) {
+  if (!checkRateLimit(request, "youtube")) {
     return rateLimitResponse(request, env, "Too many YouTube requests. Please try again later.");
   }
   if (!isYoutubeVideoId(videoId)) return errorResponse(request, env, "Invalid YouTube video id.", 400);
@@ -684,7 +692,7 @@ async function handleYoutubeRelated(request: Request, env: Env, videoId: string)
 }
 
 async function handleYoutubePlaylist(request: Request, env: Env, playlistId: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "youtube"))) {
+  if (!checkRateLimit(request, "youtube")) {
     return rateLimitResponse(request, env, "Too many YouTube requests. Please try again later.");
   }
   if (!playlistId || playlistId.length < 6 || playlistId.length > 128) {
@@ -793,7 +801,7 @@ function normalizeDeezerTrack(item: DeezerApiTrack): Record<string, unknown> | n
 }
 
 async function handleDeezerSearch(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "deezer"))) {
+  if (!checkRateLimit(request, "deezer")) {
     return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
   const url = new URL(request.url);
@@ -866,7 +874,7 @@ async function searchDeezerCatalog(title: string, artist: string, id?: string): 
 }
 
 async function handleDeezerBatchSearch(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "deezer"))) {
+  if (!checkRateLimit(request, "deezer")) {
     return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
 
@@ -918,7 +926,7 @@ async function handleDeezerBatchSearch(request: Request, env: Env): Promise<Resp
 }
 
 async function handleDeezerTrack(request: Request, env: Env, id: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "deezer"))) {
+  if (!checkRateLimit(request, "deezer")) {
     return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
   if (!/^\d+$/.test(id)) return errorResponse(request, env, "Invalid Deezer track id.", 400);
@@ -947,7 +955,7 @@ async function handleDeezerTrack(request: Request, env: Env, id: string): Promis
 }
 
 async function handleDeezerTrackRelated(request: Request, env: Env, id: string): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "deezer"))) {
+  if (!checkRateLimit(request, "deezer")) {
     return rateLimitResponse(request, env, "Too many Deezer requests. Please try again later.");
   }
   if (!/^\d+$/.test(id)) return errorResponse(request, env, "Invalid Deezer track id.", 400);
@@ -1010,18 +1018,43 @@ function getClientIp(request: Request): string {
   );
 }
 
-async function checkRateLimit(request: Request, env: Env, bucket: RateLimitBucket): Promise<boolean> {
-  const ip = getClientIp(request);
-  const window = Math.floor(Date.now() / 60000);
-  const key = `${RATE_LIMIT_PREFIX}${bucket}:${ip}:${window}`;
-  const max = RATE_LIMITS[bucket];
-  const current = await env.SHARED_DECKS.get(key);
-  const count = current ? Number.parseInt(current, 10) : 0;
-  if (!Number.isFinite(count) || count >= max) {
-    return false;
+function pruneRateLimitCounters(activeWindow: number): void {
+  for (const key of rateLimitCounters.keys()) {
+    const windowPart = key.slice(key.lastIndexOf(":") + 1);
+    const window = Number.parseInt(windowPart, 10);
+    if (!Number.isFinite(window) || window < activeWindow - 1) {
+      rateLimitCounters.delete(key);
+    }
   }
-  await env.SHARED_DECKS.put(key, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW_SEC });
-  return true;
+}
+
+function checkRateLimit(request: Request, bucket: RateLimitBucket): boolean {
+  try {
+    const ip = getClientIp(request);
+    const window = Math.floor(Date.now() / 60000);
+    pruneRateLimitCounters(window);
+    const key = `${bucket}:${ip}:${window}`;
+    const max = RATE_LIMITS[bucket];
+    const count = rateLimitCounters.get(key) ?? 0;
+    if (count >= max) {
+      return false;
+    }
+    rateLimitCounters.set(key, count + 1);
+    return true;
+  } catch {
+    // Fail open — never take down search/share because of rate-limit bookkeeping.
+    return true;
+  }
+}
+
+async function putSharePayload(env: Env, key: string, serialized: string): Promise<void> {
+  try {
+    await env.SHARED_DECKS.put(key, serialized, {
+      expirationTtl: SHARE_TTL_SECONDS,
+    });
+  } catch {
+    throw new ShareWriteError();
+  }
 }
 
 async function allocateShareId(env: Env, serialized: string): Promise<string | null> {
@@ -1031,9 +1064,7 @@ async function allocateShareId(env: Env, serialized: string): Promise<string | n
     const existing = await env.SHARED_DECKS.get(key);
     if (existing) continue;
 
-    await env.SHARED_DECKS.put(key, serialized, {
-      expirationTtl: SHARE_TTL_SECONDS,
-    });
+    await putSharePayload(env, key, serialized);
     return shareId;
   }
   return null;
@@ -1071,14 +1102,12 @@ async function allocateContentAddressedShareId(
     return { shareId: fallbackShareId, created: true };
   }
 
-  await env.SHARED_DECKS.put(key, serialized, {
-    expirationTtl: SHARE_TTL_SECONDS,
-  });
+  await putSharePayload(env, key, serialized);
   return { shareId, created: true };
 }
 
 async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "share"))) {
+  if (!checkRateLimit(request, "share")) {
     return rateLimitResponse(request, env, "Too many share requests. Please try again later.");
   }
 
@@ -1103,13 +1132,20 @@ async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
     return errorResponse(request, env, "Invalid deck payload.", 400);
   }
 
-  const result = await allocateContentAddressedShareId(env, payload, serialized);
-  if (!result) {
-    return errorResponse(request, env, "Could not create share link. Please try again.", 503);
-  }
+  try {
+    const result = await allocateContentAddressedShareId(env, payload, serialized);
+    if (!result) {
+      return errorResponse(request, env, "Could not create share link. Please try again.", 503);
+    }
 
-  trackUsageEvent(env, result.created ? "share_created" : "share_deduplicated");
-  return jsonResponse(request, env, { shareId: result.shareId }, result.created ? 201 : 200);
+    trackUsageEvent(env, result.created ? "share_created" : "share_deduplicated");
+    return jsonResponse(request, env, { shareId: result.shareId }, result.created ? 201 : 200);
+  } catch (err) {
+    if (err instanceof ShareWriteError) {
+      return errorResponse(request, env, err.message, 503);
+    }
+    throw err;
+  }
 }
 
 async function handleGetDeck(request: Request, env: Env, shareId: string): Promise<Response> {
@@ -1133,7 +1169,7 @@ async function handleGetDeck(request: Request, env: Env, shareId: string): Promi
 }
 
 async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
-  if (!(await checkRateLimit(request, env, "events"))) {
+  if (!checkRateLimit(request, "events")) {
     return rateLimitResponse(request, env, "Too many requests. Please try again later.");
   }
 

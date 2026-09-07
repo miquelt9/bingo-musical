@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { Copy, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Copy, Download, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
@@ -10,7 +9,8 @@ import {
   buildSharedDeckUrl,
   getPlatformShareUrls,
 } from "../../lib/share/deckShare";
-import { isShareApiConfigured, publishSharedDeck, computeShareIdForDeck } from "../../lib/share/sharedDecksApi";
+import { isShareApiConfigured, publishSharedDeck } from "../../lib/share/sharedDecksApi";
+import { exportDeckToJson } from "../../lib/storage/decks";
 
 interface ShareDeckModalProps {
   deck: Deck;
@@ -32,27 +32,6 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   const [publishError, setPublishError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (initialShareUrl || shareUrl || !isShareApiConfigured()) {
-      return;
-    }
-
-    let cancelled = false;
-    void computeShareIdForDeck(deck)
-      .then((predictedShareId) => {
-        if (cancelled) return;
-        setShareId(predictedShareId);
-        setShareUrl(buildSharedDeckUrl(predictedShareId));
-      })
-      .catch(() => {
-        // Ignore local hash errors; publish flow handles failures.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [deck, initialShareUrl, shareUrl]);
-
-  useEffect(() => {
     if (!isShareApiConfigured() || initialShareUrl) {
       return;
     }
@@ -60,15 +39,20 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     let cancelled = false;
     setIsPublishing(true);
     setPublishError(null);
+    setShareId(undefined);
+    setShareUrl(undefined);
 
     void publishSharedDeck(deck)
-      .then(() => {
+      .then((published) => {
         if (cancelled) return;
-        // shareId/shareUrl are already set from the content hash above.
+        setShareId(published.shareId);
+        setShareUrl(buildSharedDeckUrl(published.shareId));
       })
       .catch((err: Error) => {
         if (!cancelled) {
-          setPublishError(err.message);
+          setPublishError(err.message || "Could not create a share link.");
+          setShareId(undefined);
+          setShareUrl(undefined);
         }
       })
       .finally(() => {
@@ -119,22 +103,25 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     }
   };
 
+  const downloadJson = () => {
+    exportDeckToJson(deck);
+    showToast({
+      title: "Deck exported",
+      message: "Send the JSON file so they can import it from Home.",
+      duration: 4000,
+    });
+  };
+
   return (
     <PcModal title={`Share "${deck.name}"`} onClose={onClose}>
       <div className="space-y-4">
-        {isPublishing && !shareUrl ? (
+        {isPublishing ? (
           <p className="text-sm inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
             Creating share link…
           </p>
         ) : shareUrl ? (
           <>
-            {isPublishing ? (
-              <p className="text-sm inline-flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Confirming share link…
-              </p>
-            ) : null}
             <p className="text-sm">Anyone with this link can open the deck and add a copy to their browser.</p>
             <div className="pc-bevel-inset p-3 break-all text-xs">{shareUrl}</div>
             <div className="flex flex-wrap justify-end gap-2 pt-2">
@@ -180,14 +167,15 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
           <>
             <p className="text-sm">
               {publishError
-                ? "Could not create a share link right now. Try again later, or export the deck as JSON from Settings."
-                : "Link sharing is not configured on this site yet. Export the deck as JSON from Settings to share it manually."}
+                ? "Could not create a share link right now. Download the deck as JSON and share that file instead — they can import it from Home."
+                : "Link sharing is not configured on this site yet. Download the deck as JSON to share it manually."}
             </p>
             {publishError ? <p className="text-xs pc-bevel-inset p-3">{publishError}</p> : null}
-            <div className="flex justify-end pt-2">
-              <Link to="/settings" className="pc-button inline-flex" onClick={onClose}>
-                Open Settings
-              </Link>
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button type="button" variant="primary" onClick={downloadJson}>
+                <Download className="w-4 h-4" />
+                Download JSON
+              </Button>
             </div>
           </>
         )}
