@@ -136,7 +136,10 @@ export async function batchMatchDeezerTracks(
             })()
           // Keep a known Deezer ID — never wipe media on a failed title search.
           : track.media?.provider === "deezer"
-            ? { ...track, matchStatus: track.matchStatus === "matched" ? "matched" : "pending" as const }
+            ? {
+                ...track,
+                matchStatus: track.matchStatus === "matched" ? ("matched" as const) : ("pending" as const),
+              }
             : { ...track, media: null, matchStatus: "pending" as const };
         results.set(track.id, updated);
         if (updated.media?.provider === "deezer" && updated.media.previewUrl) matched += 1;
