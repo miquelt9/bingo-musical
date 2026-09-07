@@ -3,15 +3,18 @@ import { Button } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { formatDuration } from "../../lib/youtube/search";
 import { PcModal } from "../ui/PcModal";
-import { Loader2, Play, Square } from "lucide-react";
+import { Loader2, Pause, Play, Square } from "lucide-react";
 import { ClipTimeline } from "./ClipTimeline";
 import { MIN_CLIP_SECONDS, useClipTimestampEditor } from "../../hooks/useClipTimestampEditor";
+
+const ACTION_BTN = "min-h-9 h-9";
 
 interface ClipTimestampModalProps {
   track: Track;
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedTrack: Track) => void;
+  onTrackMediaUpdated?: (updatedTrack: Track) => void;
 }
 
 export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
@@ -19,8 +22,9 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onTrackMediaUpdated,
 }) => {
-  const editor = useClipTimestampEditor({ track, isOpen });
+  const editor = useClipTimestampEditor({ track, isOpen, onTrackMediaUpdated });
 
   const handleSave = () => {
     const updated = editor.buildUpdatedTrack();
@@ -43,7 +47,7 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
         <p className="text-sm mb-4">{track.media?.provider === "deezer" ? "This Deezer track has no preview to edit." : "Link a YouTube video before editing clip timestamps."}</p>
       ) : (
         <>
-          <div className={`relative ${track.media?.provider === "deezer" ? "w-full" : "aspect-video"} pc-bevel-inset overflow-hidden bg-black mb-3`}>
+          <div className={`relative ${track.media?.provider === "deezer" ? "w-full min-h-[4.5rem]" : "aspect-video"} pc-bevel-inset overflow-hidden bg-black mb-3`}>
             <div id={editor.elementId} className="absolute inset-0" />
             {(editor.isLoadingPlayer || !editor.isPlayerReady) && !editor.playerError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -53,6 +57,11 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
             {editor.playerError && (
               <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-pc-error">
                 {editor.playerError}
+              </div>
+            )}
+            {track.media?.provider === "deezer" && editor.isPlayerReady && !editor.playerError && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-xs uppercase tracking-wide text-white/70">Deezer preview</span>
               </div>
             )}
           </div>
@@ -87,6 +96,7 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
           <div className="flex flex-wrap gap-2 mb-4">
             <Button
               type="button"
+              className={ACTION_BTN}
               disabled={!editor.isPlayerReady}
               onClick={editor.handleSetStart}
             >
@@ -94,6 +104,25 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
             </Button>
             <Button
               type="button"
+              className={ACTION_BTN}
+              disabled={!editor.isPlayerReady}
+              onClick={editor.handlePlayPause}
+            >
+              {editor.isTransportPlaying ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                  Pause
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  Play
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              className={ACTION_BTN}
               disabled={!editor.isPlayerReady}
               onClick={editor.handleSetEnd}
             >
@@ -102,6 +131,7 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
             <Button
               type="button"
               variant="primary"
+              className={ACTION_BTN}
               disabled={!editor.isPlayerReady || !editor.isValid}
               onClick={editor.handlePreview}
             >
@@ -128,12 +158,13 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
       )}
 
       <div className="flex items-center justify-end gap-2 pt-2">
-        <Button type="button" onClick={onClose}>
+        <Button type="button" className={ACTION_BTN} onClick={onClose}>
           Cancel
         </Button>
         <Button
           type="button"
           variant="primary"
+          className={ACTION_BTN}
           disabled={!editor.hasVideo || !editor.isValid || !editor.isPlayerReady}
           onClick={handleSave}
         >

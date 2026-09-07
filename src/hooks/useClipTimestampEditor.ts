@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Track } from "../types/deck";
 import { loadYoutubeApi } from "../lib/youtube/player";
+import { stopPlayback as stopSharedPlayback } from "../lib/player/player";
+import {
+  ensureFreshDeezerPreview,
+  withFreshDeezerMedia,
+} from "../lib/deezer/previewUrl";
 
 export const MIN_CLIP_SECONDS = 5;
 
 interface UseClipTimestampEditorOptions {
   track: Track;
   isOpen: boolean;
+  onTrackMediaUpdated?: (updatedTrack: Track) => void;
 }
 
-export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditorOptions) {
+export function useClipTimestampEditor({
+  track,
+  isOpen,
+  onTrackMediaUpdated,
+}: UseClipTimestampEditorOptions) {
   const reactId = useId();
   const elementId = `yt-clip-editor-${track.id}-${reactId.replace(/:/g, "")}`;
 
@@ -17,7 +27,10 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previewRafRef = useRef<number | null>(null);
   const pollTimerRef = useRef<number | null>(null);
+  const trackRef = useRef(track);
+  trackRef.current = track;
 
+  const [editorTrack, setEditorTrack] = useState(track);
   const [draftStart, setDraftStart] = useState(track.startTime);
   const [draftEnd, setDraftEnd] = useState(track.endTime);
   const [currentTime, setCurrentTime] = useState(0);
@@ -25,12 +38,12 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [isLoadingPlayer, setIsLoadingPlayer] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isTransportPlaying, setIsTransportPlaying] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
 
-  const isDeezer = track.media?.provider === "deezer";
-  const deezerMedia = track.media?.provider === "deezer" ? track.media : null;
-  const sourceId = track.media?.id;
-  const hasVideo = Boolean(sourceId && (!isDeezer || deezerMedia?.previewUrl));
+  const isDeezer = editorTrack.media?.provider === "deezer";
+  const deezerMedia = editorTrack.media?.provider === "deezer" ? editorTrack.media : null;
+  const sourceId = editorTrack.media?.id;
   const clipDuration = Math.max(0, draftEnd - draftStart);
   const maxDuration = isDeezer ? (videoDuration || (deezerMedia?.previewDurationMs ?? 30000) / 1000) : 0;
   const isValid = draftStart >= 0
@@ -49,6 +62,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     } catch {
       // ignore
     }
+    setIsTransportPlaying(false);
   }, []);
 
   const destroyPlayer = useCallback(() => {
@@ -69,20 +83,25 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     }
     setIsPlayerReady(false);
     setIsLoadingPlayer(false);
+    setIsTransportPlaying(false);
   }, [stopPreview]);
 
   useEffect(() => {
     if (!isOpen) return;
+    // Stop list/host preview so it does not overlap the editor audio/video.
+    stopSharedPlayback();
+    setEditorTrack(track);
     setDraftStart(track.startTime);
     setDraftEnd(track.endTime);
     setCurrentTime(0);
     setVideoDuration(0);
     setPlayerError(null);
     setIsPreviewing(false);
-  }, [isOpen, track.startTime, track.endTime, track.id]);
+    setIsTransportPlaying(false);
+  }, [isOpen, track.startTime, track.endTime, track.id, track]);
 
   useEffect(() => {
-    if (!isOpen || !hasVideo || !sourceId) {
+    if (!isOpen || !sourceId) {
       destroyPlayer();
       return;
     }
@@ -90,30 +109,62 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     let cancelled = false;
     setIsLoadingPlayer(true);
     setPlayerError(null);
+    setIsPlayerReady(false);
 
     const initPlayer = async () => {
       try {
-        if (deezerMedia?.previewUrl) {
+        if (isDeezer) {
+          if (!deezerMedia) throw new Error("This Deezer track has no preview to edit.");
+          let media = deezerMedia;
+          try {
+            const fresh = await ensureFreshDeezerPreview(deezerMedia);
+            media = fresh.media;
+            if (fresh.refreshed && !cancelled) {
+              const updated = withFreshDeezerMedia(trackRef.current, fresh.media);
+              setEditorTrack(updated);
+              onTrackMediaUpdated?.(updated);
+            }
+          } catch {
+            if (!cancelled) {
+              setPlayerError("Deezer preview unavailable. Try Change source or try again later.");
+              setIsLoadingPlayer(false);
+            }
+            return;
+          }
+          if (cancelled) return;
+          if (!media.previewUrl) {
+            setPlayerError("This Deezer track has no playable preview.");
+            setIsLoadingPlayer(false);
+            return;
+          }
+
           const container = document.getElementById(elementId);
           if (!container) throw new Error("Audio editor container is unavailable.");
           const audio = document.createElement("audio");
-          audio.className = "w-full";
-          audio.controls = true;
+          audio.className = "w-full h-full opacity-0 absolute inset-0 pointer-events-none";
+          audio.controls = false;
           audio.preload = "metadata";
-          audio.src = deezerMedia.previewUrl;
+          audio.src = media.previewUrl;
           audio.onloadedmetadata = () => {
             if (cancelled) return;
-            const knownDuration = (deezerMedia.previewDurationMs ?? 30000) / 1000;
+            const knownDuration = (media.previewDurationMs ?? 30000) / 1000;
             setVideoDuration(Math.min(audio.duration || knownDuration, knownDuration));
-            audio.currentTime = Math.min(track.startTime, knownDuration);
+            audio.currentTime = Math.min(trackRef.current.startTime, knownDuration);
             setCurrentTime(audio.currentTime);
             setIsPlayerReady(true);
             setIsLoadingPlayer(false);
+          };
+          audio.onplay = () => {
+            if (!cancelled) setIsTransportPlaying(true);
+          };
+          audio.onpause = () => {
+            if (!cancelled) setIsTransportPlaying(false);
           };
           audio.onerror = () => {
             if (cancelled) return;
             setPlayerError("Failed to load the Deezer preview. The preview URL may have expired.");
             setIsLoadingPlayer(false);
+            setIsPlayerReady(false);
           };
           container.replaceChildren(audio);
           audioRef.current = audio;
@@ -135,7 +186,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
             playsinline: 1,
             enablejsapi: 1,
             origin: window.location.origin,
-            start: track.startTime,
+            start: trackRef.current.startTime,
           },
           events: {
             onReady: (event) => {
@@ -150,6 +201,15 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
               const time = event.target.getCurrentTime?.() ?? 0;
               setCurrentTime(time);
             },
+            onStateChange: (event) => {
+              if (cancelled) return;
+              const playing = event.data === window.YT?.PlayerState.PLAYING;
+              const paused = event.data === window.YT?.PlayerState.PAUSED
+                || event.data === window.YT?.PlayerState.ENDED
+                || event.data === window.YT?.PlayerState.CUED;
+              if (playing) setIsTransportPlaying(true);
+              else if (paused) setIsTransportPlaying(false);
+            },
             onError: () => {
               if (cancelled) return;
               setPlayerError("Failed to load video. The video may be unavailable or restricted.");
@@ -163,7 +223,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
         }
       } catch {
         if (!cancelled) {
-          setPlayerError("Failed to initialize YouTube player.");
+          setPlayerError(isDeezer ? "Failed to load the Deezer preview." : "Failed to initialize YouTube player.");
           setIsLoadingPlayer(false);
         }
       }
@@ -175,7 +235,7 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
       cancelled = true;
       destroyPlayer();
     };
-  }, [isOpen, hasVideo, sourceId, isDeezer, track.media, track.startTime, elementId, destroyPlayer]);
+  }, [isOpen, sourceId, isDeezer, elementId, destroyPlayer, onTrackMediaUpdated, deezerMedia?.id]);
 
   useEffect(() => {
     if (!isOpen || !isPlayerReady) return;
@@ -239,6 +299,39 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     setCurrentTime(clamped);
   }, [videoDuration, isDeezer]);
 
+  const handlePlayPause = useCallback(() => {
+    const player = playerRef.current;
+    const audio = audioRef.current;
+    if (!player && !audio) return;
+
+    if (isPreviewing) {
+      stopPreview();
+    }
+
+    if (isDeezer && audio) {
+      if (audio.paused) {
+        stopSharedPlayback();
+        void audio.play().catch(() => {
+          setPlayerError("The browser blocked preview playback.");
+        });
+      } else {
+        audio.pause();
+      }
+      return;
+    }
+
+    if (!player) return;
+    const state = player.getPlayerState?.();
+    if (state === window.YT?.PlayerState.PLAYING) {
+      player.pauseVideo();
+      setIsTransportPlaying(false);
+    } else {
+      stopSharedPlayback();
+      player.playVideo();
+      setIsTransportPlaying(true);
+    }
+  }, [isDeezer, isPreviewing, stopPreview]);
+
   const handlePreview = useCallback(() => {
     const player = playerRef.current;
     const audio = audioRef.current;
@@ -249,11 +342,13 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
       return;
     }
 
+    stopSharedPlayback();
     setIsPreviewing(true);
+    setIsTransportPlaying(true);
     if (audio) {
       audio.currentTime = draftStart;
       void audio.play().catch(() => {
-        setPlayerError("The browser blocked preview playback. Press play on the audio control.");
+        setPlayerError("The browser blocked preview playback.");
         stopPreview();
       });
     } else {
@@ -292,15 +387,15 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
   const buildUpdatedTrack = useCallback((): Track | null => {
     if (!isValid) return null;
     return {
-      ...track,
+      ...editorTrack,
       startTime: draftStart,
       endTime: draftEnd,
     };
-  }, [track, draftStart, draftEnd, isValid]);
+  }, [editorTrack, draftStart, draftEnd, isValid]);
 
   return {
     elementId,
-    hasVideo,
+    hasVideo: Boolean(sourceId && (!isDeezer || Boolean(deezerMedia))),
     draftStart,
     draftEnd,
     currentTime,
@@ -310,10 +405,12 @@ export function useClipTimestampEditor({ track, isOpen }: UseClipTimestampEditor
     isPlayerReady,
     isLoadingPlayer,
     isPreviewing,
+    isTransportPlaying,
     playerError,
     handleSetStart,
     handleSetEnd,
     handleSeek,
+    handlePlayPause,
     handlePreview,
     buildUpdatedTrack,
   };

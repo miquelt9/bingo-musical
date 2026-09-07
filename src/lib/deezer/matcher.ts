@@ -1,6 +1,7 @@
 import { Track } from "../../types/deck";
 import { BatchMatchProgress } from "../youtube/matcher";
 import { DeezerTrackHit, deezerHitToTrack, searchDeezerTracks, searchDeezerTracksBatch } from "./api";
+import { isDeezerPreviewUrlFresh } from "./previewUrl";
 
 export function normalizeMusicText(value: string): string {
   return value
@@ -58,7 +59,13 @@ export async function batchMatchDeezerTracks(
   onProgress?: (progress: BatchMatchProgress, track: Track) => void,
   shouldCancel?: () => boolean
 ): Promise<Track[]> {
-  const targets = tracks.filter((track) => !track.media || track.media.provider !== "deezer" || track.matchStatus !== "matched" || !track.media.previewUrl);
+  const targets = tracks.filter((track) =>
+    !track.media
+    || track.media.provider !== "deezer"
+    || track.matchStatus !== "matched"
+    || !track.media.previewUrl
+    || !isDeezerPreviewUrlFresh(track.media.previewUrl)
+  );
   const results = new Map(tracks.map((track) => [track.id, track]));
   let completed = 0;
   let matched = 0;
@@ -85,14 +92,16 @@ export async function batchMatchDeezerTracks(
         const updated = match
           ? (() => {
               const resolved = deezerHitToTrack(match);
+              const keepClipWindow =
+                track.media?.provider === "deezer" && track.media.id === match.id;
               return {
                 ...track,
                 album: resolved.album,
                 albumArtUrl: resolved.albumArtUrl,
                 durationMs: resolved.durationMs,
                 media: resolved.media,
-                startTime: resolved.startTime,
-                endTime: resolved.endTime,
+                startTime: keepClipWindow ? track.startTime : resolved.startTime,
+                endTime: keepClipWindow ? track.endTime : resolved.endTime,
                 matchStatus: "matched" as const,
               };
             })()

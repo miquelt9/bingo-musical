@@ -15,6 +15,7 @@ import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
 import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
+import { trackNeedsDeezerPreviewRefresh } from "../lib/deezer/previewUrl";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 
 interface ShareDeckTarget {
@@ -53,9 +54,15 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const stored = getStoredDecks();
     const sample = stored.find((deck) => deck.id === SAMPLE_DEEZER_DECK.id);
-    if (!sample || sample.provider !== "deezer" || sample.tracks.every((track) => track.media?.provider === "deezer" && track.media.previewUrl)) {
-      return;
-    }
+    if (!sample || sample.provider !== "deezer") return;
+
+    const needsRefresh = sample.tracks.some(
+      (track) =>
+        track.media?.provider !== "deezer" ||
+        !track.media.previewUrl ||
+        trackNeedsDeezerPreviewRefresh(track)
+    );
+    if (!needsRefresh) return;
 
     try {
       const tracks = await batchMatchDeezerTracks(sample.tracks, 2);

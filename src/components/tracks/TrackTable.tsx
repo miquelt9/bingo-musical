@@ -8,6 +8,7 @@ import { ManualDeezerModal } from "./ManualDeezerModal";
 import { TrackListMobile } from "./TrackListMobile";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { isVideoEmbedBlocked } from "../../lib/youtube/validator";
+import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../../lib/deezer/previewUrl";
 import {
   Search,
   Sparkles,
@@ -93,6 +94,8 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   const [timestampEditingTrack, setTimestampEditingTrack] = useState<Track | null>(null);
   const [trackPendingDelete, setTrackPendingDelete] = useState<Track | null>(null);
   const [autoMatchRainbowDismissed, setAutoMatchRainbowDismissed] = useState(false);
+  const [editClipBusyId, setEditClipBusyId] = useState<string | null>(null);
+  const [editClipError, setEditClipError] = useState<string | null>(null);
 
   useEffect(() => {
     setStatusFilter(initialStatusFilter);
@@ -101,6 +104,30 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   useEffect(() => {
     setAutoMatchRainbowDismissed(false);
   }, [deckId]);
+
+  useEffect(() => {
+    setEditClipError(null);
+  }, [deckId, tracks]);
+
+  const handleEditClip = async (track: Track) => {
+    setEditClipError(null);
+    if (track.media?.provider !== "deezer") {
+      setTimestampEditingTrack(track);
+      return;
+    }
+
+    setEditClipBusyId(track.id);
+    try {
+      const fresh = await ensureFreshDeezerPreview(track.media);
+      const updated = withFreshDeezerMedia(track, fresh.media);
+      if (fresh.refreshed) onUpdateTrack(updated);
+      setTimestampEditingTrack(updated);
+    } catch {
+      setEditClipError("Deezer preview unavailable — try Change source.");
+    } finally {
+      setEditClipBusyId(null);
+    }
+  };
 
   const isTrackBlocked = (track: Track): boolean => {
     if (track.matchStatus === "failed") return true;
@@ -289,12 +316,20 @@ export const TrackTable: React.FC<TrackTableProps> = ({
         <TrackListMobile
           tracks={filteredTracks}
           onEditVideo={setEditingTrack}
-          onEditClip={setTimestampEditingTrack}
+          onEditClip={(track) => void handleEditClip(track)}
           onDeleteTrack={onDeleteTrack ? setTrackPendingDelete : undefined}
           onFindSimilar={onFindSimilar}
+          onUpdateTrack={onUpdateTrack}
           isTrackBlocked={isTrackBlocked}
-          isBusy={isMatching}
+          isBusy={isMatching || editClipBusyId !== null}
+          editClipBusyId={editClipBusyId}
         />
+      )}
+
+      {editClipError && (
+        <p className="text-xs text-pc-error mt-2" role="alert">
+          {editClipError}
+        </p>
       )}
 
       </div>
@@ -333,6 +368,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             onUpdateTrack(updated);
             setTimestampEditingTrack(null);
           }}
+          onTrackMediaUpdated={onUpdateTrack}
         />
       ) : (
         <ClipTimestampModal
@@ -343,6 +379,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             onUpdateTrack(updated);
             setTimestampEditingTrack(null);
           }}
+          onTrackMediaUpdated={onUpdateTrack}
         />
       ))}
 

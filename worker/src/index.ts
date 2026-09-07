@@ -30,8 +30,10 @@ const RATE_LIMITS = {
 type RateLimitBucket = keyof typeof RATE_LIMITS;
 const SHARE_ID_RETRIES = 5;
 const DEEZER_API = "https://api.deezer.com";
-const DEEZER_EDGE_CACHE_TTL = 86400;
-const DEEZER_META_CACHE_TTL_SECONDS = 60 * 60 * 24 * 3;
+/** Keep under Deezer signed preview URL TTL (~15 min). */
+const DEEZER_EDGE_CACHE_TTL = 300;
+const DEEZER_META_CACHE_TTL_SECONDS = 300;
+const DEEZER_PREVIEW_EXPIRY_SKEW_SECONDS = 60;
 const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/";
 const YOUTUBE_CACHE_PREFIX = "https://bingo-musical.cache/youtube/";
 const YOUTUBE_META_CACHE_TTL_SECONDS = 60 * 30;
@@ -149,11 +151,53 @@ function deezerCacheRequest(key: string): Request {
   return new Request(`${DEEZER_CACHE_PREFIX}${key}`, { method: "GET" });
 }
 
+function deezerPreviewExpiryUnix(previewUrl: string): number | null {
+  try {
+    const exp = new URL(previewUrl).searchParams.get("hdnea")?.match(/(?:^|~)exp=(\d+)/)?.[1]
+      ?? new URL(previewUrl).searchParams.get("exp");
+    if (!exp) return null;
+    const value = Number.parseInt(exp, 10);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function isDeezerPreviewUrlFresh(previewUrl: unknown, nowSec = Math.floor(Date.now() / 1000)): boolean {
+  if (typeof previewUrl !== "string" || !previewUrl.trim()) return false;
+  const exp = deezerPreviewExpiryUnix(previewUrl);
+  // Unsigned / legacy URLs: treat as stale so we re-fetch a signed URL.
+  if (exp === null) return false;
+  return exp > nowSec + DEEZER_PREVIEW_EXPIRY_SKEW_SECONDS;
+}
+
+function deezerCachedTrackIsFresh(track: Record<string, unknown> | null | undefined): boolean {
+  if (!track) return false;
+  const previewUrl = track.previewUrl;
+  if (previewUrl == null || previewUrl === "") return true;
+  return isDeezerPreviewUrlFresh(previewUrl);
+}
+
+function deezerCachedPayloadIsFresh(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const record = payload as { data?: unknown; previewUrl?: unknown };
+  if (Array.isArray(record.data)) {
+    return record.data.every((item) =>
+      item && typeof item === "object"
+        ? deezerCachedTrackIsFresh(item as Record<string, unknown>)
+        : false
+    );
+  }
+  return deezerCachedTrackIsFresh(record as Record<string, unknown>);
+}
+
 async function readDeezerCache<T>(key: string): Promise<T | null> {
   try {
     const cached = await caches.default.match(deezerCacheRequest(key));
     if (!cached) return null;
-    return await cached.json() as T;
+    const body = await cached.json() as T;
+    if (!deezerCachedPayloadIsFresh(body)) return null;
+    return body;
   } catch {
     return null;
   }

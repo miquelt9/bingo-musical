@@ -8,12 +8,14 @@ import {
   PlayerPlaybackState as ProviderPlaybackState,
 } from "../../lib/player/player";
 import { usePlayerUI } from "../../state/PlayerUIContext";
+import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../../lib/deezer/previewUrl";
 
 interface ClipPreviewButtonProps {
   track: Track;
   className?: string;
   size?: "sm" | "md" | "lg";
   showLabel?: boolean;
+  onTrackMediaUpdated?: (updatedTrack: Track) => void;
 }
 
 export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
@@ -21,8 +23,11 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
   className = "",
   size = "md",
   showLabel = false,
+  onTrackMediaUpdated,
 }) => {
   const [playerState, setPlayerState] = useState<ProviderPlaybackState | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const { requestPlayerEngine } = usePlayerUI();
 
   useEffect(() => {
@@ -31,12 +36,18 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
     });
   }, []);
 
+  useEffect(() => {
+    setRefreshFailed(false);
+  }, [track.id]);
+
   const isCurrentTrack = playerState?.currentClip?.trackId === track.id;
   const isPlaying = isCurrentTrack && playerState?.state === "playing";
   const isLoading =
-    isCurrentTrack &&
-    (playerState?.state === "buffering" || playerState?.state === "cued");
-  const hasError = isCurrentTrack && playerState?.state === "error";
+    isRefreshing ||
+    (isCurrentTrack &&
+      (playerState?.state === "buffering" || playerState?.state === "cued"));
+  const hasError =
+    refreshFailed || (isCurrentTrack && playerState?.state === "error");
 
   const durationSec = Math.max(1, track.endTime - track.startTime);
   const progressPercent = isCurrentTrack ? (playerState?.progress ?? 0) * 100 : 0;
@@ -47,22 +58,49 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
 
     if (isPlaying || isLoading) {
       stopProviderPlayback();
-    } else {
-      requestPlayerEngine(track.media.provider);
-      playProviderClip({
-        provider: track.media.provider,
-        sourceId: track.media.id,
-        previewUrl: track.media.provider === "deezer" ? track.media.previewUrl ?? undefined : undefined,
-        startTime: track.startTime,
-        endTime: track.endTime,
-        trackId: track.id,
-        title: track.title,
-        artist: track.artist,
-      });
+      setIsRefreshing(false);
+      return;
     }
+
+    setRefreshFailed(false);
+
+    void (async () => {
+      let playTrack = track;
+      if (track.media?.provider === "deezer") {
+        setIsRefreshing(true);
+        try {
+          const fresh = await ensureFreshDeezerPreview(track.media);
+          playTrack = withFreshDeezerMedia(track, fresh.media);
+          if (fresh.refreshed) onTrackMediaUpdated?.(playTrack);
+        } catch {
+          setIsRefreshing(false);
+          setRefreshFailed(true);
+          return;
+        }
+        setIsRefreshing(false);
+      }
+
+      if (!playTrack.media) return;
+      requestPlayerEngine(playTrack.media.provider);
+      playProviderClip({
+        provider: playTrack.media.provider,
+        sourceId: playTrack.media.id,
+        previewUrl:
+          playTrack.media.provider === "deezer"
+            ? playTrack.media.previewUrl ?? undefined
+            : undefined,
+        startTime: playTrack.startTime,
+        endTime: playTrack.endTime,
+        trackId: playTrack.id,
+        title: playTrack.title,
+        artist: playTrack.artist,
+      });
+    })();
   };
 
-  const hasVideo = Boolean(track.media && (track.media.provider === "youtube" || track.media.previewUrl));
+  const hasVideo = Boolean(
+    track.media && (track.media.provider === "youtube" || track.media.id)
+  );
 
   const sizeClasses = {
     sm: "px-2.5 py-1 text-xs gap-1.5 h-8",
@@ -92,7 +130,6 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
         sizeClasses[size]
       } ${!hasVideo ? "opacity-50" : ""} ${isPlaying ? "active" : ""} ${className}`}
     >
-      {/* Background progress fill when playing */}
       {isPlaying && (
         <span
           className="absolute inset-0 bg-emerald-400/30 transition-all pointer-events-none"

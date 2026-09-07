@@ -23,8 +23,10 @@ interface TrackListMobileProps {
   onEditClip: (track: Track) => void;
   onDeleteTrack?: (track: Track) => void;
   onFindSimilar?: (track: Track) => void;
+  onUpdateTrack?: (track: Track) => void;
   isTrackBlocked: (track: Track) => boolean;
   isBusy?: boolean;
+  editClipBusyId?: string | null;
 }
 
 function getErrorStatus(
@@ -58,8 +60,10 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
   onEditClip,
   onDeleteTrack,
   onFindSimilar,
+  onUpdateTrack,
   isTrackBlocked,
   isBusy = false,
+  editClipBusyId = null,
 }) => {
   const isMobile = useIsMobile();
   const actionBtnClass =
@@ -84,8 +88,9 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
         const isBlocked = isTrackBlocked(track);
         const isReady =
           (track.matchStatus === "matched" || track.matchStatus === "manual") && !isBlocked;
-        const hasVideo = Boolean(track.media && (track.media.provider === "youtube" || track.media.previewUrl));
+        const hasVideo = Boolean(track.media && (track.media.provider === "youtube" || track.media.id));
         const errorStatus = getErrorStatus(track, isBlocked);
+        const isEditingClip = editClipBusyId === track.id;
 
         const statusButton = errorStatus ? (
           <button
@@ -180,8 +185,8 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                   onClick={() => onEditClip(track)}
                   title="Edit clip timestamps"
                 >
-                  <Timer className="w-4 h-4" />
-                  {isMobile ? <span>Edit clip</span> : "Edit clip"}
+                  <Timer className={`w-4 h-4 ${isEditingClip ? "animate-spin" : ""}`} />
+                  {isMobile ? <span>{isEditingClip ? "Loading…" : "Edit clip"}</span> : isEditingClip ? "Loading…" : "Edit clip"}
                 </button>
               ) : (
                 <button
@@ -201,6 +206,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 size={isMobile ? "sm" : "md"}
                 showLabel={!isMobile}
                 className={isMobile ? actionBtnSize : `${actionBtnSize} !h-9`}
+                onTrackMediaUpdated={onUpdateTrack}
               />
               <OverflowMenu
                 ariaLabel={`More actions for ${track.title}`}

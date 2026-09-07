@@ -36,6 +36,7 @@ import {
 import { PlayableClip } from "../lib/player/types";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
 import { getTrackProvider, getTrackSourceId } from "../lib/music/providers";
+import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../lib/deezer/previewUrl";
 import { getDeckReadiness } from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import {
@@ -72,6 +73,25 @@ function trackToClip(track: Track): PlayableClip | null {
     title: track.title,
     artist: track.artist,
   };
+}
+
+async function resolveHostClip(
+  track: Track
+): Promise<{ clip: PlayableClip; track: Track; refreshed: boolean } | null> {
+  if (track.media?.provider === "deezer") {
+    try {
+      const fresh = await ensureFreshDeezerPreview(track.media);
+      const nextTrack = withFreshDeezerMedia(track, fresh.media);
+      const clip = trackToClip(nextTrack);
+      if (!clip) return null;
+      return { clip, track: nextTrack, refreshed: fresh.refreshed };
+    } catch {
+      return null;
+    }
+  }
+  const clip = trackToClip(track);
+  if (!clip) return null;
+  return { clip, track, refreshed: false };
 }
 
 function readStoredCrossfadeMs(deckId: string): number {
@@ -173,7 +193,7 @@ function clearHostSession(deckId: string): void {
 export const HostPage: React.FC = () => {
   const isMobile = useIsMobile();
   const { deck, isLoading, notFound } = useDeckRoute();
-  const { updateDeck } = useDeck();
+  const { updateDeck, updateTrackInDeck } = useDeck();
   const { showVideo, toggleVideo } = usePlayerUI();
 
   const [uncalledIds, setUncalledIds] = useState<string[]>([]);
@@ -237,15 +257,26 @@ export const HostPage: React.FC = () => {
     [deck]
   );
 
+  const persistRefreshedTrack = useCallback(
+    (track: Track) => {
+      if (!deck) return;
+      updateTrackInDeck(deck.id, track);
+    },
+    [deck, updateTrackInDeck]
+  );
+
   const preloadNextTrack = useCallback(
     (remainingIds: string[]) => {
       if (!deck || !autoCallNextOnEndRef.current || remainingIds.length === 0) return;
       const nextTrack = deck.tracks.find((t) => t.id === remainingIds[0]);
       if (!nextTrack) return;
-      const clip = trackToClip(nextTrack);
-      if (clip) preloadClip(clip);
+      void resolveHostClip(nextTrack).then((resolved) => {
+        if (!resolved) return;
+        if (resolved.refreshed) persistRefreshedTrack(resolved.track);
+        preloadClip(resolved.clip);
+      });
     },
-    [deck]
+    [deck, persistRefreshedTrack]
   );
 
   const handleTracksUpdated = useCallback(
@@ -325,7 +356,6 @@ export const HostPage: React.FC = () => {
       calledAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
     };
 
-    const clip = trackToClip(track);
     const isFirstCall = calledHistory.length === 0;
     const isLastCall = remaining.length === 0;
     const playbackOpts = { fadeIn: isFirstCall, fadeOut: isLastCall };
@@ -335,23 +365,33 @@ export const HostPage: React.FC = () => {
     setCalledHistory((prev) => [newEntry, ...prev]);
     setIsRevealed(false);
 
-    if (clip) {
-      if (
-        !continueClipPlayback(clip, onClipEnd, playbackOpts) &&
-        !activatePreloadedClip(clip, onClipEnd, playbackOpts)
-      ) {
-        playClip(clip, onClipEnd, playbackOpts);
-      }
-      preloadNextTrack(remaining);
-    } else if (autoCallNextOnEnd && remaining.length > 0) {
-      chainTimeoutRef.current = window.setTimeout(() => {
-        chainTimeoutRef.current = null;
-        if (uncalledIdsRef.current.length > 0) {
-          handleCallNextRef.current();
+    void resolveHostClip(track).then((resolved) => {
+      if (resolved) {
+        if (resolved.refreshed) {
+          persistRefreshedTrack(resolved.track);
+          setCurrentCall((current) =>
+            current?.track.id === resolved.track.id
+              ? { ...current, track: resolved.track }
+              : current
+          );
         }
-      }, REVEAL_BEFORE_CHAIN_MS);
-    }
-  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout, autoCallNextOnEnd, preloadNextTrack]);
+        if (
+          !continueClipPlayback(resolved.clip, onClipEnd, playbackOpts) &&
+          !activatePreloadedClip(resolved.clip, onClipEnd, playbackOpts)
+        ) {
+          playClip(resolved.clip, onClipEnd, playbackOpts);
+        }
+        preloadNextTrack(remaining);
+      } else if (autoCallNextOnEnd && remaining.length > 0) {
+        chainTimeoutRef.current = window.setTimeout(() => {
+          chainTimeoutRef.current = null;
+          if (uncalledIdsRef.current.length > 0) {
+            handleCallNextRef.current();
+          }
+        }, REVEAL_BEFORE_CHAIN_MS);
+      }
+    });
+  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout, autoCallNextOnEnd, preloadNextTrack, persistRefreshedTrack]);
 
   useEffect(() => {
     handleCallNextRef.current = handleCallNext;
@@ -448,12 +488,19 @@ export const HostPage: React.FC = () => {
 
   const handleReplayCurrent = () => {
     if (!currentCall?.track) return;
-    const clip = trackToClip(currentCall.track);
-    if (!clip) return;
-    playClip(clip, onClipEnd);
-    if (uncalledIds.length > 0) {
-      preloadNextTrack(uncalledIds);
-    }
+    void resolveHostClip(currentCall.track).then((resolved) => {
+      if (!resolved) return;
+      if (resolved.refreshed) {
+        persistRefreshedTrack(resolved.track);
+        setCurrentCall((current) =>
+          current ? { ...current, track: resolved.track } : current
+        );
+      }
+      playClip(resolved.clip, onClipEnd);
+      if (uncalledIds.length > 0) {
+        preloadNextTrack(uncalledIds);
+      }
+    });
   };
 
   const handleTogglePlayPause = () => {
@@ -736,7 +783,13 @@ export const HostPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-mono hidden sm:inline">{item.calledAt}</span>
-                <ClipPreviewButton track={item.track} size="sm" />
+                <ClipPreviewButton
+                  track={item.track}
+                  size="sm"
+                  onTrackMediaUpdated={(updated) => {
+                    if (deck) updateTrackInDeck(deck.id, updated);
+                  }}
+                />
               </div>
             </div>
           );

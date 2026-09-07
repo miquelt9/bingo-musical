@@ -1,15 +1,18 @@
 import React from "react";
 import { Button, Overlay, Window } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
-import { Loader2, Play, Square } from "lucide-react";
+import { Loader2, Pause, Play, Square } from "lucide-react";
 import { ClipTimeline } from "./ClipTimeline";
 import { MIN_CLIP_SECONDS, useClipTimestampEditor } from "../../hooks/useClipTimestampEditor";
+
+const ACTION_BTN = "w-full min-h-[44px] text-xs sm:text-sm";
 
 interface ClipTimestampModalMobileProps {
   track: Track;
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedTrack: Track) => void;
+  onTrackMediaUpdated?: (updatedTrack: Track) => void;
 }
 
 export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> = ({
@@ -17,8 +20,9 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
   isOpen,
   onClose,
   onSave,
+  onTrackMediaUpdated,
 }) => {
-  const editor = useClipTimestampEditor({ track, isOpen });
+  const editor = useClipTimestampEditor({ track, isOpen, onTrackMediaUpdated });
 
   const handleSave = () => {
     const updated = editor.buildUpdatedTrack();
@@ -45,7 +49,7 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
           ) : (
             <>
               <div className="pc-clip-editor-video pc-bevel-inset overflow-hidden bg-black mb-2">
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-full min-h-[4.5rem]">
                   <div id={editor.elementId} className="absolute inset-0" />
                   {(editor.isLoadingPlayer || !editor.isPlayerReady) && !editor.playerError && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -55,6 +59,11 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
                   {editor.playerError && (
                     <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-pc-error">
                       {editor.playerError}
+                    </div>
+                  )}
+                  {track.media?.provider === "deezer" && editor.isPlayerReady && !editor.playerError && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="text-xs uppercase tracking-wide text-white/70">Deezer preview</span>
                     </div>
                   )}
                 </div>
@@ -69,10 +78,10 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
                 onSeek={editor.isPlayerReady ? editor.handleSeek : undefined}
               />
 
-              <div className="grid grid-cols-2 gap-2 mb-2">
+              <div className="grid grid-cols-3 gap-2 mb-2">
                 <Button
                   type="button"
-                  className="w-full min-h-[44px] text-xs sm:text-sm"
+                  className={ACTION_BTN}
                   disabled={!editor.isPlayerReady}
                   onClick={editor.handleSetStart}
                 >
@@ -80,7 +89,25 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
                 </Button>
                 <Button
                   type="button"
-                  className="w-full min-h-[44px] text-xs sm:text-sm"
+                  className={ACTION_BTN}
+                  disabled={!editor.isPlayerReady}
+                  onClick={editor.handlePlayPause}
+                >
+                  {editor.isTransportPlaying ? (
+                    <>
+                      <Pause className="w-4 h-4 fill-current" />
+                      Pause
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-current" />
+                      Play
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  className={ACTION_BTN}
                   disabled={!editor.isPlayerReady}
                   onClick={editor.handleSetEnd}
                 >
@@ -91,7 +118,7 @@ export const ClipTimestampModalMobile: React.FC<ClipTimestampModalMobileProps> =
               <Button
                 type="button"
                 variant="primary"
-                className="w-full min-h-[44px] mb-2"
+                className={`${ACTION_BTN} mb-2`}
                 disabled={!editor.isPlayerReady || !editor.isValid}
                 onClick={editor.handlePreview}
               >
