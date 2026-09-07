@@ -1,7 +1,13 @@
 import { jsPDF } from "jspdf";
 import { BingoCard, BingoCardOptions, Track } from "../../types/deck";
-import { BingoCellContentMode } from "./cellContent";
-import { bingoColumnLetters, isBlankCell, normalizeGridSize } from "./generateCards";
+import {
+  BingoCellContentSelection,
+  DEFAULT_CELL_CONTENT,
+  getTrackAuthorNumber,
+  normalizeCellContent,
+  usesAuthorPool,
+} from "./cellContent";
+import { isBlankCell, normalizeGridSize } from "./generateCards";
 import { generateQrDataUrl } from "./qr";
 import { getTrackSongNumber } from "./songNumbers";
 
@@ -11,7 +17,7 @@ export interface PdfExportOptions extends BingoCardOptions {
   /** Include a printable master list (number → song) before the cards. */
   includeMasterList?: boolean;
   tracks?: Track[];
-  cellContent?: BingoCellContentMode;
+  cellContent?: BingoCellContentSelection;
   shareUrl?: string;
 }
 
@@ -174,9 +180,12 @@ export async function generateBingoPdf(
   const marginX = 15;
   const gridWidth = pageWidth - marginX * 2;
   const eventTitle = options.customTitle?.trim() || options.deckName || "Musical Bingo";
-  const cellContent: BingoCellContentMode = options.cellContent ?? "songs";
-  const showNumbers = cellContent === "numbers" || cellContent === "both";
-  const showSongs = cellContent === "songs" || cellContent === "both";
+  const cellContent = normalizeCellContent(options.cellContent ?? DEFAULT_CELL_CONTENT);
+  const showNumbers = cellContent.numbers;
+  const showSongs = cellContent.songs;
+  const showAuthors = cellContent.authors;
+  const authorPool = usesAuthorPool(cellContent);
+  const numberOnly = showNumbers && !showSongs && !showAuthors;
   const tracks = options.tracks ?? [];
   const shareUrl = options.shareUrl?.trim() || undefined;
   const qrCache = new Map<string, string>();
@@ -198,15 +207,11 @@ export async function generateBingoPdf(
     const card = cards[cardIndex];
     const gridSize = normalizeGridSize(card.gridSize || options.gridSize || 5);
     const cellSize = gridWidth / gridSize;
-    const headerLetters = bingoColumnLetters(gridSize);
     const scale = cellSize / 36;
     const titleFont = Math.max(6, 8.5 * scale);
     const artistFont = Math.max(5.5, 7.5 * scale);
-    const numberFont =
-      cellContent === "numbers"
-        ? Math.max(18, 28 * scale)
-        : Math.max(10, 16 * scale);
-    const headerRowHeight = Math.max(8, 12 * Math.min(1.2, scale));
+    const authorOnlyFont = Math.max(7, 10 * scale);
+    const numberFont = numberOnly ? Math.max(18, 28 * scale) : Math.max(10, 16 * scale);
     let cursorY = 18;
 
     doc.setFont("helvetica", "bold");
@@ -225,21 +230,6 @@ export async function generateBingoPdf(
       { align: "center" }
     );
     cursorY += 8;
-
-    for (let c = 0; c < gridSize; c++) {
-      const cellX = marginX + c * cellSize;
-
-      doc.setFillColor(24, 24, 27);
-      doc.roundedRect(cellX, cursorY, cellSize, headerRowHeight, 1.5, 1.5, "F");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(Math.max(11, 18 * Math.min(1, scale)));
-      doc.setTextColor(255, 255, 255);
-      doc.text(headerLetters[c], cellX + cellSize / 2, cursorY + headerRowHeight * 0.72, {
-        align: "center",
-      });
-    }
-    cursorY += headerRowHeight + 2;
 
     const cellHeight = cellSize;
     for (let row = 0; row < gridSize; row++) {
@@ -281,42 +271,50 @@ export async function generateBingoPdf(
           if (track) {
             const padding = 2.5;
             const textWidth = cellSize - padding * 2;
-            const songNumber = getTrackSongNumber(tracks, track.id);
+            const cellNumber = authorPool
+              ? getTrackAuthorNumber(tracks, track.id)
+              : getTrackSongNumber(tracks, track.id);
             const titleLineH = titleFont * 0.45;
             const artistLineH = artistFont * 0.42;
+            const authorOnlyLineH = authorOnlyFont * 0.45;
             const numberLineH = numberFont * 0.4;
 
-            let totalContentHeight = 0;
-            if (showNumbers && songNumber != null) totalContentHeight += numberLineH;
+            let titleLines: string[] = [];
+            let artistLines: string[] = [];
+
             if (showSongs) {
               doc.setFont("helvetica", "bold");
               doc.setFontSize(titleFont);
-              const titleLines = doc.splitTextToSize(track.title, textWidth);
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(artistFont);
-              const artistLines = doc.splitTextToSize(track.artist, textWidth);
-              totalContentHeight += titleLines.length * titleLineH + artistLines.length * artistLineH + (showNumbers ? 1.5 : 2);
+              titleLines = doc.splitTextToSize(track.title, textWidth);
             }
+            if (showAuthors) {
+              doc.setFont("helvetica", showSongs ? "normal" : "bold");
+              doc.setFontSize(showSongs ? artistFont : authorOnlyFont);
+              artistLines = doc.splitTextToSize(track.artist, textWidth);
+            }
+
+            let totalContentHeight = 0;
+            if (showNumbers && cellNumber != null) totalContentHeight += numberLineH;
+            if (showSongs) totalContentHeight += titleLines.length * titleLineH;
+            if (showAuthors) {
+              totalContentHeight +=
+                artistLines.length * (showSongs ? artistLineH : authorOnlyLineH);
+            }
+            if ((showSongs || showAuthors) && showNumbers) totalContentHeight += 1.5;
+            else if (showSongs && showAuthors) totalContentHeight += 0.5;
 
             let textStartY = cellY + (cellHeight - totalContentHeight) / 2;
 
-            if (showNumbers && songNumber != null) {
+            if (showNumbers && cellNumber != null) {
               textStartY += numberLineH * 0.85;
               doc.setFont("helvetica", "bold");
               doc.setFontSize(numberFont);
               doc.setTextColor(24, 24, 27);
-              doc.text(String(songNumber), cellX + cellSize / 2, textStartY, { align: "center" });
-              textStartY += numberLineH * 0.35 + (showSongs ? 1.2 : 0);
+              doc.text(String(cellNumber), cellX + cellSize / 2, textStartY, { align: "center" });
+              textStartY += numberLineH * 0.35 + (showSongs || showAuthors ? 1.2 : 0);
             }
 
             if (showSongs) {
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(titleFont);
-              const titleLines = doc.splitTextToSize(track.title, textWidth);
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(artistFont);
-              const artistLines = doc.splitTextToSize(track.artist, textWidth);
-
               textStartY += titleLineH;
               doc.setFont("helvetica", "bold");
               doc.setFontSize(titleFont);
@@ -328,17 +326,20 @@ export async function generateBingoPdf(
                 textStartY,
                 titleLineH
               );
+            }
 
-              textStartY += 0.5;
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(artistFont);
-              doc.setTextColor(100, 116, 139);
+            if (showAuthors) {
+              if (showSongs) textStartY += 0.5;
+              else textStartY += authorOnlyLineH;
+              doc.setFont("helvetica", showSongs ? "normal" : "bold");
+              doc.setFontSize(showSongs ? artistFont : authorOnlyFont);
+              doc.setTextColor(showSongs ? 100 : 24, showSongs ? 116 : 24, showSongs ? 139 : 27);
               drawWrappedCentered(
                 doc,
                 artistLines,
                 cellX + cellSize / 2,
                 textStartY,
-                artistLineH
+                showSongs ? artistLineH : authorOnlyLineH
               );
             }
           }

@@ -1,4 +1,5 @@
 import { BingoCard, BingoCardOptions } from "../../types/deck";
+import { DEFAULT_CELL_CONTENT } from "./cellContent";
 import { isBlankCell, normalizeGridSize } from "./generateCards";
 import { downloadJson, slugifyFilename } from "../storage/download";
 
@@ -22,7 +23,7 @@ export function cardsToReadableJson(
     deck: options.deckName,
     gridSize: options.gridSize,
     bingoPercent: options.bingoPercent,
-    cellContent: options.cellContent ?? "songs",
+    cellContent: options.cellContent ?? DEFAULT_CELL_CONTENT,
     cardCount: cards.length,
     exportedAt: new Date().toISOString(),
     cards: cards.map((card) => {

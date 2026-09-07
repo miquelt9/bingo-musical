@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { BingoCard, Track } from "../../types/deck";
-import { BingoCellContentMode } from "../../lib/bingo/cellContent";
-import { bingoColumnLetters, isBlankCell, normalizeGridSize } from "../../lib/bingo/generateCards";
+import {
+  BingoCellContentSelection,
+  DEFAULT_CELL_CONTENT,
+  getTrackAuthorNumber,
+  normalizeCellContent,
+  usesAuthorPool,
+} from "../../lib/bingo/cellContent";
+import { isBlankCell, normalizeGridSize } from "../../lib/bingo/generateCards";
 import { getTrackSongNumber } from "../../lib/bingo/songNumbers";
 import { Check, RotateCcw } from "lucide-react";
 
 interface CardPreviewProps {
   card: BingoCard;
   eventTitle: string;
-  /** Full deck track list in order — used to resolve song numbers. */
+  /** Full deck track list in order — used to resolve song / author numbers. */
   tracks: Track[];
-  cellContent?: BingoCellContentMode;
+  cellContent?: BingoCellContentSelection;
   shareUrl?: string | null;
   qrDataUrl?: string | null;
   interactiveMarks?: boolean;
@@ -20,15 +26,17 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   card,
   eventTitle,
   tracks,
-  cellContent = "songs",
+  cellContent = DEFAULT_CELL_CONTENT,
   shareUrl = null,
   qrDataUrl = null,
   interactiveMarks = true,
 }) => {
   const gridSize = normalizeGridSize(card.gridSize || Math.round(Math.sqrt(card.grid.length)) || 5);
-  const letters = bingoColumnLetters(gridSize);
-  const showNumbers = cellContent === "numbers" || cellContent === "both";
-  const showSongs = cellContent === "songs" || cellContent === "both";
+  const selection = normalizeCellContent(cellContent);
+  const showNumbers = selection.numbers;
+  const showSongs = selection.songs;
+  const showAuthors = selection.authors;
+  const authorPool = usesAuthorPool(selection);
 
   const [markedIndices, setMarkedIndices] = useState<Set<number>>(new Set());
 
@@ -54,7 +62,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     setMarkedIndices(new Set());
   };
 
-  const numberOnly = cellContent === "numbers";
+  const numberOnly = showNumbers && !showSongs && !showAuthors;
   const numberClass = numberOnly
     ? gridSize >= 6
       ? "font-black text-2xl sm:text-3xl leading-none text-zinc-950 tabular-nums"
@@ -71,6 +79,10 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     gridSize >= 6
       ? "font-medium text-[7px] sm:text-[8px] text-zinc-500 line-clamp-1 mt-0.5"
       : "font-medium text-[9px] sm:text-[10px] text-zinc-500 line-clamp-1 mt-0.5";
+  const authorOnlyClass =
+    gridSize >= 6
+      ? "font-bold text-[9px] sm:text-[10px] leading-tight line-clamp-3 text-zinc-900"
+      : "font-bold text-[11px] sm:text-[12px] leading-tight line-clamp-3 text-zinc-900";
 
   return (
     <div className="bg-white text-zinc-900 p-6 sm:p-8 border border-zinc-200 max-w-xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full">
@@ -97,20 +109,6 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
       </div>
 
       <div
-        className="gap-1.5 sm:gap-2 mb-1.5 sm:mb-2"
-        style={{ display: "grid", gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
-      >
-        {letters.map((letter) => (
-          <div
-            key={letter}
-            className="bg-[var(--pc-titlebar-bg)] text-[var(--pc-titlebar-text,#ffffff)] font-extrabold text-lg sm:text-xl py-2 text-center rounded-lg shadow-sm print:bg-black print:text-white"
-          >
-            {letter}
-          </div>
-        ))}
-      </div>
-
-      <div
         className="gap-1.5 sm:gap-2"
         style={{ display: "grid", gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
       >
@@ -127,7 +125,11 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
 
           const track = cell.track;
           const isMarked = markedIndices.has(index);
-          const songNumber = track ? getTrackSongNumber(tracks, track.id) : null;
+          const cellNumber = track
+            ? authorPool
+              ? getTrackAuthorNumber(tracks, track.id)
+              : getTrackSongNumber(tracks, track.id)
+            : null;
 
           return (
             <button
@@ -142,14 +144,22 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
             >
               {track ? (
                 <>
-                  {showNumbers && songNumber != null && (
-                    <p className={numberClass}>{songNumber}</p>
+                  {showNumbers && cellNumber != null && (
+                    <p className={numberClass}>{cellNumber}</p>
                   )}
                   {showSongs && (
-                    <>
-                      <p className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}>{track.title}</p>
-                      <p className={artistClass}>{track.artist}</p>
-                    </>
+                    <p className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}>{track.title}</p>
+                  )}
+                  {showAuthors && (
+                    <p
+                      className={
+                        showSongs
+                          ? artistClass
+                          : `${authorOnlyClass} ${showNumbers ? "mt-0.5" : ""}`
+                      }
+                    >
+                      {track.artist}
+                    </p>
                   )}
                 </>
               ) : (

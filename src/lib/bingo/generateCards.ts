@@ -1,10 +1,13 @@
 import { Track, BingoCard, BingoCardCell, BingoCardOptions } from "../../types/deck";
+import {
+  DEFAULT_CELL_CONTENT,
+  cellContentPool,
+  normalizeCellContent,
+} from "./cellContent";
 
 export const MIN_GRID_SIZE = 3;
 export const MAX_GRID_SIZE = 6;
 export const GRID_SIZES = [3, 4, 5, 6] as const;
-
-const COLUMN_LETTERS = ["B", "I", "N", "G", "O", "★"];
 
 // Fisher-Yates array shuffle
 export function shuffleArray<T>(array: T[]): T[] {
@@ -46,32 +49,32 @@ export function isBlankCell(cell: BingoCardCell): boolean {
   return cell.isBlank || !cell.track;
 }
 
-export function bingoColumnLetters(gridSize: number): string[] {
-  return COLUMN_LETTERS.slice(0, normalizeGridSize(gridSize));
-}
-
 export function generateSingleBingoCard(
   tracks: Track[],
   cardNumber: number,
-  options: Pick<BingoCardOptions, "gridSize" | "bingoPercent">
+  options: Pick<BingoCardOptions, "gridSize" | "bingoPercent" | "cellContent">
 ): BingoCard {
-  if (tracks.length === 0) {
+  const selection = normalizeCellContent(options.cellContent ?? DEFAULT_CELL_CONTENT);
+  const pool = cellContentPool(tracks, selection);
+  if (pool.length === 0) {
     throw new Error("Cannot generate bingo card from an empty track list.");
   }
 
   const gridSize = normalizeGridSize(options.gridSize);
   const slots = cellCount(gridSize);
-  const songCount = uniqueSongCount(tracks.length, slots, options.bingoPercent);
-  const songs = shuffleArray(tracks).slice(0, songCount);
-  const songPositions = new Set(shuffleArray(Array.from({ length: slots }, (_, i) => i)).slice(0, songCount));
+  const filledCount = uniqueSongCount(pool.length, slots, options.bingoPercent);
+  const picked = shuffleArray(pool).slice(0, filledCount);
+  const filledPositions = new Set(
+    shuffleArray(Array.from({ length: slots }, (_, i) => i)).slice(0, filledCount)
+  );
 
   const grid: BingoCardCell[] = [];
-  let songIdx = 0;
+  let pickIdx = 0;
   for (let i = 0; i < slots; i++) {
-    if (songPositions.has(i)) {
+    if (filledPositions.has(i)) {
       grid.push({
         isBlank: false,
-        track: songs[songIdx++] || null,
+        track: picked[pickIdx++] || null,
       });
     } else {
       grid.push({
@@ -95,6 +98,10 @@ export function generateBingoCards(
 ): BingoCard[] {
   if (tracks.length === 0) return [];
 
+  const selection = normalizeCellContent(options.cellContent ?? DEFAULT_CELL_CONTENT);
+  const pool = cellContentPool(tracks, selection);
+  if (pool.length === 0) return [];
+
   const cards: BingoCard[] = [];
   const count = Math.max(1, Math.min(200, options.cardCount));
 
@@ -103,6 +110,7 @@ export function generateBingoCards(
       generateSingleBingoCard(tracks, i, {
         gridSize: options.gridSize,
         bingoPercent: options.bingoPercent,
+        cellContent: selection,
       })
     );
   }

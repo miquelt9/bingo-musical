@@ -5,10 +5,14 @@ import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
 import { generateBingoCards, GRID_SIZES, cellCount } from "../lib/bingo/generateCards";
 import {
-  CELL_CONTENT_MODES,
-  BingoCellContentMode,
-  cellContentLabel,
-  isBingoCellContentMode,
+  BingoCellContentSelection,
+  CELL_CONTENT_KINDS,
+  DEFAULT_CELL_CONTENT,
+  cellContentKindLabel,
+  cellContentPool,
+  parseStoredCellContent,
+  toggleCellContent,
+  usesAuthorPool,
 } from "../lib/bingo/cellContent";
 import { generateQrDataUrl } from "../lib/bingo/qr";
 import {
@@ -55,7 +59,7 @@ type PrintJob = "cards" | "master" | "all";
 interface CardSettings {
   cardCount: number;
   gridSize: number;
-  cellContent: BingoCellContentMode;
+  cellContent: BingoCellContentSelection;
   includeMasterList: boolean;
 }
 
@@ -78,7 +82,7 @@ export const CardsPage: React.FC = () => {
   const [customTitle, setCustomTitle] = useState("");
   const [cardCount, setCardCount] = useState<number>(10);
   const [gridSize, setGridSize] = useState<number>(5);
-  const [cellContent, setCellContent] = useState<BingoCellContentMode>("both");
+  const [cellContent, setCellContent] = useState<BingoCellContentSelection>(DEFAULT_CELL_CONTENT);
   const [includeMasterList, setIncludeMasterList] = useState(true);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
@@ -112,6 +116,12 @@ export const CardsPage: React.FC = () => {
   });
 
   const slots = cellCount(gridSize);
+  const poolTracks = useMemo(
+    () => (deck ? cellContentPool(deck.tracks, cellContent) : []),
+    [deck, cellContent]
+  );
+  const poolCount = poolTracks.length;
+  const poolLabelPlural = usesAuthorPool(cellContent) ? "authors" : "songs";
 
   const cardOptions = useMemo(() => {
     if (!deck) return null;
@@ -135,13 +145,15 @@ export const CardsPage: React.FC = () => {
     const trackCount = deck.tracks.length;
     if (stored) {
       if (typeof stored.cardCount === "number") setCardCount(stored.cardCount);
+      const parsedContent = parseStoredCellContent(stored.cellContent) ?? DEFAULT_CELL_CONTENT;
+      setCellContent(parsedContent);
+      const poolSize = cellContentPool(deck.tracks, parsedContent).length;
       const sizeCandidate =
-        typeof stored.gridSize === "number" ? stored.gridSize : getLargestValidGridSize(trackCount);
-      const size = isGridSizeValidForDeck(trackCount, sizeCandidate)
+        typeof stored.gridSize === "number" ? stored.gridSize : getLargestValidGridSize(poolSize);
+      const size = isGridSizeValidForDeck(poolSize, sizeCandidate)
         ? sizeCandidate
-        : getLargestValidGridSize(trackCount);
+        : getLargestValidGridSize(poolSize);
       setGridSize(size);
-      if (isBingoCellContentMode(stored.cellContent)) setCellContent(stored.cellContent);
       if (typeof stored.includeMasterList === "boolean") {
         setIncludeMasterList(stored.includeMasterList);
       }
@@ -174,7 +186,8 @@ export const CardsPage: React.FC = () => {
       return;
     }
 
-    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}`;
+    const authorMode = usesAuthorPool(cellContent) ? "authors" : "songs";
+    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}:${authorMode}`;
     const layoutChanged = layoutKey !== layoutKeyRef.current;
     layoutKeyRef.current = layoutKey;
 
@@ -185,13 +198,22 @@ export const CardsPage: React.FC = () => {
         cardCount,
         gridSize,
         bingoPercent: BINGO_PERCENT,
+        cellContent,
       })
     );
 
     if (layoutChanged) {
       setActivePreviewIndex(0);
     }
-  }, [deck?.id, deck?.updatedAt, cardCount, gridSize]);
+  }, [deck?.id, deck?.updatedAt, cardCount, gridSize, cellContent.songs, cellContent.authors]);
+
+  // If author-only mode shrinks the pool below the current grid, step down.
+  useEffect(() => {
+    if (!deck || poolCount === 0) return;
+    if (!isGridSizeValidForDeck(poolCount, gridSize)) {
+      setGridSize(getLargestValidGridSize(poolCount));
+    }
+  }, [deck, poolCount, gridSize]);
 
   useEffect(() => {
     if (!deck || !isShareApiConfigured()) {
@@ -310,7 +332,7 @@ export const CardsPage: React.FC = () => {
   const readiness = getDeckReadiness(deck.tracks, gridSize);
   const currentCard = cards[activePreviewIndex] || cards[0];
   const cardsForPrint = printCards ?? cards;
-  const canGenerate = deck.tracks.length > 0 && isGridSizeValidForDeck(deck.tracks.length, gridSize);
+  const canGenerate = poolCount > 0 && isGridSizeValidForDeck(poolCount, gridSize);
   const exportsDisabled = cards.length === 0 || !canGenerate;
   const showCardsInPrint = printJob === "cards" || printJob === "all";
   const eventTitle = customTitle || deck.name;
@@ -450,36 +472,25 @@ export const CardsPage: React.FC = () => {
 
               <div>
                 <p className="text-xs font-bold mb-1.5">Cell content</p>
-                {isMobile ? (
-                  <select
-                    className="pc-select w-full"
-                    value={cellContent}
-                    onChange={(e) => setCellContent(e.target.value as BingoCellContentMode)}
-                    aria-label="Cell content"
-                  >
-                    {CELL_CONTENT_MODES.map((mode) => (
-                      <option key={mode} value={mode}>
-                        {cellContentLabel(mode)}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {CELL_CONTENT_MODES.map((mode) => (
-                      <Button
-                        key={mode}
-                        type="button"
-                        active={cellContent === mode}
-                        onClick={() => setCellContent(mode)}
-                        className="w-full justify-start"
-                      >
-                        {cellContentLabel(mode)}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-col gap-2">
+                  {CELL_CONTENT_KINDS.map((kind) => (
+                    <label
+                      key={kind}
+                      className="flex items-center gap-2 text-xs font-bold cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={cellContent[kind]}
+                        onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
+                      />
+                      <span>{cellContentKindLabel(kind)}</span>
+                    </label>
+                  ))}
+                </div>
                 <p className="text-[11px] text-muted mt-1.5">
-                  Numbers follow deck order (#1 is the first song). Best for players who may not know the tracks.
+                  {usesAuthorPool(cellContent)
+                    ? "Authors are deduplicated across songs. Numbers follow first appearance in the deck."
+                    : "Numbers follow deck order (#1 is the first song). Pick any combination of numbers, songs, and authors."}
                 </p>
               </div>
 
@@ -520,24 +531,24 @@ export const CardsPage: React.FC = () => {
                     aria-label="Grid size"
                   >
                     {GRID_SIZES.map((size) => {
-                      const valid = isGridSizeValidForDeck(deck.tracks.length, size);
+                      const valid = isGridSizeValidForDeck(poolCount, size);
                       return (
                       <option key={size} value={size} disabled={!valid}>
-                        {size}×{size}{!valid ? ` (need ${cellCount(size)}+ songs)` : ""}
+                        {size}×{size}{!valid ? ` (need ${cellCount(size)}+ ${poolLabelPlural})` : ""}
                       </option>
                     );})}
                   </select>
                 ) : (
                   <div className="flex items-center gap-2">
                     {GRID_SIZES.map((size) => {
-                      const valid = isGridSizeValidForDeck(deck.tracks.length, size);
+                      const valid = isGridSizeValidForDeck(poolCount, size);
                       return (
                       <Button
                         key={size}
                         type="button"
                         active={gridSize === size}
                         disabled={!valid}
-                        title={valid ? undefined : `Need at least ${cellCount(size)} songs for ${size}×${size}`}
+                        title={valid ? undefined : `Need at least ${cellCount(size)} ${poolLabelPlural} for ${size}×${size}`}
                         onClick={() => setGridSize(size)}
                         className="flex-1"
                       >
@@ -592,10 +603,13 @@ export const CardsPage: React.FC = () => {
 
               <div className="text-xs pt-1 border-t border-[var(--pc-border)] space-y-1">
                 <p className="text-muted">
-                  {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck · {slots} squares
-                  per card
-                  {!isGridSizeValidForDeck(deck.tracks.length, gridSize)
-                    ? ` · Need ${cellCount(gridSize)}+ songs for this grid`
+                  {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck
+                  {usesAuthorPool(cellContent)
+                    ? ` · ${poolCount} unique author${poolCount === 1 ? "" : "s"}`
+                    : ""}{" "}
+                  · {slots} squares per card
+                  {!isGridSizeValidForDeck(poolCount, gridSize)
+                    ? ` · Need ${cellCount(gridSize)}+ ${poolLabelPlural} for this grid`
                     : ""}
                 </p>
                 {shareStatus === "loading" && (
