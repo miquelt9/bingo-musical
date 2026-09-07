@@ -52,7 +52,10 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
 
   const durationSec = Math.max(1, track.endTime - track.startTime);
   const progressPercent = isCurrentTrack ? (playerState?.progress ?? 0) * 100 : 0;
-  const needsAttention = isTrackUnplayable(track);
+  // Deezer tracks with a known ID can refresh a missing/expired preview on click.
+  const canRefreshDeezer =
+    track.media?.provider === "deezer" && Boolean(track.media.id);
+  const needsAttention = isTrackUnplayable(track) && !canRefreshDeezer;
   const isDisabled = needsAttention && !isPlaying && !isLoading;
 
   const handleClick = (e: React.MouseEvent) => {

@@ -1,6 +1,6 @@
 import { Track } from "../../types/deck";
 import { BatchMatchProgress } from "../youtube/matcher";
-import { DeezerTrackHit, deezerHitToTrack, searchDeezerTracks, searchDeezerTracksBatch } from "./api";
+import { DeezerTrackHit, deezerHitToTrack, resolveDeezerTrack, searchDeezerTracks, searchDeezerTracksBatch } from "./api";
 import { isDeezerPreviewUrlFresh } from "./previewUrl";
 
 export function normalizeMusicText(value: string): string {
@@ -85,8 +85,37 @@ export async function batchMatchDeezerTracks(
       const targetIndex = cursor++;
       const track = targets[targetIndex];
       try {
+        // Prefer resolving a known Deezer ID (sample decks / expired preview refresh).
+        if (track.media?.provider === "deezer" && track.media.id) {
+          try {
+            const hit = await resolveDeezerTrack(track.media.id);
+            if (hit.previewUrl) {
+              const resolved = deezerHitToTrack(hit);
+              const updated = {
+                ...track,
+                album: resolved.album || track.album,
+                albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
+                durationMs: resolved.durationMs || track.durationMs,
+                media: resolved.media,
+                startTime: track.startTime,
+                endTime: track.endTime,
+                matchStatus: "matched" as const,
+              };
+              results.set(track.id, updated);
+              matched += 1;
+              completed += 1;
+              onProgress?.({ total: targets.length, completed, matched, failed }, updated);
+              continue;
+            }
+          } catch {
+            // Fall through to title search; keep existing media if search also fails.
+          }
+        }
+
         const candidates = batchCandidates
-          ? batchCandidates[targetIndex] ?? []
+          ? (batchCandidates[targetIndex]?.length
+              ? batchCandidates[targetIndex]
+              : await searchDeezerTracks(`${track.artist} ${track.title}`, 8))
           : await searchDeezerTracks(`${track.artist} ${track.title}`, 8);
         const match = chooseDeezerMatch(track, candidates);
         const updated = match
@@ -105,14 +134,20 @@ export async function batchMatchDeezerTracks(
                 matchStatus: "matched" as const,
               };
             })()
-          : { ...track, media: null, matchStatus: "pending" as const };
+          // Keep a known Deezer ID — never wipe media on a failed title search.
+          : track.media?.provider === "deezer"
+            ? { ...track, matchStatus: track.matchStatus === "matched" ? "matched" : "pending" as const }
+            : { ...track, media: null, matchStatus: "pending" as const };
         results.set(track.id, updated);
         if (updated.media?.provider === "deezer" && updated.media.previewUrl) matched += 1;
         else failed += 1;
         completed += 1;
         onProgress?.({ total: targets.length, completed, matched, failed }, updated);
       } catch {
-        const updated = { ...track, media: null, matchStatus: "pending" as const };
+        // Preserve known Deezer media on transient failures.
+        const updated = track.media?.provider === "deezer"
+          ? track
+          : { ...track, media: null, matchStatus: "pending" as const };
         results.set(track.id, updated);
         failed += 1;
         completed += 1;

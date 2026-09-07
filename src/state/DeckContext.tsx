@@ -13,7 +13,6 @@ import { fetchSharedDeckPayload, isShareApiConfigured, publishSharedDeck } from 
 import { buildSharedDeckUrl, shareDeckNative } from "../lib/share/deckShare";
 import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
-import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
 import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
 import { trackNeedsDeezerPreviewRefresh } from "../lib/deezer/previewUrl";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
@@ -43,6 +42,9 @@ interface DeckContextType {
 
 const DeckContext = createContext<DeckContextType | undefined>(undefined);
 
+/** Prevent React Strict Mode from running two overlapping sample hydrations. */
+let deezerSampleHydrateInFlight: Promise<void> | null = null;
+
 export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
@@ -50,34 +52,83 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
 
   const hydrateDefaultDeezerSample = useCallback(async () => {
-    if (!isDeezerApiConfigured()) return;
+    if (deezerSampleHydrateInFlight) {
+      await deezerSampleHydrateInFlight;
+      return;
+    }
 
-    const stored = getStoredDecks();
-    const sample = stored.find((deck) => deck.id === SAMPLE_DEEZER_DECK.id);
-    if (!sample || sample.provider !== "deezer") return;
+    deezerSampleHydrateInFlight = (async () => {
+      if (!isDeezerApiConfigured()) return;
 
-    const needsRefresh = sample.tracks.some(
-      (track) =>
-        track.media?.provider !== "deezer" ||
-        !track.media.previewUrl ||
-        trackNeedsDeezerPreviewRefresh(track)
-    );
-    if (!needsRefresh) return;
+      const stored = getStoredDecks();
+      const sample = stored.find((deck) => deck.id === SAMPLE_DEEZER_DECK.id);
+      if (!sample || sample.provider !== "deezer") return;
+
+      // Restore known sample Deezer IDs when a previous search-based hydrate wiped them.
+      const withKnownIds = sample.tracks.map((track, index) => {
+        if (track.media?.provider === "deezer" && track.media.id) return track;
+        const template = SAMPLE_DEEZER_DECK.tracks[index];
+        if (!template?.media || template.media.provider !== "deezer") return track;
+        return {
+          ...track,
+          media: { ...template.media, previewUrl: null as string | null },
+          matchStatus: track.matchStatus === "manual" ? track.matchStatus : ("pending" as const),
+        };
+      });
+
+      const needsRefresh = withKnownIds.some(
+        (track) =>
+          track.media?.provider !== "deezer" ||
+          !track.media.previewUrl ||
+          trackNeedsDeezerPreviewRefresh(track)
+      );
+      if (!needsRefresh) return;
+
+      try {
+        // Resolve by known Deezer track ID — do not re-search by title (that can wipe IDs).
+        const tracks = await Promise.all(
+          withKnownIds.map(async (track) => {
+            if (track.media?.provider !== "deezer" || !track.media.id) return track;
+            if (track.media.previewUrl && !trackNeedsDeezerPreviewRefresh(track)) return track;
+            try {
+              const hit = await resolveDeezerTrack(track.media.id);
+              if (!hit.previewUrl) return track;
+              const resolved = deezerHitToTrack(hit);
+              return {
+                ...track,
+                album: resolved.album || track.album,
+                albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
+                durationMs: resolved.durationMs || track.durationMs,
+                media: resolved.media,
+                // Keep the sample clip window when we already had one.
+                startTime: track.media?.id === hit.id ? track.startTime : resolved.startTime,
+                endTime: track.media?.id === hit.id ? track.endTime : resolved.endTime,
+                matchStatus: "matched" as const,
+              };
+            } catch {
+              return track;
+            }
+          })
+        );
+        const changed = tracks.some((track, index) => JSON.stringify(track) !== JSON.stringify(sample.tracks[index]));
+        if (!changed) return;
+
+        const saved = persistDeck({
+          ...sample,
+          tracks,
+          updatedAt: new Date().toISOString(),
+        });
+        setDecks(getStoredDecks());
+        setActiveDeck((current) => (current?.id === saved.id ? saved : current));
+      } catch {
+        // The starter remains available for manual matching when the Worker or Deezer is offline.
+      }
+    })();
 
     try {
-      const tracks = await batchMatchDeezerTracks(sample.tracks, 2);
-      const changed = tracks.some((track, index) => JSON.stringify(track) !== JSON.stringify(sample.tracks[index]));
-      if (!changed) return;
-
-      const saved = persistDeck({
-        ...sample,
-        tracks,
-        updatedAt: new Date().toISOString(),
-      });
-      setDecks(getStoredDecks());
-      setActiveDeck((current) => current?.id === saved.id ? saved : current);
-    } catch {
-      // The starter remains available for manual matching when the Worker or Deezer is offline.
+      await deezerSampleHydrateInFlight;
+    } finally {
+      deezerSampleHydrateInFlight = null;
     }
   }, []);
 
