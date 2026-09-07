@@ -13,6 +13,8 @@ interface AnswerCardProps {
   progress: number;
   remainingTime: number;
   callNumber: number;
+  /** 1-based deck-order song number; shown only when revealed. */
+  songNumber?: number | null;
   errorMessage?: string | null;
   fill?: boolean;
   className?: string;
@@ -27,6 +29,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
   progress,
   remainingTime,
   callNumber,
+  songNumber = null,
   errorMessage,
   fill = false,
   className = "",
@@ -180,6 +183,11 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
                 )}
               </div>
               <div className="host-answer-card-details min-w-0">
+                {songNumber != null && (
+                  <p className="text-sm font-black tabular-nums text-muted mb-0.5">
+                    Song #{songNumber}
+                  </p>
+                )}
                 <h2 className="text-xl font-extrabold leading-tight truncate">{track.title}</h2>
                 <p className="text-sm font-medium truncate">{track.artist}</p>
                 {track.album && (

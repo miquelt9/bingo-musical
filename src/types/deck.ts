@@ -61,6 +61,8 @@ export interface BingoCard {
   grid: BingoCardCell[]; // gridSize × gridSize cells
 }
 
+export type BingoCellContentMode = "numbers" | "songs" | "both";
+
 export interface BingoCardOptions {
   deckName: string;
   customTitle?: string;
@@ -68,4 +70,8 @@ export interface BingoCardOptions {
   gridSize: number;
   /** Percent of the deck sampled onto each card (1–100). Remaining squares become blank tiles. */
   bingoPercent: number;
+  /** What each filled cell shows on preview / print / PDF. */
+  cellContent?: BingoCellContentMode;
+  /** Share URL printed under a QR code so players can reopen the deck. */
+  shareUrl?: string;
 }

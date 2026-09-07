@@ -5,12 +5,20 @@ import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
 import { generateBingoCards, GRID_SIZES, cellCount } from "../lib/bingo/generateCards";
 import {
+  CELL_CONTENT_MODES,
+  BingoCellContentMode,
+  cellContentLabel,
+  isBingoCellContentMode,
+} from "../lib/bingo/cellContent";
+import { generateQrDataUrl } from "../lib/bingo/qr";
+import {
   getDeckReadiness,
   getLargestValidGridSize,
   isGridSizeValidForDeck,
   MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { CardPreview } from "../components/bingo/CardPreview";
+import { MasterSongList } from "../components/bingo/MasterSongList";
 import { BingoCard } from "../types/deck";
 import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
@@ -19,6 +27,12 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { trackEvent } from "../lib/usage/events";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
+import { buildSharedDeckUrl } from "../lib/share/deckShare";
+import {
+  computeShareIdForDeck,
+  isShareApiConfigured,
+  publishSharedDeck,
+} from "../lib/share/sharedDecksApi";
 import {
   Printer,
   Download,
@@ -29,6 +43,7 @@ import {
   FileText,
   Loader2,
   Edit3,
+  ListOrdered,
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
@@ -36,20 +51,21 @@ const CARD_COUNT_PRESETS = [5, 10, 20, 50, 100] as const;
 const BINGO_PERCENT = 100;
 const EVENT_TITLE_MAX = 80;
 
+type PrintJob = "cards" | "master" | "all";
+
 interface CardSettings {
   cardCount: number;
   gridSize: number;
+  cellContent: BingoCellContentMode;
+  includeMasterList: boolean;
 }
 
-function readCardSettings(deckId: string): CardSettings | null {
+function readCardSettings(deckId: string): Partial<CardSettings> | null {
   try {
     const raw = sessionStorage.getItem(`${CARD_SETTINGS_KEY}.${deckId}`);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as CardSettings;
-    if (typeof parsed.cardCount === "number" && typeof parsed.gridSize === "number") {
-      return parsed;
-    }
-    return null;
+    const parsed = JSON.parse(raw) as Partial<CardSettings>;
+    return parsed;
   } catch {
     return null;
   }
@@ -63,13 +79,21 @@ export const CardsPage: React.FC = () => {
   const [customTitle, setCustomTitle] = useState("");
   const [cardCount, setCardCount] = useState<number>(10);
   const [gridSize, setGridSize] = useState<number>(5);
+  const [cellContent, setCellContent] = useState<BingoCellContentMode>("both");
+  const [includeMasterList, setIncludeMasterList] = useState(true);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
   const [printCards, setPrintCards] = useState<BingoCard[] | null>(null);
+  const [printJob, setPrintJob] = useState<PrintJob>("all");
   const [pendingPrint, setPendingPrint] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const handleTracksUpdated = useCallback(
     (updatedTracks: Track[]) => {
@@ -98,8 +122,10 @@ export const CardsPage: React.FC = () => {
       cardCount,
       gridSize,
       bingoPercent: BINGO_PERCENT,
+      cellContent,
+      shareUrl: shareUrl ?? undefined,
     };
-  }, [deck, customTitle, cardCount, gridSize]);
+  }, [deck, customTitle, cardCount, gridSize, cellContent, shareUrl]);
 
   const layoutKeyRef = useRef("");
 
@@ -109,11 +135,17 @@ export const CardsPage: React.FC = () => {
     const stored = readCardSettings(deck.id);
     const trackCount = deck.tracks.length;
     if (stored) {
-      setCardCount(stored.cardCount);
-      const size = isGridSizeValidForDeck(trackCount, stored.gridSize)
-        ? stored.gridSize
+      if (typeof stored.cardCount === "number") setCardCount(stored.cardCount);
+      const sizeCandidate =
+        typeof stored.gridSize === "number" ? stored.gridSize : getLargestValidGridSize(trackCount);
+      const size = isGridSizeValidForDeck(trackCount, sizeCandidate)
+        ? sizeCandidate
         : getLargestValidGridSize(trackCount);
       setGridSize(size);
+      if (isBingoCellContentMode(stored.cellContent)) setCellContent(stored.cellContent);
+      if (typeof stored.includeMasterList === "boolean") {
+        setIncludeMasterList(stored.includeMasterList);
+      }
     } else if (trackCount > 0) {
       setGridSize(getLargestValidGridSize(trackCount));
     }
@@ -124,12 +156,12 @@ export const CardsPage: React.FC = () => {
     try {
       sessionStorage.setItem(
         `${CARD_SETTINGS_KEY}.${deck.id}`,
-        JSON.stringify({ cardCount, gridSize })
+        JSON.stringify({ cardCount, gridSize, cellContent, includeMasterList } satisfies CardSettings)
       );
     } catch {
       // ignore
     }
-  }, [deck?.id, cardCount, gridSize]);
+  }, [deck?.id, cardCount, gridSize, cellContent, includeMasterList]);
 
   useEffect(() => {
     setActivePreviewIndex((prev) => (cards.length === 0 ? 0 : Math.min(prev, cards.length - 1)));
@@ -162,6 +194,44 @@ export const CardsPage: React.FC = () => {
     }
   }, [deck?.id, deck?.updatedAt, cardCount, gridSize]);
 
+  useEffect(() => {
+    if (!deck || !isShareApiConfigured()) {
+      setShareUrl(null);
+      setQrDataUrl(null);
+      setShareStatus("idle");
+      setShareError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setShareStatus("loading");
+    setShareError(null);
+
+    void (async () => {
+      try {
+        const predictedId = await computeShareIdForDeck(deck);
+        const url = buildSharedDeckUrl(predictedId);
+        await publishSharedDeck(deck);
+        if (cancelled) return;
+        setShareUrl(url);
+        const qr = await generateQrDataUrl(url, 160);
+        if (cancelled) return;
+        setQrDataUrl(qr);
+        setShareStatus("ready");
+      } catch (err) {
+        if (cancelled) return;
+        setShareUrl(null);
+        setQrDataUrl(null);
+        setShareStatus("error");
+        setShareError((err as Error).message || "Could not create share link");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck?.id, deck?.updatedAt]);
+
   const handleRegenerate = () => {
     if (!deck || !cardOptions || deck.tracks.length === 0) return;
     const generated = generateBingoCards(deck.tracks, cardOptions);
@@ -176,9 +246,19 @@ export const CardsPage: React.FC = () => {
 
     try {
       const { downloadBingoPdf } = await import("../lib/bingo/pdf");
-      await downloadBingoPdf(cards, cardOptions, (current, total) => {
-        setPdfProgress({ current, total });
-      });
+      await downloadBingoPdf(
+        cards,
+        {
+          ...cardOptions,
+          tracks: deck.tracks,
+          cellContent,
+          shareUrl: shareUrl ?? undefined,
+          includeMasterList,
+        },
+        (current, total) => {
+          setPdfProgress({ current, total });
+        }
+      );
       trackEvent("cards_printed");
     } catch (err) {
       console.error("PDF generation failed:", err);
@@ -190,7 +270,10 @@ export const CardsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    const resetPrintCards = () => setPrintCards(null);
+    const resetPrintCards = () => {
+      setPrintCards(null);
+      setPrintJob("all");
+    };
     window.addEventListener("afterprint", resetPrintCards);
     return () => window.removeEventListener("afterprint", resetPrintCards);
   }, []);
@@ -202,18 +285,22 @@ export const CardsPage: React.FC = () => {
     window.print();
   }, [pendingPrint, printCards]);
 
-  const triggerBrowserPrint = (selection: BingoCard[]) => {
-    if (cards.length === 0) return;
+  const triggerBrowserPrint = (selection: BingoCard[], job: PrintJob = "all") => {
+    if (job !== "master" && cards.length === 0) return;
+    setPrintJob(job);
     setPrintCards(selection);
     setPendingPrint(true);
   };
 
-  const handleBrowserPrint = () => triggerBrowserPrint(cards);
+  const handleBrowserPrint = () =>
+    triggerBrowserPrint(cards, includeMasterList ? "all" : "cards");
+
+  const handlePrintMasterOnly = () => triggerBrowserPrint([], "master");
 
   const handlePrintPreviewCard = () => {
     const card = cards[activePreviewIndex];
     if (!card) return;
-    triggerBrowserPrint([card]);
+    triggerBrowserPrint([card], "cards");
   };
 
   if (notFound) {
@@ -227,6 +314,7 @@ export const CardsPage: React.FC = () => {
   const cardsForPrint = printCards ?? cards;
   const canGenerate = deck.tracks.length > 0 && isGridSizeValidForDeck(deck.tracks.length, gridSize);
   const exportsDisabled = cards.length === 0 || !canGenerate;
+  const showCardsInPrint = printJob === "cards" || printJob === "all";
   const eventTitle = customTitle || deck.name;
 
   const pdfButtonLabel = isExportingPdf
@@ -294,6 +382,12 @@ export const CardsPage: React.FC = () => {
               onClick: () => void handleDownloadPdf(),
               disabled: exportsDisabled,
             },
+            {
+              icon: <ListOrdered className="w-4 h-4" />,
+              label: "Print master list",
+              onClick: handlePrintMasterOnly,
+              disabled: deck.tracks.length === 0,
+            },
           ]}
         />
       ) : (
@@ -355,6 +449,68 @@ export const CardsPage: React.FC = () => {
                   {customTitle.length}/{EVENT_TITLE_MAX}
                 </span>
               </label>
+
+              <div>
+                <p className="text-xs font-bold mb-1.5">Cell content</p>
+                {isMobile ? (
+                  <select
+                    className="pc-select w-full"
+                    value={cellContent}
+                    onChange={(e) => setCellContent(e.target.value as BingoCellContentMode)}
+                    aria-label="Cell content"
+                  >
+                    {CELL_CONTENT_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {cellContentLabel(mode)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {CELL_CONTENT_MODES.map((mode) => (
+                      <Button
+                        key={mode}
+                        type="button"
+                        active={cellContent === mode}
+                        onClick={() => setCellContent(mode)}
+                        className="w-full justify-start"
+                      >
+                        {cellContentLabel(mode)}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted mt-1.5">
+                  Numbers follow deck order (#1 is the first song). Best for players who may not know the tracks.
+                </p>
+              </div>
+
+              <label className="flex items-start gap-2 text-xs font-bold cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={includeMasterList}
+                  onChange={(e) => setIncludeMasterList(e.target.checked)}
+                />
+                <span>
+                  Include master song list
+                  <span className="block font-normal text-muted mt-0.5">
+                    Prints a number → song key sheet for the host (and PDF first pages).
+                  </span>
+                </span>
+              </label>
+
+              {!isMobile && (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handlePrintMasterOnly}
+                  disabled={deck.tracks.length === 0}
+                >
+                  <ListOrdered className="w-4 h-4" />
+                  Print master list only
+                </Button>
+              )}
 
               <div>
                 <p className="text-xs font-bold mb-1.5">Grid size ({gridSize}×{gridSize})</p>
@@ -436,13 +592,36 @@ export const CardsPage: React.FC = () => {
                 Shuffle again
               </Button>
 
-              <p className="text-xs text-muted pt-1 border-t border-[var(--pc-border)]">
-                {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck · {slots} squares
-                per card
-                {!isGridSizeValidForDeck(deck.tracks.length, gridSize)
-                  ? ` · Need ${cellCount(gridSize)}+ songs for this grid`
-                  : ""}
-              </p>
+              <div className="text-xs pt-1 border-t border-[var(--pc-border)] space-y-1">
+                <p className="text-muted">
+                  {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck · {slots} squares
+                  per card
+                  {!isGridSizeValidForDeck(deck.tracks.length, gridSize)
+                    ? ` · Need ${cellCount(gridSize)}+ songs for this grid`
+                    : ""}
+                </p>
+                {shareStatus === "loading" && (
+                  <p className="text-muted inline-flex items-center gap-1.5">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Preparing share link for QR…
+                  </p>
+                )}
+                {shareStatus === "ready" && shareUrl && (
+                  <p className="text-muted break-all">
+                    QR / link on prints: {shareUrl}
+                  </p>
+                )}
+                {shareStatus === "error" && (
+                  <p className="text-pc-warning">
+                    Share link unavailable{shareError ? `: ${shareError}` : ""}. Cards still print without QR.
+                  </p>
+                )}
+                {shareStatus === "idle" && !isShareApiConfigured() && (
+                  <p className="text-muted">
+                    Share API not configured — prints will omit the deck QR / link.
+                  </p>
+                )}
+              </div>
             </div>
           </Window>
         </div>
@@ -491,7 +670,15 @@ export const CardsPage: React.FC = () => {
                   </Button>
                 </div>
               </div>
-              <CardPreview card={currentCard} eventTitle={eventTitle} interactiveMarks={false} />
+              <CardPreview
+                card={currentCard}
+                eventTitle={eventTitle}
+                tracks={deck.tracks}
+                cellContent={cellContent}
+                shareUrl={shareUrl}
+                qrDataUrl={qrDataUrl}
+                interactiveMarks={false}
+              />
             </Window>
           ) : (
             previewEmptyState
@@ -500,11 +687,31 @@ export const CardsPage: React.FC = () => {
       </div>
 
       <div className="hidden print:block space-y-8">
-        {cardsForPrint.map((c) => (
-          <div key={c.id} className="page-break-after-always">
-            <CardPreview card={c} eventTitle={eventTitle} interactiveMarks={false} />
-          </div>
-        ))}
+        {(printJob === "master" || (printJob === "all" && includeMasterList)) &&
+          deck.tracks.length > 0 && (
+            <div className="page-break-after-always">
+              <MasterSongList
+                eventTitle={eventTitle}
+                tracks={deck.tracks}
+                shareUrl={shareUrl}
+                qrDataUrl={qrDataUrl}
+              />
+            </div>
+          )}
+        {showCardsInPrint &&
+          cardsForPrint.map((c) => (
+            <div key={c.id} className="page-break-after-always">
+              <CardPreview
+                card={c}
+                eventTitle={eventTitle}
+                tracks={deck.tracks}
+                cellContent={cellContent}
+                shareUrl={shareUrl}
+                qrDataUrl={qrDataUrl}
+                interactiveMarks={false}
+              />
+            </div>
+          ))}
       </div>
     </div>
   );

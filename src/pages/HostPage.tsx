@@ -5,6 +5,7 @@ import { useDeck } from "../state/DeckContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
 import { Track } from "../types/deck";
 import { shuffleArray } from "../lib/bingo/generateCards";
+import { getTrackSongNumber } from "../lib/bingo/songNumbers";
 import { AnswerCard } from "../components/host/AnswerCard";
 import { CallNextControls } from "../components/host/CallNextControls";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
@@ -574,6 +575,10 @@ export const HostPage: React.FC = () => {
       isRevealed,
       isPlaying: Boolean(isPlayingNow),
       progress: isPlayingNow ? playerState?.progress ?? 0 : 0,
+      songNumber:
+        isRevealed && currentCall
+          ? getTrackSongNumber(deck.tracks, currentCall.track.id)
+          : null,
       title: isRevealed && currentCall ? currentCall.track.title : null,
       artist: isRevealed && currentCall ? currentCall.track.artist : null,
       albumArtUrl: isRevealed && currentCall ? currentCall.track.albumArtUrl : null,
@@ -677,11 +682,21 @@ export const HostPage: React.FC = () => {
   const remainingTime = playerState?.remainingTime || 0;
   const currentErrorMessage = playerState?.errorMessage && playerState?.currentClip?.trackId === currentCall?.track.id ? playerState.errorMessage : null;
 
-  const filteredHistory = calledHistory.filter(
-    (item) =>
-      item.track.title.toLowerCase().includes(historySearch.toLowerCase()) ||
-      item.track.artist.toLowerCase().includes(historySearch.toLowerCase())
-  );
+  const filteredHistory = calledHistory.filter((item) => {
+    const q = historySearch.toLowerCase().trim();
+    if (!q) return true;
+    const songNumber = getTrackSongNumber(deck.tracks, item.track.id);
+    return (
+      item.track.title.toLowerCase().includes(q) ||
+      item.track.artist.toLowerCase().includes(q) ||
+      (songNumber != null && String(songNumber).includes(q))
+    );
+  });
+
+  const currentSongNumber =
+    currentCall && isRevealed
+      ? getTrackSongNumber(deck.tracks, currentCall.track.id)
+      : null;
 
   const answerCard = (
     <AnswerCard
@@ -695,6 +710,7 @@ export const HostPage: React.FC = () => {
       progress={playbackProgress}
       remainingTime={remainingTime}
       callNumber={currentCall?.callNumber || 0}
+      songNumber={currentSongNumber}
       errorMessage={currentErrorMessage}
     />
   );
@@ -744,6 +760,7 @@ export const HostPage: React.FC = () => {
         filteredHistory.map((item) => {
           const isCurrent = item.callNumber === currentCall?.callNumber;
           const hideAnswer = isCurrent && !isRevealed;
+          const songNumber = getTrackSongNumber(deck.tracks, item.track.id);
           const thumbUrl =
             !hideAnswer &&
             (item.track.albumArtUrl ||
@@ -774,7 +791,11 @@ export const HostPage: React.FC = () => {
                 )}
                 <div className="min-w-0">
                   <p className="font-bold text-xs truncate">
-                    {hideAnswer ? "???" : item.track.title}
+                    {hideAnswer
+                      ? "???"
+                      : songNumber != null
+                        ? `#${songNumber} · ${item.track.title}`
+                        : item.track.title}
                   </p>
                   <p className="text-[11px] truncate">
                     {hideAnswer ? "Artist hidden" : item.track.artist}
@@ -933,17 +954,21 @@ export const HostPage: React.FC = () => {
             Playback paused. Verify the winning card against these recent calls:
           </p>
           <ul className="space-y-2 mb-4">
-            {calledHistory.slice(0, 5).map((item) => (
+            {calledHistory.slice(0, 5).map((item) => {
+              const songNumber = getTrackSongNumber(deck.tracks, item.track.id);
+              return (
               <li
                 key={item.callNumber}
                 className="flex items-center gap-2 p-2 pc-bevel-inset text-xs"
               >
                 <span className="font-bold shrink-0">#{item.callNumber}</span>
                 <span className="truncate">
+                  {songNumber != null ? `Song #${songNumber} · ` : ""}
                   {item.track.title} — {item.track.artist}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ul>
           <p className="text-[11px] text-muted mb-4">
             Use the called songs log search to confirm the player&apos;s claim.

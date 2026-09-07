@@ -360,6 +360,14 @@
   max-width: 100%;
 }
 
+.display-page__song-number {
+  font-size: clamp(1.25rem, 3.5vw, 2.25rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
 .display-page__artist {
   font-size: clamp(1rem, 2.5vw, 1.75rem);
   margin: 0;

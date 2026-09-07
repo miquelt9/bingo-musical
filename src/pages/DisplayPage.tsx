@@ -18,6 +18,7 @@ const EMPTY_STATE: HostDisplayState = {
   isRevealed: false,
   isPlaying: false,
   progress: 0,
+  songNumber: null,
   title: null,
   artist: null,
   albumArtUrl: null,
@@ -107,6 +108,7 @@ export const DisplayPage: React.FC = () => {
     isRevealed,
     isPlaying,
     progress,
+    songNumber,
     title,
     artist,
     albumArtUrl,
@@ -122,7 +124,7 @@ export const DisplayPage: React.FC = () => {
           <h1 className="display-page__deck-name">{deck.name}</h1>
           {hasActiveCall && (
             <p className="display-page__call-count">
-              Song {callNumber} of {totalCount}
+              Call {callNumber} of {totalCount}
             </p>
           )}
         </header>
@@ -158,6 +160,9 @@ export const DisplayPage: React.FC = () => {
                 <div className="display-page__art display-page__art--empty pc-bevel-inset">
                   <Music2 className="display-page__icon" aria-hidden="true" />
                 </div>
+              )}
+              {songNumber != null && (
+                <p className="display-page__song-number">Song #{songNumber}</p>
               )}
               <h2 className="display-page__title">{title}</h2>
               <p className="display-page__artist">{artist}</p>

@@ -4,11 +4,17 @@ import { downloadJson, slugifyFilename } from "../storage/download";
 
 export interface ReadableCardCell {
   blank?: true;
+  songNumber?: number;
   title?: string;
   artist?: string;
 }
 
-export function cardsToReadableJson(cards: BingoCard[], options: BingoCardOptions) {
+export function cardsToReadableJson(
+  cards: BingoCard[],
+  options: BingoCardOptions,
+  tracks: { id: string }[] = []
+) {
+  const numberById = new Map(tracks.map((t, i) => [t.id, i + 1]));
   return {
     format: "bingo-musical-cards",
     schemaVersion: 1,
@@ -16,6 +22,7 @@ export function cardsToReadableJson(cards: BingoCard[], options: BingoCardOption
     deck: options.deckName,
     gridSize: options.gridSize,
     bingoPercent: options.bingoPercent,
+    cellContent: options.cellContent ?? "songs",
     cardCount: cards.length,
     exportedAt: new Date().toISOString(),
     cards: cards.map((card) => {
@@ -28,7 +35,9 @@ export function cardsToReadableJson(cards: BingoCard[], options: BingoCardOption
           if (!cell || isBlankCell(cell)) {
             cells.push({ blank: true });
           } else {
+            const trackId = cell.track?.id;
             cells.push({
+              songNumber: trackId ? numberById.get(trackId) : undefined,
               title: cell.track?.title ?? "",
               artist: cell.track?.artist ?? "",
             });

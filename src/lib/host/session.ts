@@ -1,4 +1,5 @@
 import { Track } from "../../types/deck";
+import { getTrackSongNumber } from "../bingo/songNumbers";
 
 export const HOST_SESSION_KEY = "bingo.host.session";
 export const DISPLAY_CHANNEL_PREFIX = "bingo.host.display";
@@ -25,6 +26,8 @@ export interface HostDisplayState {
   isRevealed: boolean;
   isPlaying: boolean;
   progress: number;
+  /** 1-based deck-order song number; only set when revealed. */
+  songNumber: number | null;
   title: string | null;
   artist: string | null;
   albumArtUrl: string | null;
@@ -62,6 +65,7 @@ export function buildDisplayStateFromSession(
       isRevealed: false,
       isPlaying: false,
       progress: 0,
+      songNumber: null,
       title: null,
       artist: null,
       albumArtUrl: null,
@@ -72,6 +76,7 @@ export function buildDisplayStateFromSession(
   if (!track) return null;
 
   const isRevealed = session.isRevealed ?? false;
+  const songNumber = isRevealed ? getTrackSongNumber(tracks, track.id) : null;
 
   return {
     callNumber: current.callNumber,
@@ -80,6 +85,7 @@ export function buildDisplayStateFromSession(
     isRevealed,
     isPlaying: playback?.isPlaying ?? false,
     progress: playback?.progress ?? 0,
+    songNumber,
     title: isRevealed ? track.title : null,
     artist: isRevealed ? track.artist : null,
     albumArtUrl: isRevealed ? track.albumArtUrl : null,

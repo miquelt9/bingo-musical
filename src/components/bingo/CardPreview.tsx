@@ -1,21 +1,34 @@
 import React, { useEffect, useState } from "react";
-import { BingoCard } from "../../types/deck";
+import { BingoCard, Track } from "../../types/deck";
+import { BingoCellContentMode } from "../../lib/bingo/cellContent";
 import { bingoColumnLetters, isBlankCell, normalizeGridSize } from "../../lib/bingo/generateCards";
+import { getTrackSongNumber } from "../../lib/bingo/songNumbers";
 import { Check, RotateCcw } from "lucide-react";
 
 interface CardPreviewProps {
   card: BingoCard;
   eventTitle: string;
+  /** Full deck track list in order — used to resolve song numbers. */
+  tracks: Track[];
+  cellContent?: BingoCellContentMode;
+  shareUrl?: string | null;
+  qrDataUrl?: string | null;
   interactiveMarks?: boolean;
 }
 
 export const CardPreview: React.FC<CardPreviewProps> = ({
   card,
   eventTitle,
+  tracks,
+  cellContent = "songs",
+  shareUrl = null,
+  qrDataUrl = null,
   interactiveMarks = true,
 }) => {
   const gridSize = normalizeGridSize(card.gridSize || Math.round(Math.sqrt(card.grid.length)) || 5);
   const letters = bingoColumnLetters(gridSize);
+  const showNumbers = cellContent === "numbers" || cellContent === "both";
+  const showSongs = cellContent === "songs" || cellContent === "both";
 
   const [markedIndices, setMarkedIndices] = useState<Set<number>>(new Set());
 
@@ -40,6 +53,15 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   const resetMarks = () => {
     setMarkedIndices(new Set());
   };
+
+  const numberOnly = cellContent === "numbers";
+  const numberClass = numberOnly
+    ? gridSize >= 6
+      ? "font-black text-2xl sm:text-3xl leading-none text-zinc-950 tabular-nums"
+      : "font-black text-3xl sm:text-4xl leading-none text-zinc-950 tabular-nums"
+    : gridSize >= 6
+      ? "font-black text-base sm:text-lg leading-none text-zinc-950 tabular-nums"
+      : "font-black text-xl sm:text-2xl leading-none text-zinc-950 tabular-nums";
 
   const titleClass =
     gridSize >= 6
@@ -105,6 +127,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
 
           const track = cell.track;
           const isMarked = markedIndices.has(index);
+          const songNumber = track ? getTrackSongNumber(tracks, track.id) : null;
 
           return (
             <button
@@ -119,8 +142,15 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
             >
               {track ? (
                 <>
-                  <p className={titleClass}>{track.title}</p>
-                  <p className={artistClass}>{track.artist}</p>
+                  {showNumbers && songNumber != null && (
+                    <p className={numberClass}>{songNumber}</p>
+                  )}
+                  {showSongs && (
+                    <>
+                      <p className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}>{track.title}</p>
+                      <p className={artistClass}>{track.artist}</p>
+                    </>
+                  )}
                 </>
               ) : (
                 <span className="text-[10px] text-zinc-300">-</span>
@@ -136,11 +166,27 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
         })}
       </div>
 
-      <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[9px] text-zinc-400 font-medium">
-        <span>Musical Bingo Creator</span>
-        <span>
-          Mark {gridSize} in a row. Empty squares appear when the deck has fewer songs than cells.
-        </span>
+      <div className="mt-4 pt-3 border-t border-zinc-100 flex items-start justify-between gap-3 text-[9px] text-zinc-400 font-medium">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p>Musical Bingo Creator</p>
+          <p>
+            Mark {gridSize} in a row. Empty squares appear when the deck has fewer songs than cells.
+          </p>
+          {shareUrl && (
+            <p className="break-all text-[8px] text-zinc-500 leading-snug pt-1">
+              Scan or open to get this deck: {shareUrl}
+            </p>
+          )}
+        </div>
+        {qrDataUrl && shareUrl && (
+          <div className="shrink-0 text-center">
+            <img
+              src={qrDataUrl}
+              alt="QR code linking to this deck"
+              className="w-16 h-16 sm:w-[72px] sm:h-[72px] print:w-[72px] print:h-[72px]"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
