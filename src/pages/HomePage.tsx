@@ -15,7 +15,6 @@ import { saveStoredDecks } from "../lib/storage/decks";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
-import { ConvertDeckModal } from "../components/decks/ConvertDeckModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
@@ -28,7 +27,6 @@ import {
   Share2,
   X,
   Sparkles,
-  ArrowRightLeft,
   Music2,
   Disc3,
 } from "lucide-react";
@@ -70,7 +68,6 @@ export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
-  const [deckToConvert, setDeckToConvert] = useState<Deck | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
@@ -166,13 +163,6 @@ export const HomePage: React.FC = () => {
         icon: <Copy className="w-4 h-4" />,
         label: "Duplicate",
         onClick: () => duplicateDeck(deck.id),
-      },
-      {
-        icon: <ArrowRightLeft className="w-4 h-4" />,
-        label: "Convert deck",
-        onClick: () => setDeckToConvert(deck),
-        disabled: emptyDeck,
-        title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
       },
       {
         icon: <Printer className="w-4 h-4" />,
@@ -298,9 +288,6 @@ export const HomePage: React.FC = () => {
             >
               <Copy className="w-4 h-4" />
             </button>
-            <button type="button" className="pc-button" onClick={() => setDeckToConvert(deck)} disabled={emptyDeck} title="Convert deck">
-              <ArrowRightLeft className="w-4 h-4" />
-            </button>
             <button type="button" className="pc-button" onClick={() => setDeckToDelete(deck)} title="Delete deck">
               <Trash2 className="w-4 h-4" />
             </button>
@@ -335,7 +322,7 @@ export const HomePage: React.FC = () => {
       <p className="home-decks-intro text-sm mb-1">
         {isMobile
           ? "Match clips, print cards, and host bingo."
-          : "Match YouTube clips, print bingo sheets, or launch the host board."}
+          : "Match songs, print bingo sheets, or launch the host board."}
       </p>
       <p className="text-xs text-muted mb-4">Decks saved on this device only.</p>
 
@@ -442,18 +429,6 @@ export const HomePage: React.FC = () => {
             undone.
           </p>
         </Modal>
-      )}
-      {deckToConvert && (
-        <ConvertDeckModal
-          deck={deckToConvert}
-          isOpen
-          onClose={() => setDeckToConvert(null)}
-          onCreate={(converted) => {
-            const saved = createDeck(converted);
-            setDeckToConvert(null);
-            navigate(`/deck/${saved.id}`);
-          }}
-        />
       )}
     </Window>
   );
