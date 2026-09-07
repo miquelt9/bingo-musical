@@ -15,7 +15,6 @@ export interface HostSessionData {
   calledHistory: SerializedCalledEntry[];
   currentCall: SerializedCalledEntry | null;
   isRevealed: boolean;
-  autoRevealOnEnd: boolean;
   autoCallNextOnEnd: boolean;
 }
 

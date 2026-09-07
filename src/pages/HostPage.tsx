@@ -57,7 +57,8 @@ export interface CalledEntry {
   calledAt: string;
 }
 
-const REVEAL_BEFORE_CHAIN_MS = 3000;
+/** Reveal this many ms before the next song starts (before crossfade when autoplay). */
+const REVEAL_BEFORE_NEXT_MS = 3000;
 const DEFAULT_CROSSFADE_MS = 1500;
 const CROSSFADE_SESSION_KEY = "bingo.host.crossfadeOverlapMs";
 
@@ -128,7 +129,6 @@ function readHostSession(
   calledHistory: CalledEntry[];
   currentCall: CalledEntry | null;
   isRevealed: boolean;
-  autoRevealOnEnd: boolean;
   autoCallNextOnEnd: boolean;
 } | null {
   try {
@@ -149,7 +149,6 @@ function readHostSession(
       calledHistory,
       currentCall,
       isRevealed: data.isRevealed ?? false,
-      autoRevealOnEnd: data.autoRevealOnEnd ?? false,
       autoCallNextOnEnd: data.autoCallNextOnEnd ?? true,
     };
   } catch {
@@ -164,7 +163,6 @@ function writeHostSession(
     calledHistory: CalledEntry[];
     currentCall: CalledEntry | null;
     isRevealed: boolean;
-    autoRevealOnEnd: boolean;
     autoCallNextOnEnd: boolean;
   }
 ): void {
@@ -174,7 +172,6 @@ function writeHostSession(
       calledHistory: data.calledHistory.map(serializeCalledEntry),
       currentCall: data.currentCall ? serializeCalledEntry(data.currentCall) : null,
       isRevealed: data.isRevealed,
-      autoRevealOnEnd: data.autoRevealOnEnd,
       autoCallNextOnEnd: data.autoCallNextOnEnd,
     };
     sessionStorage.setItem(`${HOST_SESSION_KEY}.${deckId}`, JSON.stringify(payload));
@@ -201,7 +198,6 @@ export const HostPage: React.FC = () => {
   const [calledHistory, setCalledHistory] = useState<CalledEntry[]>([]);
   const [currentCall, setCurrentCall] = useState<CalledEntry | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
-  const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(false);
   const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
   const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
@@ -211,11 +207,9 @@ export const HostPage: React.FC = () => {
   const [showBingoModal, setShowBingoModal] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
 
-  const chainTimeoutRef = useRef<number | null>(null);
   const videoViewportRef = useRef<HTMLDivElement>(null);
   const uncalledIdsRef = useRef(uncalledIds);
   const autoCallNextOnEndRef = useRef(autoCallNextOnEnd);
-  const autoRevealOnEndRef = useRef(autoRevealOnEnd);
   const crossfadeOverlapMsRef = useRef(crossfadeOverlapMs);
   const handleCallNextRef = useRef<() => void>(() => {});
   const pendingRestoreRef = useRef<ReturnType<typeof readHostSession> | null>(null);
@@ -228,10 +222,6 @@ export const HostPage: React.FC = () => {
   useEffect(() => {
     autoCallNextOnEndRef.current = autoCallNextOnEnd;
   }, [autoCallNextOnEnd]);
-
-  useEffect(() => {
-    autoRevealOnEndRef.current = autoRevealOnEnd;
-  }, [autoRevealOnEnd]);
 
   useEffect(() => {
     crossfadeOverlapMsRef.current = crossfadeOverlapMs;
@@ -306,16 +296,8 @@ export const HostPage: React.FC = () => {
   const canHost = isPlayable && readiness.canHost;
   const emptyDeck = Boolean(deck && isEmptyDeck(deck));
 
-  const clearChainTimeout = useCallback(() => {
-    if (chainTimeoutRef.current !== null) {
-      window.clearTimeout(chainTimeoutRef.current);
-      chainTimeoutRef.current = null;
-    }
-  }, []);
-
   const initGame = useCallback(() => {
     if (!deck) return;
-    clearChainTimeout();
     const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
     setUncalledIds(shuffled);
     setCalledHistory([]);
@@ -323,26 +305,18 @@ export const HostPage: React.FC = () => {
     setIsRevealed(false);
     stopPlayback();
     clearHostSession(deck.id);
-  }, [deck, clearChainTimeout]);
+  }, [deck]);
 
   const onClipEnd = useCallback(() => {
     if (autoCallNextOnEndRef.current && uncalledIdsRef.current.length > 0) {
-      setIsRevealed(true);
-      chainTimeoutRef.current = window.setTimeout(() => {
-        chainTimeoutRef.current = null;
-        if (uncalledIdsRef.current.length > 0) {
-          handleCallNextRef.current();
-        }
-      }, REVEAL_BEFORE_CHAIN_MS);
-    } else if (autoRevealOnEndRef.current) {
+      handleCallNextRef.current();
+    } else {
       setIsRevealed(true);
     }
   }, []);
 
   const handleCallNext = useCallback(() => {
     if (!deck || !canHost || uncalledIds.length === 0) return;
-
-    clearChainTimeout();
 
     const nextId = uncalledIds[0];
     const remaining = uncalledIds.slice(1);
@@ -384,15 +358,10 @@ export const HostPage: React.FC = () => {
         }
         preloadNextTrack(remaining);
       } else if (autoCallNextOnEnd && remaining.length > 0) {
-        chainTimeoutRef.current = window.setTimeout(() => {
-          chainTimeoutRef.current = null;
-          if (uncalledIdsRef.current.length > 0) {
-            handleCallNextRef.current();
-          }
-        }, REVEAL_BEFORE_CHAIN_MS);
+        handleCallNextRef.current();
       }
     });
-  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, clearChainTimeout, autoCallNextOnEnd, preloadNextTrack, persistRefreshedTrack]);
+  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, autoCallNextOnEnd, preloadNextTrack, persistRefreshedTrack]);
 
   useEffect(() => {
     handleCallNextRef.current = handleCallNext;
@@ -424,7 +393,6 @@ export const HostPage: React.FC = () => {
       pendingRestoreRef.current = restored;
       setShowContinueModal(true);
     } else {
-      clearChainTimeout();
       const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
       setUncalledIds(shuffled);
       setCalledHistory([]);
@@ -436,12 +404,11 @@ export const HostPage: React.FC = () => {
         calledHistory: [],
         currentCall: null,
         isRevealed: false,
-        autoRevealOnEnd: false,
         autoCallNextOnEnd: true,
       });
       setSessionReady(true);
     }
-  }, [deck, clearChainTimeout]);
+  }, [deck]);
 
   useEffect(() => {
     if (!deck || !sessionReady) return;
@@ -450,7 +417,6 @@ export const HostPage: React.FC = () => {
       calledHistory,
       currentCall,
       isRevealed,
-      autoRevealOnEnd,
       autoCallNextOnEnd,
     });
   }, [
@@ -459,7 +425,6 @@ export const HostPage: React.FC = () => {
     calledHistory,
     currentCall,
     isRevealed,
-    autoRevealOnEnd,
     autoCallNextOnEnd,
     sessionReady,
   ]);
@@ -480,12 +445,40 @@ export const HostPage: React.FC = () => {
     });
   }, []);
 
+  // Always reveal near the end of the current call (before next song / crossfade starts).
+  useEffect(() => {
+    if (isRevealed || !currentCall || !playerState?.currentClip) return;
+    if (playerState.currentClip.trackId !== currentCall.track.id) return;
+    if (playerState.state !== "playing" && playerState.state !== "buffering") return;
+
+    const clipDurationSec = Math.max(0.1, playerState.duration || 0);
+    const crossfadeLeadMs =
+      autoCallNextOnEnd && uncalledIds.length > 0 ? crossfadeOverlapMs : 0;
+    const leadSec = Math.min(
+      clipDurationSec * 0.4,
+      (REVEAL_BEFORE_NEXT_MS + crossfadeLeadMs) / 1000
+    );
+
+    if (playerState.remainingTime <= leadSec) {
+      setIsRevealed(true);
+    }
+  }, [
+    isRevealed,
+    currentCall,
+    playerState?.currentClip,
+    playerState?.state,
+    playerState?.remainingTime,
+    playerState?.duration,
+    autoCallNextOnEnd,
+    uncalledIds.length,
+    crossfadeOverlapMs,
+  ]);
+
   useEffect(() => {
     return () => {
-      clearChainTimeout();
       stopPlayback();
     };
-  }, [clearChainTimeout]);
+  }, []);
 
   const handleReplayCurrent = () => {
     if (!currentCall?.track) return;
@@ -524,7 +517,6 @@ export const HostPage: React.FC = () => {
     setCalledHistory(restored.calledHistory);
     setCurrentCall(restored.currentCall);
     setIsRevealed(restored.isRevealed);
-    setAutoRevealOnEnd(restored.autoRevealOnEnd);
     setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
     pendingRestoreRef.current = null;
     setSessionReady(true);
@@ -539,7 +531,6 @@ export const HostPage: React.FC = () => {
     setShowContinueModal(false);
     pendingRestoreRef.current = null;
     if (!deck) return;
-    clearChainTimeout();
     const shuffled = shuffleArray(deck.tracks.map((t) => t.id));
     setUncalledIds(shuffled);
     setCalledHistory([]);
@@ -551,7 +542,6 @@ export const HostPage: React.FC = () => {
       calledHistory: [],
       currentCall: null,
       isRevealed: false,
-      autoRevealOnEnd: false,
       autoCallNextOnEnd: true,
     });
     setSessionReady(true);
@@ -650,8 +640,6 @@ export const HostPage: React.FC = () => {
 
         if (clipActiveForCurrent) {
           handleTogglePlayPause();
-        } else if (uncalledIds.length > 0) {
-          handleCallNext();
         }
       }
     };
@@ -661,10 +649,7 @@ export const HostPage: React.FC = () => {
   }, [
     currentCall,
     playerState,
-    uncalledIds.length,
-    handleCallNext,
     handleTogglePlayPause,
-    isPlayable,
     canHost,
   ]);
 
@@ -731,8 +716,6 @@ export const HostPage: React.FC = () => {
       remainingCount={uncalledIds.length}
       totalCount={deck.tracks.length}
       calledCount={calledHistory.length}
-      autoRevealOnEnd={autoRevealOnEnd}
-      onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
       autoCallNextOnEnd={autoCallNextOnEnd}
       onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
       crossfadeOverlapMs={crossfadeOverlapMs}

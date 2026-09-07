@@ -56,8 +56,6 @@ interface CallNextControlsProps {
   remainingCount: number;
   totalCount: number;
   calledCount: number;
-  autoRevealOnEnd: boolean;
-  onToggleAutoReveal: () => void;
   autoCallNextOnEnd: boolean;
   onToggleAutoCallNext: () => void;
   crossfadeOverlapMs: number;
@@ -83,8 +81,6 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   remainingCount,
   totalCount,
   calledCount,
-  autoRevealOnEnd,
-  onToggleAutoReveal,
   autoCallNextOnEnd,
   onToggleAutoCallNext,
   crossfadeOverlapMs,
@@ -125,7 +121,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
           <span className="font-medium">
             Auto-play next song when snippet ends
             <span className="block text-[10px] font-normal opacity-80 mt-0.5">
-              Reveals the just-played call, then continues to the next song
+              Reveals the answer a few seconds before the next song, then continues
             </span>
           </span>
         </label>
@@ -157,22 +153,6 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      {autoCallNextOnEnd ? (
-        <p className="text-[10px] opacity-80">
-          Auto-play next already reveals each answer when the snippet ends.
-        </p>
-      ) : (
-        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={autoRevealOnEnd}
-            onChange={onToggleAutoReveal}
-            disabled={disabled}
-          />
-          <span className="font-medium">Auto-reveal answer when snippet finishes playing</span>
-        </label>
-      )}
-
       <div className="inline-flex items-center gap-2">
         <SlidersHorizontal className="w-3.5 h-3.5" />
         <span>Non-repeating randomized shuffle bag</span>
@@ -202,13 +182,13 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <Button
           type="button"
           variant="primary"
           onClick={onCallNext}
           disabled={disabled || isDeckFinished}
-          className="py-3 w-full"
+          className="py-3 flex-1 min-w-0"
         >
           <Shuffle className="w-5 h-5" />
           {isDeckFinished
@@ -218,18 +198,15 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
                 ? "Start & Call First"
                 : "Start Game & Call First Song"
               : "Call Next Song"}
-          <kbd className="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs font-mono pc-bevel-inset">
-            Space
-          </kbd>
         </Button>
-        <Button type="button" onClick={onOpenDisplay} className="w-full">
+        <Button type="button" onClick={onOpenDisplay} className="py-3 sm:shrink-0">
           <Monitor className="w-4 h-4" />
           Open display window
         </Button>
-        <p className="text-[10px] opacity-80 -mt-1">
-          Prefer Display for projection. Host Video is off by default so players cannot see titles.
-        </p>
       </div>
+      <p className="text-[10px] opacity-80 mt-2">
+        Prefer Display for projection. Host Video is off by default so players cannot see titles.
+      </p>
 
       <div
         className={`host-now-playing-slot mt-4 pt-3 border-t border-[var(--pc-border)] ${
