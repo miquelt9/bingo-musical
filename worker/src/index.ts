@@ -30,11 +30,14 @@ const RATE_LIMITS = {
 type RateLimitBucket = keyof typeof RATE_LIMITS;
 const SHARE_ID_RETRIES = 5;
 const DEEZER_API = "https://api.deezer.com";
-/** Keep under Deezer signed preview URL TTL (~15 min). */
+/** Keep under Deezer signed preview URL TTL (~15 min). Search/related meta only. */
 const DEEZER_EDGE_CACHE_TTL = 300;
 const DEEZER_META_CACHE_TTL_SECONDS = 300;
 const DEEZER_PREVIEW_EXPIRY_SKEW_SECONDS = 60;
-const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/";
+/** v2 busts Cache API entries written before signed-preview freshness checks. */
+const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/v2/";
+/** Signed preview payloads must never be HTTP-cached by browsers/CDNs. */
+const DEEZER_PREVIEW_CACHE_CONTROL = "private, no-store";
 const YOUTUBE_CACHE_PREFIX = "https://bingo-musical.cache/youtube/";
 const YOUTUBE_META_CACHE_TTL_SECONDS = 60 * 30;
 const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
@@ -224,6 +227,16 @@ async function deezerSearchCacheKey(query: string, limit: number): Promise<strin
 
 async function deezerTrackCacheKey(id: string): Promise<string> {
   return `track:${id}`;
+}
+
+/** Bypass CF edge cache — Deezer track JSON embeds short-lived signed preview URLs. */
+function fetchDeezerTrackUpstream(id: string): Promise<Response> {
+  return fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}?cb=preview-v2`);
+}
+
+function setDeezerPreviewResponseHeaders(response: Response, cacheStatus: "HIT" | "MISS"): void {
+  response.headers.set("Cache-Control", DEEZER_PREVIEW_CACHE_CONTROL);
+  response.headers.set("X-Cache", cacheStatus);
 }
 
 async function deezerRelatedCacheKey(id: string, limit: number): Promise<string> {
@@ -813,9 +826,7 @@ async function searchDeezerCatalog(title: string, artist: string, id?: string): 
     const cached = await readDeezerCache<Record<string, unknown>>(cacheKey);
     if (cached) return [cached];
 
-    const upstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
-      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
-    });
+    const upstream = await fetchDeezerTrackUpstream(id);
     if (!upstream.ok) return [];
     const item = await upstream.json() as DeezerApiTrack & { error?: unknown };
     const normalized = normalizeDeezerTrack(item);
@@ -903,22 +914,18 @@ async function handleDeezerTrack(request: Request, env: Env, id: string): Promis
     const cached = await readDeezerCache<Record<string, unknown>>(cacheKey);
     if (cached) {
       const response = jsonResponse(request, env, cached, 200);
-      response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
-      response.headers.set("X-Cache", "HIT");
+      setDeezerPreviewResponseHeaders(response, "HIT");
       return response;
     }
 
-    const upstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
-      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
-    });
+    const upstream = await fetchDeezerTrackUpstream(id);
     if (!upstream.ok) return errorResponse(request, env, "Deezer track not found.", 404);
     const item = await upstream.json() as DeezerApiTrack & { error?: unknown };
     const normalized = normalizeDeezerTrack(item);
     if (!normalized) return errorResponse(request, env, "Deezer track is unavailable.", 404);
     await writeDeezerCache(cacheKey, normalized);
     const response = jsonResponse(request, env, normalized, 200);
-    response.headers.set("Cache-Control", `public, max-age=${DEEZER_META_CACHE_TTL_SECONDS}`);
-    response.headers.set("X-Cache", "MISS");
+    setDeezerPreviewResponseHeaders(response, "MISS");
     return response;
   } catch {
     return errorResponse(request, env, "Could not reach Deezer right now.", 502);
@@ -944,9 +951,7 @@ async function handleDeezerTrackRelated(request: Request, env: Env, id: string):
       return response;
     }
 
-    const trackUpstream = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}`, {
-      cf: { cacheTtl: DEEZER_EDGE_CACHE_TTL, cacheEverything: true },
-    });
+    const trackUpstream = await fetchDeezerTrackUpstream(id);
     if (!trackUpstream.ok) return errorResponse(request, env, "Deezer track not found.", 404);
     const track = await trackUpstream.json() as DeezerApiTrack & { error?: unknown };
     const artistId =

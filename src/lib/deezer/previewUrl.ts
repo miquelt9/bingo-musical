@@ -60,6 +60,14 @@ export async function ensureFreshDeezerPreview(
     throw new Error("This Deezer track has no playable preview.");
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7353/ingest/b1aba6f5-01db-41fe-b67e-11476259958b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'54878f'},body:JSON.stringify({sessionId:'54878f',runId:'pre-fix',hypothesisId:'H3',location:'previewUrl.ts:ensureFresh',message:'resolveDeezerTrack result',data:{trackId:media.id,hadPreview:Boolean(media.previewUrl),prevFresh:isDeezerPreviewUrlFresh(media.previewUrl),nextFresh:isDeezerPreviewUrlFresh(hit.previewUrl),prevExp:media.previewUrl?deezerPreviewExpiryUnix(media.previewUrl):null,nextExp:deezerPreviewExpiryUnix(hit.previewUrl),sameUrl:media.previewUrl===hit.previewUrl},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
+  if (!isDeezerPreviewUrlFresh(hit.previewUrl)) {
+    throw new Error("Deezer preview URL is still expired after refresh.");
+  }
+
   const nextMedia: DeezerMedia = {
     ...media,
     previewUrl: hit.previewUrl,

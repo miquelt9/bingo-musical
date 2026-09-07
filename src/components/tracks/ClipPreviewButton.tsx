@@ -78,9 +78,15 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
         setIsRefreshing(true);
         try {
           const fresh = await ensureFreshDeezerPreview(track.media);
+          // #region agent log
+          fetch('http://127.0.0.1:7353/ingest/b1aba6f5-01db-41fe-b67e-11476259958b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'54878f'},body:JSON.stringify({sessionId:'54878f',runId:'pre-fix',hypothesisId:'H1',location:'ClipPreviewButton.tsx:click',message:'preview refresh ok',data:{trackId:track.id,deezerId:track.media.id,title:track.title,refreshed:fresh.refreshed,previewLen:fresh.previewUrl.length},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           playTrack = withFreshDeezerMedia(track, fresh.media);
           if (fresh.refreshed) onTrackMediaUpdated?.(playTrack);
-        } catch {
+        } catch (err) {
+          // #region agent log
+          fetch('http://127.0.0.1:7353/ingest/b1aba6f5-01db-41fe-b67e-11476259958b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'54878f'},body:JSON.stringify({sessionId:'54878f',runId:'pre-fix',hypothesisId:'H3',location:'ClipPreviewButton.tsx:click',message:'preview refresh failed',data:{trackId:track.id,deezerId:track.media?.provider==='deezer'?track.media.id:null,title:track.title,error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           setIsRefreshing(false);
           setRefreshFailed(true);
           return;
