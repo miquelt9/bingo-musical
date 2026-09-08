@@ -77,6 +77,8 @@ interface CallNextControlsProps {
   calledCount: number;
   autoCallNextOnEnd: boolean;
   onToggleAutoCallNext: () => void;
+  autoRevealOnEnd: boolean;
+  onToggleAutoReveal: () => void;
   crossfadeOverlapMs: number;
   onCrossfadeOverlapChange: (ms: number) => void;
   onOpenDisplay: () => void;
@@ -104,6 +106,8 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   calledCount,
   autoCallNextOnEnd,
   onToggleAutoCallNext,
+  autoRevealOnEnd,
+  onToggleAutoReveal,
   crossfadeOverlapMs,
   onCrossfadeOverlapChange,
   onOpenDisplay,
@@ -133,21 +137,39 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   const advancedOptions = (
     <div className="flex flex-col gap-3 text-xs">
       <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none flex-1 min-w-0">
-          <input
-            type="checkbox"
-            checked={autoCallNextOnEnd}
-            onChange={onToggleAutoCallNext}
-            disabled={disabled}
-          />
-          <span className="font-medium">
-            Auto-play next song when snippet ends
-            <span className="block text-[10px] font-normal opacity-80 mt-0.5">
-              When on, reveals the answer a few seconds before the next song. When off, you
-              control reveal timing.
+        <div className="flex flex-col gap-2.5 flex-1 min-w-0">
+          <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoCallNextOnEnd}
+              onChange={onToggleAutoCallNext}
+              disabled={disabled}
+            />
+            <span className="font-medium">
+              Auto-play next song when snippet ends
+              <span className="block text-[10px] font-normal opacity-80 mt-0.5">
+                When on, starts the next song automatically. When off, you call the next song
+                manually.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+
+          <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoRevealOnEnd}
+              onChange={onToggleAutoReveal}
+              disabled={disabled}
+            />
+            <span className="font-medium">
+              Auto-reveal answer when snippet ends
+              <span className="block text-[10px] font-normal opacity-80 mt-0.5">
+                When on, reveals the answer a few seconds before the clip ends. When off, you
+                control reveal timing.
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div
           className={`shrink-0 w-full sm:w-40 ${gameStarted ? "opacity-60" : ""}`}

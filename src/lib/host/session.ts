@@ -16,6 +16,7 @@ export interface HostSessionData {
   currentCall: SerializedCalledEntry | null;
   isRevealed: boolean;
   autoCallNextOnEnd: boolean;
+  autoRevealOnEnd: boolean;
 }
 
 export interface HostDisplayState {

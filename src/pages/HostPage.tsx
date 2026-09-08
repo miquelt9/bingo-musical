@@ -130,6 +130,7 @@ function readHostSession(
   currentCall: CalledEntry | null;
   isRevealed: boolean;
   autoCallNextOnEnd: boolean;
+  autoRevealOnEnd: boolean;
 } | null {
   try {
     const raw = sessionStorage.getItem(`${HOST_SESSION_KEY}.${deckId}`);
@@ -150,6 +151,7 @@ function readHostSession(
       currentCall,
       isRevealed: data.isRevealed ?? false,
       autoCallNextOnEnd: data.autoCallNextOnEnd ?? true,
+      autoRevealOnEnd: data.autoRevealOnEnd ?? true,
     };
   } catch {
     return null;
@@ -164,6 +166,7 @@ function writeHostSession(
     currentCall: CalledEntry | null;
     isRevealed: boolean;
     autoCallNextOnEnd: boolean;
+    autoRevealOnEnd: boolean;
   }
 ): void {
   try {
@@ -173,6 +176,7 @@ function writeHostSession(
       currentCall: data.currentCall ? serializeCalledEntry(data.currentCall) : null,
       isRevealed: data.isRevealed,
       autoCallNextOnEnd: data.autoCallNextOnEnd,
+      autoRevealOnEnd: data.autoRevealOnEnd,
     };
     sessionStorage.setItem(`${HOST_SESSION_KEY}.${deckId}`, JSON.stringify(payload));
   } catch {
@@ -199,6 +203,7 @@ export const HostPage: React.FC = () => {
   const [currentCall, setCurrentCall] = useState<CalledEntry | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
+  const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(true);
   const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [hostClipError, setHostClipError] = useState<string | null>(null);
@@ -413,6 +418,7 @@ export const HostPage: React.FC = () => {
         currentCall: null,
         isRevealed: false,
         autoCallNextOnEnd: true,
+        autoRevealOnEnd: true,
       });
       setSessionReady(true);
     }
@@ -426,6 +432,7 @@ export const HostPage: React.FC = () => {
       currentCall,
       isRevealed,
       autoCallNextOnEnd,
+      autoRevealOnEnd,
     });
   }, [
     deck,
@@ -434,6 +441,7 @@ export const HostPage: React.FC = () => {
     currentCall,
     isRevealed,
     autoCallNextOnEnd,
+    autoRevealOnEnd,
     sessionReady,
   ]);
 
@@ -453,8 +461,8 @@ export const HostPage: React.FC = () => {
     });
   }, []);
 
-  // When auto-play is on, reveal near the end of the current call (before crossfade).
-  // With auto-play off, the host controls reveal timing manually.
+  // When auto-reveal is on, reveal near the end of the current call (before crossfade
+  // when autoplay is also on). When off, the host controls reveal timing manually.
   // Arm only after we've observed a healthy remainingTime so a stale ~0 from the previous
   // clip cannot instantly re-reveal the next song.
   useEffect(() => {
@@ -462,13 +470,14 @@ export const HostPage: React.FC = () => {
   }, [currentCall?.track.id, currentCall?.callNumber]);
 
   useEffect(() => {
-    if (!autoCallNextOnEnd) return;
+    if (!autoRevealOnEnd) return;
     if (isRevealed || !currentCall || !playerState?.currentClip) return;
     if (playerState.currentClip.trackId !== currentCall.track.id) return;
     if (playerState.state !== "playing" && playerState.state !== "buffering") return;
 
     const clipDurationSec = Math.max(0.1, playerState.duration || 0);
-    const crossfadeLeadMs = uncalledIds.length > 0 ? crossfadeOverlapMs : 0;
+    const crossfadeLeadMs =
+      autoCallNextOnEnd && uncalledIds.length > 0 ? crossfadeOverlapMs : 0;
     const leadSec = Math.min(
       clipDurationSec * 0.4,
       (REVEAL_BEFORE_NEXT_MS + crossfadeLeadMs) / 1000
@@ -489,6 +498,7 @@ export const HostPage: React.FC = () => {
     playerState?.state,
     playerState?.remainingTime,
     playerState?.duration,
+    autoRevealOnEnd,
     autoCallNextOnEnd,
     uncalledIds.length,
     crossfadeOverlapMs,
@@ -542,6 +552,7 @@ export const HostPage: React.FC = () => {
     setCurrentCall(restored.currentCall);
     setIsRevealed(restored.isRevealed);
     setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
+    setAutoRevealOnEnd(restored.autoRevealOnEnd);
     pendingRestoreRef.current = null;
     setSessionReady(true);
   }, []);
@@ -567,6 +578,7 @@ export const HostPage: React.FC = () => {
       currentCall: null,
       isRevealed: false,
       autoCallNextOnEnd: true,
+      autoRevealOnEnd: true,
     });
     setSessionReady(true);
   };
@@ -747,6 +759,8 @@ export const HostPage: React.FC = () => {
       calledCount={calledHistory.length}
       autoCallNextOnEnd={autoCallNextOnEnd}
       onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
+      autoRevealOnEnd={autoRevealOnEnd}
+      onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
       crossfadeOverlapMs={crossfadeOverlapMs}
       onCrossfadeOverlapChange={persistCrossfadeMs}
       onOpenDisplay={openDisplayWindow}
