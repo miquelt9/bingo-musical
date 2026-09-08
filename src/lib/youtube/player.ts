@@ -493,9 +493,15 @@ function handlePlayerError(code: number, slotIndex: number) {
   if (erroredClip?.videoId && (code === 100 || code === 101 || code === 150)) {
     markVideoEmbedBlocked(erroredClip.videoId, msg);
   }
+  stopPoll();
+  cancelCrossfade();
+  cancelVolumeRamp();
+  // Do not finishClip / fire onClipEnd — failed playback must not auto-advance.
+  onClipEndCallback = null;
+  chainClip = null;
+  chainEndFired = false;
   currentState.state = "error";
   currentState.errorMessage = msg;
-  finishClip();
   notifyListeners();
 }
 

@@ -31,6 +31,8 @@ let outroFadeMs = DEFAULT_OUTRO_FADE_MS;
 let playbackFadeIn = false;
 let playbackFadeOut = false;
 let outroFadeInProgress = false;
+/** True only after the active clip has reached a real `playing` event. */
+let playbackStarted = false;
 let pendingPlay: { clip: PlayableClip; handleEnd?: ClipEndHandler; options?: ClipPlaybackOptions } | null = null;
 const listeners = new Set<StateListener>();
 
@@ -152,12 +154,43 @@ function effectiveOverlap(clip: PlayableClip): number {
   return crossfadeEnabled ? Math.min(crossfadeOverlapMs, durationMs * 0.4) : 0;
 }
 
+function clearClipEndCallback(): void {
+  onClipEndCallback = null;
+}
+
 function fireClipEnd(): void {
   if (chainEndFired) return;
   chainEndFired = true;
   const callback = onClipEndCallback;
   onClipEndCallback = null;
+  // Never treat a clip that never reached `playing` as a successful end.
+  if (!playbackStarted) return;
   callback?.();
+}
+
+function handoffChainToClip(clip: PlayableClip, handleEnd: ClipEndHandler | null): void {
+  activeClip = clip;
+  chainEndFired = false;
+  onClipEndCallback = handleEnd;
+}
+
+function resetProgressForClip(clip: PlayableClip): void {
+  const duration = Math.max(0.1, clip.endTime - clip.startTime);
+  currentState.currentTime = clip.startTime;
+  currentState.duration = duration;
+  currentState.progress = 0;
+  currentState.remainingTime = duration;
+}
+
+function failActivePlayback(message: string): void {
+  stopPoll();
+  cancelCrossfade();
+  cancelVolumeRamp();
+  clearClipEndCallback();
+  playbackStarted = false;
+  currentState.state = "error";
+  currentState.errorMessage = message;
+  notify();
 }
 
 function finishClip(): void {
@@ -209,19 +242,25 @@ function startCrossfade(incomingClip: PlayableClip): void {
     if (progress < 1) crossfadeRafId = requestAnimationFrame(tick);
     else {
       crossfadeRafId = null;
+      crossfadeInProgress = false;
       outgoing.audio.pause();
       outgoing.clip = null;
       incoming.preloadedClip = null;
       activeSlotIndex = activeSlotIndex === 0 ? 1 : 0;
+      const chainCb = onClipEndCallback;
+      // Switch active clip before progress/notify so Host never sees stale
+      // remainingTime ≈ 0 from the outgoing track on the incoming currentClip.
       activeClip = incomingClip;
-      chainEndFired = false;
       currentState.currentClip = incomingClip;
       currentState.state = "playing";
       currentState.errorMessage = null;
+      currentState.activePlayerElementId = incoming.wrapperId;
+      currentState.visiblePlayerElementId = incoming.wrapperId;
+      updateProgress();
       notify();
       fireClipEnd();
-      chainEndFired = false;
-      onClipEndCallback = null;
+      handoffChainToClip(incomingClip, chainCb);
+      playbackStarted = true;
       startPoll();
     }
   };
@@ -253,14 +292,16 @@ function startPoll(): void {
 
 function handleAudioEvent(slotIndex: number, event: string): void {
   if (slotIndex !== activeSlotIndex) return;
-  if (event === "playing") currentState.state = "playing";
-  else if (event === "waiting" || event === "loadstart") currentState.state = "buffering";
-  else if (event === "error") {
-    currentState.state = "error";
-    currentState.errorMessage = "The Deezer preview could not be loaded in this browser.";
-    stopPoll();
+  if (event === "playing") {
+    playbackStarted = true;
+    currentState.state = "playing";
+    notify();
+  } else if (event === "waiting" || event === "loadstart") {
+    currentState.state = "buffering";
+    notify();
+  } else if (event === "error") {
+    failActivePlayback("The Deezer preview could not be loaded in this browser.");
   }
-  notify();
 }
 
 function createAudioSlot(container: HTMLElement, wrapperId: string, slotIndex: number): AudioSlot {
@@ -391,10 +432,8 @@ export function clearPreload(): void {
 export function continueClipPlayback(clip: PlayableClip, handleEnd?: ClipEndHandler, options?: ClipPlaybackOptions): boolean {
   if (!activeClip || activeClip.trackId !== clip.trackId || currentState.currentClip?.sourceId !== clip.sourceId) return false;
   if (!["playing", "buffering", "paused"].includes(currentState.state)) return false;
-  onClipEndCallback = handleEnd ?? null;
-  chainEndFired = false;
+  handoffChainToClip(clip, handleEnd ?? null);
   applyOptions(options);
-  activeClip = clip;
   const active = getActiveSlot();
   if (currentState.state === "paused") void active?.audio.play();
   startPoll();
@@ -411,16 +450,17 @@ export function activatePreloadedClip(clip: PlayableClip, handleEnd?: ClipEndHan
   activeSlotIndex = activeSlotIndex === 0 ? 1 : 0;
   standby.preloadedClip = null;
   standby.clip = clip;
-  activeClip = clip;
-  chainEndFired = false;
-  onClipEndCallback = handleEnd ?? null;
+  playbackStarted = false;
+  handoffChainToClip(clip, handleEnd ?? null);
   applyOptions(options);
   currentState.currentClip = clip;
   currentState.errorMessage = null;
   currentState.activePlayerElementId = standby.wrapperId;
   currentState.visiblePlayerElementId = standby.wrapperId;
+  resetProgressForClip(clip);
   setBothVolumes();
   void standby.audio.play().then(() => {
+    playbackStarted = true;
     currentState.state = "playing";
     startPoll();
     notify();
@@ -457,16 +497,14 @@ export function playClip(clip: PlayableClip, handleEnd?: ClipEndHandler, options
   activeSlotIndex = activeSlotIndex === 0 ? 0 : 1;
   activeClip = clip;
   chainEndFired = false;
+  playbackStarted = false;
   onClipEndCallback = handleEnd ?? null;
   applyOptions(options);
   active.clip = clip;
   currentState.currentClip = clip;
   currentState.state = "buffering";
   currentState.errorMessage = null;
-  currentState.currentTime = clip.startTime;
-  currentState.duration = Math.max(0.1, clip.endTime - clip.startTime);
-  currentState.progress = 0;
-  currentState.remainingTime = currentState.duration;
+  resetProgressForClip(clip);
   currentState.activePlayerElementId = active.wrapperId;
   currentState.visiblePlayerElementId = active.wrapperId;
   if (playbackFadeIn) setAudioVolume(active, 0);
@@ -474,19 +512,16 @@ export function playClip(clip: PlayableClip, handleEnd?: ClipEndHandler, options
   try {
     loadAudio(active, clip);
     void active.audio.play().then(() => {
+      playbackStarted = true;
       currentState.state = "playing";
       if (playbackFadeIn && introFadeMs > 0) fadeSlot(active, 0, getTargetVolume(), introFadeMs);
       startPoll();
       notify();
     }).catch(() => {
-      currentState.state = "error";
-      currentState.errorMessage = "The browser blocked Deezer audio playback.";
-      notify();
+      failActivePlayback("The browser blocked Deezer audio playback.");
     });
   } catch (err) {
-    currentState.state = "error";
-    currentState.errorMessage = err instanceof Error ? err.message : "Deezer preview unavailable.";
-    notify();
+    failActivePlayback(err instanceof Error ? err.message : "Deezer preview unavailable.");
   }
 }
 
@@ -507,13 +542,12 @@ export function resumePlayback(): void {
     return;
   }
   void active.audio.play().then(() => {
+    playbackStarted = true;
     currentState.state = "playing";
     startPoll();
     notify();
   }).catch(() => {
-    currentState.state = "error";
-    currentState.errorMessage = "The browser blocked Deezer audio playback.";
-    notify();
+    failActivePlayback("The browser blocked Deezer audio playback.");
   });
 }
 
@@ -530,6 +564,7 @@ export function stopPlayback(): void {
   activeClip = null;
   onClipEndCallback = null;
   chainEndFired = false;
+  playbackStarted = false;
   pendingPlay = null;
   currentState.currentClip = null;
   currentState.state = "unstarted";

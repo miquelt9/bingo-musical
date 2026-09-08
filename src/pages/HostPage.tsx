@@ -201,6 +201,7 @@ export const HostPage: React.FC = () => {
   const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
   const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
+  const [hostClipError, setHostClipError] = useState<string | null>(null);
   const [historySearch, setHistorySearch] = useState<string>("");
   const [showResetModal, setShowResetModal] = useState(false);
   const [showContinueModal, setShowContinueModal] = useState(false);
@@ -214,6 +215,8 @@ export const HostPage: React.FC = () => {
   const handleCallNextRef = useRef<() => void>(() => {});
   const pendingRestoreRef = useRef<ReturnType<typeof readHostSession> | null>(null);
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
+  /** Only auto-reveal after we've seen remainingTime > leadSec for this call. */
+  const revealArmedRef = useRef(false);
 
   useEffect(() => {
     uncalledIdsRef.current = uncalledIds;
@@ -303,6 +306,8 @@ export const HostPage: React.FC = () => {
     setCalledHistory([]);
     setCurrentCall(null);
     setIsRevealed(false);
+    setHostClipError(null);
+    revealArmedRef.current = false;
     stopPlayback();
     clearHostSession(deck.id);
   }, [deck]);
@@ -339,6 +344,8 @@ export const HostPage: React.FC = () => {
     setCurrentCall(newEntry);
     setCalledHistory((prev) => [newEntry, ...prev]);
     setIsRevealed(false);
+    revealArmedRef.current = false;
+    setHostClipError(null);
 
     void resolveHostClip(track).then((resolved) => {
       if (resolved) {
@@ -357,11 +364,12 @@ export const HostPage: React.FC = () => {
           playClip(resolved.clip, onClipEnd, playbackOpts);
         }
         preloadNextTrack(remaining);
-      } else if (autoCallNextOnEnd && remaining.length > 0) {
-        handleCallNextRef.current();
+      } else {
+        // Keep this call active; do not autocall next on resolve failure.
+        setHostClipError("This track could not be prepared for playback.");
       }
     });
-  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, autoCallNextOnEnd, preloadNextTrack, persistRefreshedTrack]);
+  }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, preloadNextTrack, persistRefreshedTrack]);
 
   useEffect(() => {
     handleCallNextRef.current = handleCallNext;
@@ -446,6 +454,12 @@ export const HostPage: React.FC = () => {
   }, []);
 
   // Always reveal near the end of the current call (before next song / crossfade starts).
+  // Arm only after we've observed a healthy remainingTime so a stale ~0 from the previous
+  // clip cannot instantly re-reveal the next song.
+  useEffect(() => {
+    revealArmedRef.current = false;
+  }, [currentCall?.track.id, currentCall?.callNumber]);
+
   useEffect(() => {
     if (isRevealed || !currentCall || !playerState?.currentClip) return;
     if (playerState.currentClip.trackId !== currentCall.track.id) return;
@@ -459,7 +473,12 @@ export const HostPage: React.FC = () => {
       (REVEAL_BEFORE_NEXT_MS + crossfadeLeadMs) / 1000
     );
 
-    if (playerState.remainingTime <= leadSec) {
+    if (playerState.remainingTime > leadSec) {
+      revealArmedRef.current = true;
+      return;
+    }
+
+    if (revealArmedRef.current && playerState.remainingTime <= leadSec) {
       setIsRevealed(true);
     }
   }, [
@@ -482,8 +501,12 @@ export const HostPage: React.FC = () => {
 
   const handleReplayCurrent = () => {
     if (!currentCall?.track) return;
+    setHostClipError(null);
     void resolveHostClip(currentCall.track).then((resolved) => {
-      if (!resolved) return;
+      if (!resolved) {
+        setHostClipError("This track could not be prepared for playback.");
+        return;
+      }
       if (resolved.refreshed) {
         persistRefreshedTrack(resolved.track);
         setCurrentCall((current) =>
@@ -665,7 +688,11 @@ export const HostPage: React.FC = () => {
   const isPlaying = playerState?.state === "playing" && playerState?.currentClip?.trackId === currentCall?.track.id;
   const playbackProgress = playerState?.progress || 0;
   const remainingTime = playerState?.remainingTime || 0;
-  const currentErrorMessage = playerState?.errorMessage && playerState?.currentClip?.trackId === currentCall?.track.id ? playerState.errorMessage : null;
+  const currentErrorMessage =
+    hostClipError ||
+    (playerState?.errorMessage && playerState?.currentClip?.trackId === currentCall?.track.id
+      ? playerState.errorMessage
+      : null);
 
   const filteredHistory = calledHistory.filter((item) => {
     const q = historySearch.toLowerCase().trim();
