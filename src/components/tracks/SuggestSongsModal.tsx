@@ -209,14 +209,22 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
       (item) => suggestHitPlayable(item) && !alreadyInDeck.has(suggestHitId(item))
     );
     if (playable.length === 0) return;
-    const tracks = playable.map(suggestHitToTrack);
+    const seen = new Set<string>();
+    const unique = playable.filter((item) => {
+      const identity = hitAsTrackIdentity(item);
+      const key = songIdentityKey(identity.artist, identity.title);
+      if (key === "::" || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const tracks = unique.map(suggestHitToTrack);
     if (onAddTracks) onAddTracks(tracks);
     else tracks.forEach(onAddTrack);
     setHits([]);
     setHasMoreResults(false);
     setAddedIds((current) => {
       const next = new Set(current);
-      playable.forEach((item) => next.add(suggestHitId(item)));
+      unique.forEach((item) => next.add(suggestHitId(item)));
       return next;
     });
   };

@@ -2,13 +2,14 @@ import React, { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Window, Modal } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
-import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
+import { EMPTY_DECK_ACTION_TITLE, isAbandonedEmptyDeck, isEmptyDeck } from "../lib/decks/discardable";
 import { Deck, MusicProvider } from "../types/deck";
 import {
   formatReadinessPrimary,
   formatReadinessSecondary,
   getDeckReadiness,
   getNextDeckName,
+  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { SAMPLE_DEEZER_DECK, SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
@@ -89,6 +90,15 @@ export const HomePage: React.FC = () => {
     };
   }, [decks]);
 
+  // Drop abandoned empty "New deck" drafts so Home stays tidy.
+  useEffect(() => {
+    const abandoned = decks.filter(isAbandonedEmptyDeck);
+    if (abandoned.length === 0) return;
+    for (const deck of abandoned) {
+      deleteDeck(deck.id);
+    }
+  }, [decks, deleteDeck]);
+
   const sortedDecks = useMemo(() => {
     return [...decks].sort((a, b) => {
       if (a.id === SAMPLE_DECK_ID) return -1;
@@ -106,11 +116,15 @@ export const HomePage: React.FC = () => {
   };
 
   const handleCreateEmptyDeck = (provider: MusicProvider = "youtube") => {
+    const defaultName = getNextDeckName(decks.map((d) => d.name));
+    const entered = window.prompt("Name this deck", defaultName);
+    if (entered === null) return;
+    const name = entered.trim() || defaultName;
     const now = new Date().toISOString();
     const saved = createDeck({
       schemaVersion: 2,
       id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      name: getNextDeckName(decks.map((d) => d.name)),
+      name,
       createdAt: now,
       updatedAt: now,
       provider,
@@ -168,8 +182,12 @@ export const HomePage: React.FC = () => {
         icon: <Printer className="w-4 h-4" />,
         label: "Cards",
         onClick: () => navigate(`/deck/${deck.id}/cards`),
-        disabled: emptyDeck,
-        title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
+        disabled: emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS,
+        title: emptyDeck
+          ? EMPTY_DECK_ACTION_TITLE
+          : deck.tracks.length < MIN_CARDS_TRACKS
+            ? `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
+            : undefined,
       },
       {
         icon: <Trash2 className="w-4 h-4" />,
@@ -227,10 +245,14 @@ export const HomePage: React.FC = () => {
           <div className="home-deck-card-body">
             <Music className="home-deck-card-icon w-5 h-5 shrink-0" aria-hidden />
             <div className="home-deck-card-info min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <h3 className="home-deck-card-title text-sm font-semibold truncate">{deck.name}</h3>
-                <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
-                {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
+              <div className="flex flex-col gap-1.5 min-w-0">
+                <h3 className="home-deck-card-title text-sm font-semibold line-clamp-2" title={deck.name}>
+                  {deck.name}
+                </h3>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
+                  {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
+                </div>
               </div>
               {healthBadge}
               {statsLine}
@@ -260,10 +282,14 @@ export const HomePage: React.FC = () => {
         <div className="home-deck-card-body">
           <Music className="home-deck-card-icon w-6 h-6 shrink-0" aria-hidden />
           <div className="home-deck-card-info min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <h3 className="home-deck-card-title text-sm font-semibold truncate">{deck.name}</h3>
-              <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
-              {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
+            <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+              <h3 className="home-deck-card-title text-sm font-semibold line-clamp-2" title={deck.name}>
+                {deck.name}
+              </h3>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
+                {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
+              </div>
             </div>
             {healthBadge}
             {statsLine}
@@ -296,8 +322,15 @@ export const HomePage: React.FC = () => {
             <Edit3 className="w-3.5 h-3.5" />
             Edit
           </Link>
-          {emptyDeck ? (
-            <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
+          {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
+            <span
+              title={
+                emptyDeck
+                  ? EMPTY_DECK_ACTION_TITLE
+                  : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
+              }
+              className="contents"
+            >
               <span className="pc-button home-deck-card-action-cards opacity-60 pointer-events-none" aria-disabled>
                 <Printer className="w-3.5 h-3.5" />
                 Cards

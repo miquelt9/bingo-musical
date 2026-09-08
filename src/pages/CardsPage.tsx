@@ -179,10 +179,15 @@ export const CardsPage: React.FC = () => {
   }, [cards.length]);
 
   useEffect(() => {
-    if (!deck || deck.tracks.length === 0) {
+    if (!deck || deck.tracks.length < MIN_CARDS_TRACKS || poolCount < MIN_CARDS_TRACKS) {
       setCards([]);
       setActivePreviewIndex(0);
       layoutKeyRef.current = "";
+      return;
+    }
+
+    if (!isGridSizeValidForDeck(poolCount, gridSize)) {
+      setCards([]);
       return;
     }
 
@@ -205,18 +210,27 @@ export const CardsPage: React.FC = () => {
     if (layoutChanged) {
       setActivePreviewIndex(0);
     }
-  }, [deck?.id, deck?.updatedAt, cardCount, gridSize, cellContent.songs, cellContent.authors]);
+  }, [
+    deck?.id,
+    deck?.updatedAt,
+    deck?.tracks.length,
+    poolCount,
+    cardCount,
+    gridSize,
+    cellContent.songs,
+    cellContent.authors,
+  ]);
 
   // If author-only mode shrinks the pool below the current grid, step down.
   useEffect(() => {
-    if (!deck || poolCount === 0) return;
+    if (!deck || poolCount < MIN_CARDS_TRACKS) return;
     if (!isGridSizeValidForDeck(poolCount, gridSize)) {
       setGridSize(getLargestValidGridSize(poolCount));
     }
   }, [deck, poolCount, gridSize]);
 
   useEffect(() => {
-    if (!deck || !isShareApiConfigured()) {
+    if (!deck || !isShareApiConfigured() || deck.tracks.length < MIN_CARDS_TRACKS) {
       setShareUrl(null);
       setQrDataUrl(null);
       setShareStatus("idle");
@@ -250,10 +264,11 @@ export const CardsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [deck?.id, deck?.updatedAt]);
+  }, [deck?.id, deck?.updatedAt, deck?.tracks.length]);
 
   const handleRegenerate = () => {
-    if (!deck || !cardOptions || deck.tracks.length === 0) return;
+    if (!deck || !cardOptions || deck.tracks.length < MIN_CARDS_TRACKS) return;
+    if (!isGridSizeValidForDeck(poolCount, gridSize)) return;
     const generated = generateBingoCards(deck.tracks, cardOptions);
     setCards(generated);
     setActivePreviewIndex(0);

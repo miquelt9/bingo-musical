@@ -18,6 +18,10 @@ import {
 import { checkHitsEmbeddability } from "../youtube/validator";
 import { getTrackSourceId } from "./providers";
 
+import { songIdentityKey } from "./songIdentity";
+
+export { songIdentityKey } from "./songIdentity";
+
 export const SUGGEST_RESULT_CAP = 16;
 export const SUGGEST_PAGE_SIZE = 8;
 export const SUGGEST_SEED_CAP = 5;
@@ -45,21 +49,6 @@ export interface SuggestSongsOptions {
 
 function normalizeArtistKey(artist: string): string {
   return artist.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/** Normalize title+artist for duplicate detection across uploads of the same song. */
-export function songIdentityKey(artist: string, title: string): string {
-  const norm = (value: string) =>
-    value
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
-      .replace(/\b(official|audio|video|lyrics?|live|remix|remaster(?:ed)?|version|hd|4k)\b/g, " ")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim()
-      .replace(/\s+/g, " ");
-  return `${norm(artist)}::${norm(title)}`;
 }
 
 /** Pick up to SUGGEST_SEED_CAP tracks covering distinct artists when possible. */

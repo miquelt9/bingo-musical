@@ -18,6 +18,7 @@ const EMPTY_STATE: HostDisplayState = {
   isRevealed: false,
   isPlaying: false,
   progress: 0,
+  bingoCalled: false,
   songNumber: null,
   title: null,
   artist: null,
@@ -77,7 +78,11 @@ export const DisplayPage: React.FC = () => {
       channel.onmessage = (event) => {
         const data = event.data as { type?: string; payload?: HostDisplayState };
         if (data?.type === "display-state" && data.payload) {
-          setDisplayState(data.payload);
+          setDisplayState({
+            ...EMPTY_STATE,
+            ...data.payload,
+            bingoCalled: Boolean(data.payload.bingoCalled),
+          });
         }
       };
     } catch {
@@ -108,6 +113,7 @@ export const DisplayPage: React.FC = () => {
     isRevealed,
     isPlaying,
     progress,
+    bingoCalled,
     songNumber,
     title,
     artist,
@@ -118,11 +124,14 @@ export const DisplayPage: React.FC = () => {
   const progressPercent = Math.min(100, Math.max(0, progress * 100));
 
   return (
-    <div className={`display-page display-page--${theme}`} data-theme={theme}>
+    <div
+      className={`display-page display-page--${theme}${bingoCalled ? " display-page--bingo" : ""}`}
+      data-theme={theme}
+    >
       <div className="display-page__inner">
         <header className="display-page__header">
           <h1 className="display-page__deck-name">{deck.name}</h1>
-          {hasActiveCall && (
+          {hasActiveCall && !bingoCalled && (
             <p className="display-page__call-count">
               Call {callNumber} of {totalCount}
             </p>
@@ -130,19 +139,30 @@ export const DisplayPage: React.FC = () => {
         </header>
 
         <main className="display-page__main">
-          {!hasActiveCall ? (
+          {bingoCalled ? (
+            <div className="display-page__bingo" role="status" aria-live="polite">
+              <p className="display-page__bingo-label">BINGO!</p>
+              <p className="display-page__status">Someone called bingo</p>
+              <p className="display-page__bingo-pause">Playback paused — verifying card</p>
+            </div>
+          ) : !hasActiveCall ? (
             <div className="display-page__waiting">
               <Music2 className="display-page__icon" aria-hidden="true" />
               <p className="display-page__status">Waiting for host…</p>
             </div>
           ) : !isRevealed ? (
             <div className="display-page__listening">
-              <div className="display-page__mystery pc-bevel-inset">
+              <div
+                className={`display-page__mystery pc-bevel-inset${
+                  isPlaying ? " display-page__mystery--pulse" : ""
+                }`}
+              >
                 <span className="display-page__question">?</span>
               </div>
               <p className="display-page__status">
                 {isPlaying ? "Listening…" : "Paused"}
               </p>
+              <p className="display-page__call-hint">Call {callNumber} of {totalCount}</p>
               <div className="display-page__progress pc-bevel-inset">
                 <div
                   className="display-page__progress-fill"

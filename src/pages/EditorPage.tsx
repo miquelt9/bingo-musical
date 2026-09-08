@@ -25,6 +25,7 @@ import {
   formatReadinessPrimary,
   formatReadinessSecondary,
   getDeckReadiness,
+  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { PcModal } from "../components/ui/PcModal";
@@ -70,7 +71,7 @@ export const EditorPage: React.FC = () => {
   const cancelMatchingRef = useRef(false);
 
   const { showToast } = useToast();
-  const { requestPlayerEngine } = usePlayerUI();
+  const { requestPlayerEngine, releasePlayerEngine } = usePlayerUI();
   const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
@@ -384,6 +385,7 @@ export const EditorPage: React.FC = () => {
 
   const handleCloseAddTrack = () => {
     stopPlayback();
+    releasePlayerEngine();
     setShowAddTrackModal(false);
   };
 
@@ -404,8 +406,15 @@ export const EditorPage: React.FC = () => {
               >
                 <Share2 className="w-4 h-4" />
               </Button>
-              {emptyDeck ? (
-                <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
+              {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
+                <span
+                  title={
+                    emptyDeck
+                      ? EMPTY_DECK_ACTION_TITLE
+                      : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
+                  }
+                  className="contents"
+                >
                   <span
                     className="pc-button opacity-60 pointer-events-none"
                     aria-disabled
@@ -451,8 +460,15 @@ export const EditorPage: React.FC = () => {
               <Share2 className="w-3.5 h-3.5" />
               Share
             </Button>
-            {emptyDeck ? (
-              <span title={EMPTY_DECK_ACTION_TITLE} className="contents">
+            {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
+              <span
+                title={
+                  emptyDeck
+                    ? EMPTY_DECK_ACTION_TITLE
+                    : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
+                }
+                className="contents"
+              >
                 <span className="pc-button opacity-60 pointer-events-none" aria-disabled tabIndex={-1}>
                   <Printer className="w-4 h-4" />
                   Cards

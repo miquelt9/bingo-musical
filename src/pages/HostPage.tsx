@@ -453,7 +453,8 @@ export const HostPage: React.FC = () => {
     });
   }, []);
 
-  // Always reveal near the end of the current call (before next song / crossfade starts).
+  // When auto-play is on, reveal near the end of the current call (before crossfade).
+  // With auto-play off, the host controls reveal timing manually.
   // Arm only after we've observed a healthy remainingTime so a stale ~0 from the previous
   // clip cannot instantly re-reveal the next song.
   useEffect(() => {
@@ -461,13 +462,13 @@ export const HostPage: React.FC = () => {
   }, [currentCall?.track.id, currentCall?.callNumber]);
 
   useEffect(() => {
+    if (!autoCallNextOnEnd) return;
     if (isRevealed || !currentCall || !playerState?.currentClip) return;
     if (playerState.currentClip.trackId !== currentCall.track.id) return;
     if (playerState.state !== "playing" && playerState.state !== "buffering") return;
 
     const clipDurationSec = Math.max(0.1, playerState.duration || 0);
-    const crossfadeLeadMs =
-      autoCallNextOnEnd && uncalledIds.length > 0 ? crossfadeOverlapMs : 0;
+    const crossfadeLeadMs = uncalledIds.length > 0 ? crossfadeOverlapMs : 0;
     const leadSec = Math.min(
       clipDurationSec * 0.4,
       (REVEAL_BEFORE_NEXT_MS + crossfadeLeadMs) / 1000
@@ -588,6 +589,7 @@ export const HostPage: React.FC = () => {
       isRevealed,
       isPlaying: Boolean(isPlayingNow),
       progress: isPlayingNow ? playerState?.progress ?? 0 : 0,
+      bingoCalled: showBingoModal,
       songNumber:
         isRevealed && currentCall
           ? getTrackSongNumber(deck.tracks, currentCall.track.id)
@@ -596,7 +598,7 @@ export const HostPage: React.FC = () => {
       artist: isRevealed && currentCall ? currentCall.track.artist : null,
       albumArtUrl: isRevealed && currentCall ? currentCall.track.albumArtUrl : null,
     };
-  }, [deck, playerState, currentCall, calledHistory.length, isRevealed]);
+  }, [deck, playerState, currentCall, calledHistory.length, isRevealed, showBingoModal]);
 
   const broadcastDisplayState = useCallback(() => {
     const payload = buildDisplayState();
@@ -751,6 +753,7 @@ export const HostPage: React.FC = () => {
       gameStarted={calledHistory.length > 0}
       disabled={!canHost}
       isRevealed={isRevealed}
+      supportsVideoPreview={deck.provider === "youtube"}
     />
   );
 
@@ -893,13 +896,13 @@ export const HostPage: React.FC = () => {
       {sessionReady && !emptyDeck ? (
         isMobile ? (
           <div className="host-board-mobile-stack">
+            <div className="host-controls">{hostControls}</div>
+
             {answerCard}
 
             <HostInlineVideoPanel visible={deck.provider === "youtube" && showVideo} viewportRef={videoViewportRef} />
 
-            <div className="host-controls">{hostControls}</div>
-
-            <details className="host-board-log-details" open>
+            <details className="host-board-log-details">
               <summary className="host-board-log-details__summary">
                 <History className="w-4 h-4" aria-hidden="true" />
                 Called Songs ({calledHistory.length})
@@ -981,7 +984,8 @@ export const HostPage: React.FC = () => {
             })}
           </ul>
           <p className="text-[11px] text-muted mb-4">
-            Use the called songs log search to confirm the player&apos;s claim.
+            Use the called songs log search to confirm the player&apos;s claim. The display
+            window shows a BINGO celebration while this is open.
           </p>
           <div className="flex justify-end">
             <Button type="button" variant="primary" onClick={() => setShowBingoModal(false)}>

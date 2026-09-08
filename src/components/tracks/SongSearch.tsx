@@ -9,6 +9,7 @@ import {
   formatDuration,
   filterSearchHitsForDisplay,
   ResolveKind,
+  dedupeYoutubeHitsBySong,
 } from "../../lib/youtube/search";
 import { CatalogSong, catalogYoutubeQuery, filterCatalogSongs, searchCatalogSongs } from "../../lib/music/catalog";
 import { parseYoutubePlaylistId, parseYoutubeVideoId } from "../../lib/youtube/parseUrl";
@@ -311,7 +312,9 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
       setPlaylistName(result.playlistName);
       setHasMoreResults(result.kind === "search" && result.hits.length >= 8);
       if (result.hits.length === 0) {
-        setError("No matching videos found. Try a song name like “Queen Bohemian Rhapsody”, or paste a YouTube link.");
+        setError(
+          "No matching videos found. Search backends may be busy — try again in a moment, or paste a YouTube link."
+        );
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -489,7 +492,8 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
         return;
       }
 
-      const tracks = playable.map((hit) => hitToTrack(hit, selectedCatalog ?? undefined));
+      const { kept, skipped: duplicateSkipped } = dedupeYoutubeHitsBySong(playable);
+      const tracks = kept.map((hit) => hitToTrack(hit, selectedCatalog ?? undefined));
       if (onAddTracks) {
         onAddTracks(tracks);
       } else {
@@ -497,12 +501,21 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
       }
       setAddedIds((prev) => {
         const next = new Set(prev);
-        playable.forEach((hit) => next.add(hit.videoId));
+        kept.forEach((hit) => next.add(hit.videoId));
         return next;
       });
 
+      const notes: string[] = [];
       if (blocked > 0) {
-        setError(`Added ${playable.length} playable video${playable.length === 1 ? "" : "s"}. Skipped ${blocked} with embedding disabled.`);
+        notes.push(`Skipped ${blocked} with embedding disabled`);
+      }
+      if (duplicateSkipped > 0) {
+        notes.push(`Skipped ${duplicateSkipped} duplicate song version${duplicateSkipped === 1 ? "" : "s"}`);
+      }
+      if (notes.length > 0) {
+        setError(
+          `Added ${kept.length} playable video${kept.length === 1 ? "" : "s"}. ${notes.join(". ")}.`
+        );
       } else {
         setHits([]);
         setKind(null);

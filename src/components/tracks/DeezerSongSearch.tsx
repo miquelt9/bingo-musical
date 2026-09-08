@@ -11,6 +11,7 @@ import {
   searchDeezerTracks,
 } from "../../lib/deezer/api";
 import { ClipPreviewButton } from "./ClipPreviewButton";
+import { songIdentityKey } from "../../lib/music/songIdentity";
 
 interface DeezerSongSearchProps {
   existingIds?: Array<string | null | undefined>;
@@ -69,11 +70,24 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
   const addAllPlayable = () => {
     const playable = hits.filter((hit) => hit.previewUrl && !alreadyInDeck.has(hit.id));
     if (playable.length === 0) return;
-    const tracks = playable.map(deezerHitToTrack);
+    const seen = new Set<string>();
+    const unique = playable.filter((hit) => {
+      const key = songIdentityKey(hit.artist, hit.title);
+      if (key === "::" || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const skipped = playable.length - unique.length;
+    const tracks = unique.map(deezerHitToTrack);
     if (onAddTracks) onAddTracks(tracks);
     else tracks.forEach(onAddTrack);
     setHits([]);
     setHasMoreResults(false);
+    if (skipped > 0) {
+      setError(
+        `Added ${unique.length} track${unique.length === 1 ? "" : "s"}. Skipped ${skipped} duplicate song version${skipped === 1 ? "" : "s"}.`
+      );
+    }
     onAfterAdd?.();
   };
 

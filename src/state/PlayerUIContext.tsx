@@ -13,6 +13,7 @@ interface PlayerUIContextValue {
   engineRequested: boolean;
   requestedProvider: MusicProvider | null;
   requestPlayerEngine: (provider?: MusicProvider) => void;
+  releasePlayerEngine: () => void;
 }
 
 const PlayerUIContext = createContext<PlayerUIContextValue | null>(null);
@@ -30,6 +31,10 @@ export const PlayerUIProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setEngineRequested(true);
     if (provider) setRequestedProvider(provider);
   }, []);
+  const releasePlayerEngine = useCallback(() => {
+    setEngineRequested(false);
+    setRequestedProvider(null);
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -41,8 +46,17 @@ export const PlayerUIProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       engineRequested,
       requestedProvider,
       requestPlayerEngine,
+      releasePlayerEngine,
     }),
-    [showVideo, toggleVideo, videoWindowBounds, engineRequested, requestedProvider, requestPlayerEngine]
+    [
+      showVideo,
+      toggleVideo,
+      videoWindowBounds,
+      engineRequested,
+      requestedProvider,
+      requestPlayerEngine,
+      releasePlayerEngine,
+    ]
   );
 
   return <PlayerUIContext.Provider value={value}>{children}</PlayerUIContext.Provider>;

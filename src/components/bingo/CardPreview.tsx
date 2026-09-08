@@ -67,27 +67,27 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     ? gridSize >= 6
       ? "font-black text-2xl sm:text-3xl leading-none text-zinc-950 tabular-nums"
       : "font-black text-3xl sm:text-4xl leading-none text-zinc-950 tabular-nums"
-    : gridSize >= 6
-      ? "font-black text-base sm:text-lg leading-none text-zinc-950 tabular-nums"
+    : gridSize >= 5
+      ? "font-black text-lg sm:text-2xl leading-none text-zinc-950 tabular-nums"
       : "font-black text-xl sm:text-2xl leading-none text-zinc-950 tabular-nums";
 
   const titleClass =
-    gridSize >= 6
-      ? "font-bold text-[8px] sm:text-[9px] leading-tight line-clamp-2 text-zinc-900"
+    gridSize >= 5
+      ? "font-bold text-[9px] sm:text-[11px] leading-tight line-clamp-2 text-zinc-900"
       : "font-bold text-[10px] sm:text-[11px] leading-tight line-clamp-2 text-zinc-900";
   const artistClass =
-    gridSize >= 6
-      ? "font-medium text-[7px] sm:text-[8px] text-zinc-500 line-clamp-1 mt-0.5"
+    gridSize >= 5
+      ? "font-medium text-[8px] sm:text-[10px] text-zinc-500 line-clamp-1 mt-0.5"
       : "font-medium text-[9px] sm:text-[10px] text-zinc-500 line-clamp-1 mt-0.5";
   const authorOnlyClass =
-    gridSize >= 6
-      ? "font-bold text-[9px] sm:text-[10px] leading-tight line-clamp-3 text-zinc-900"
+    gridSize >= 5
+      ? "font-bold text-[10px] sm:text-[12px] leading-tight line-clamp-3 text-zinc-900"
       : "font-bold text-[11px] sm:text-[12px] leading-tight line-clamp-3 text-zinc-900";
 
   return (
-    <div className="bg-white text-zinc-900 p-6 sm:p-8 border border-zinc-200 max-w-xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full">
-      <div className="text-center mb-5 print:mb-3">
-        <h2 className="text-2xl font-black tracking-tight text-zinc-950 uppercase print:text-xl">
+    <div className="bg-white text-zinc-900 p-4 sm:p-8 border border-zinc-200 max-w-xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full">
+      <div className="text-center mb-4 sm:mb-5 print:mb-3">
+        <h2 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-950 uppercase print:text-xl">
           {eventTitle}
         </h2>
         <div className="flex items-center justify-between text-xs text-zinc-500 font-medium mt-1">
@@ -108,72 +108,78 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
         </div>
       </div>
 
-      <div
-        className="gap-1.5 sm:gap-2"
-        style={{ display: "grid", gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
-      >
-        {card.grid.map((cell, index) => {
-          if (isBlankCell(cell)) {
+      <div className="bingo-card-preview-scroll print:overflow-visible">
+        <div
+          className="bingo-card-preview-grid gap-1.5 sm:gap-2"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
+            ["--bingo-grid-size" as string]: String(gridSize),
+          }}
+        >
+          {card.grid.map((cell, index) => {
+            if (isBlankCell(cell)) {
+              return (
+                <div
+                  key={index}
+                  className="bingo-blank-tile bingo-card-preview-cell aspect-square rounded-xl"
+                  aria-hidden="true"
+                />
+              );
+            }
+
+            const track = cell.track;
+            const isMarked = markedIndices.has(index);
+            const cellNumber = track
+              ? authorPool
+                ? getTrackAuthorNumber(tracks, track.id)
+                : getTrackSongNumber(tracks, track.id)
+              : null;
+
             return (
-              <div
+              <button
                 key={index}
-                className="bingo-blank-tile aspect-square rounded-xl"
-                aria-hidden="true"
-              />
+                type="button"
+                onClick={() => toggleMark(index)}
+                className={`bingo-card-preview-cell relative aspect-square flex flex-col items-center justify-center p-1 sm:p-2 text-center rounded-xl border transition-all select-none overflow-hidden ${
+                  isMarked
+                    ? "bg-emerald-500/10 border-emerald-500 text-zinc-950 ring-2 ring-emerald-500/30"
+                    : "bg-zinc-50/80 hover:bg-zinc-100/90 border-zinc-200 text-zinc-800"
+                }`}
+              >
+                {track ? (
+                  <>
+                    {showNumbers && cellNumber != null && (
+                      <p className={numberClass}>{cellNumber}</p>
+                    )}
+                    {showSongs && (
+                      <p className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}>{track.title}</p>
+                    )}
+                    {showAuthors && (
+                      <p
+                        className={
+                          showSongs
+                            ? artistClass
+                            : `${authorOnlyClass} ${showNumbers ? "mt-0.5" : ""}`
+                        }
+                      >
+                        {track.artist}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-[10px] text-zinc-300">-</span>
+                )}
+
+                {isMarked && (
+                  <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] shadow-sm animate-in zoom-in duration-150">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                )}
+              </button>
             );
-          }
-
-          const track = cell.track;
-          const isMarked = markedIndices.has(index);
-          const cellNumber = track
-            ? authorPool
-              ? getTrackAuthorNumber(tracks, track.id)
-              : getTrackSongNumber(tracks, track.id)
-            : null;
-
-          return (
-            <button
-              key={index}
-              type="button"
-              onClick={() => toggleMark(index)}
-              className={`relative aspect-square flex flex-col items-center justify-center p-1 sm:p-2 text-center rounded-xl border transition-all select-none overflow-hidden ${
-                isMarked
-                  ? "bg-emerald-500/10 border-emerald-500 text-zinc-950 ring-2 ring-emerald-500/30"
-                  : "bg-zinc-50/80 hover:bg-zinc-100/90 border-zinc-200 text-zinc-800"
-              }`}
-            >
-              {track ? (
-                <>
-                  {showNumbers && cellNumber != null && (
-                    <p className={numberClass}>{cellNumber}</p>
-                  )}
-                  {showSongs && (
-                    <p className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}>{track.title}</p>
-                  )}
-                  {showAuthors && (
-                    <p
-                      className={
-                        showSongs
-                          ? artistClass
-                          : `${authorOnlyClass} ${showNumbers ? "mt-0.5" : ""}`
-                      }
-                    >
-                      {track.artist}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <span className="text-[10px] text-zinc-300">-</span>
-              )}
-
-              {isMarked && (
-                <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] shadow-sm animate-in zoom-in duration-150">
-                  <Check className="w-2.5 h-2.5 stroke-[3]" />
-                </div>
-              )}
-            </button>
-          );
-        })}
+          })}
+        </div>
       </div>
 
       <div className="mt-4 pt-3 border-t border-zinc-100 flex items-start justify-between gap-3 text-[9px] text-zinc-400 font-medium">

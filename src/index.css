@@ -124,6 +124,12 @@
     display: none;
   }
 
+  .pc-taskbar--host .pc-taskbar-item {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+  }
+
   .pc-modal-mobile-sheet {
     display: flex;
     flex-direction: column;
@@ -289,7 +295,8 @@
 
 .display-page__waiting,
 .display-page__listening,
-.display-page__revealed {
+.display-page__revealed,
+.display-page__bingo {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -309,6 +316,13 @@
   margin: 0;
 }
 
+.display-page__call-hint {
+  margin: 0;
+  font-size: clamp(0.95rem, 2vw, 1.25rem);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
 .display-page__mystery {
   width: min(16rem, 60vw);
   aspect-ratio: 1;
@@ -317,10 +331,70 @@
   justify-content: center;
 }
 
+.display-page__mystery--pulse {
+  animation: display-mystery-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes display-mystery-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.88;
+  }
+}
+
 .display-page__question {
   font-size: clamp(4rem, 15vw, 8rem);
   font-weight: 900;
   line-height: 1;
+}
+
+.display-page__bingo-label {
+  font-size: clamp(4rem, 18vw, 9rem);
+  font-weight: 900;
+  line-height: 1;
+  margin: 0;
+  letter-spacing: 0.06em;
+  animation: display-bingo-pop 0.9s ease-out both;
+}
+
+.display-page__bingo-pause {
+  margin: 0;
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.display-page--bingo .display-page__bingo-label {
+  animation: display-bingo-pop 0.9s ease-out both, display-bingo-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes display-bingo-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes display-bingo-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
 }
 
 .display-page__progress {
@@ -1253,6 +1327,28 @@
 
   .home-deck-card-body {
     margin-bottom: 10px;
+  }
+}
+
+.bingo-card-preview-scroll {
+  width: 100%;
+}
+
+@media (max-width: 639px) {
+  .bingo-card-preview-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-inline: -0.25rem;
+    padding-inline: 0.25rem;
+  }
+
+  .bingo-card-preview-grid {
+    min-width: calc(var(--bingo-grid-size, 5) * 4.5rem);
+  }
+
+  .bingo-card-preview-cell {
+    min-width: 4.25rem;
+    min-height: 4.25rem;
   }
 }
 

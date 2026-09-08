@@ -49,7 +49,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
           <Music2 className="w-10 h-10 mb-3" />
           <h3 className="text-xl font-bold">No Song Called Yet</h3>
           <p className="text-sm max-w-sm mt-1">
-            Click the <strong>Call Next Song</strong> button below to start the round.
+            Use <strong>Call Next Song</strong> to start the round.
           </p>
         </div>
       </Window>

@@ -43,6 +43,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     engineRequested,
     requestedProvider,
     requestPlayerEngine,
+    releasePlayerEngine,
   } = usePlayerUI();
   const isMobile = useIsMobile();
   const { showToast } = useToast();
@@ -79,11 +80,28 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (isHostRoute) {
       requestPlayerEngine();
-    } else {
-      // Keep Host audio-only by default; don't leave a spoiler window open on other routes.
-      setShowVideo(false);
+      return;
     }
-  }, [isHostRoute, requestPlayerEngine, setShowVideo]);
+    // Keep Host audio-only by default; don't leave a spoiler window open on other routes.
+    setShowVideo(false);
+    if (!hasActiveClip) {
+      releasePlayerEngine();
+    }
+  }, [isHostRoute, hasActiveClip, requestPlayerEngine, releasePlayerEngine, setShowVideo]);
+
+  useEffect(() => {
+    if (isHostRoute || hasActiveClip) return;
+    if (!engineRequested) return;
+    releasePlayerEngine();
+  }, [isHostRoute, hasActiveClip, engineRequested, releasePlayerEngine]);
+
+  const needsYoutubeEngine =
+    (isHostRoute || hasActiveClip || engineRequested) &&
+    (playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider ?? "youtube") ===
+      "youtube";
+  const needsDeezerEngine =
+    (isHostRoute || hasActiveClip || engineRequested) &&
+    (playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider) === "deezer";
 
   const taskbarItemClass = (tab: string) =>
     `pc-button pc-taskbar-item ${activeTab === tab ? "active" : ""}`;
@@ -211,18 +229,14 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      {(isHostRoute || hasActiveClip || engineRequested) && (
+      {(needsYoutubeEngine || needsDeezerEngine) && (
         <>
-          {(playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider ?? "youtube") === "youtube" && (
-            <YoutubePlayerEngine />
-          )}
-          {(playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider) === "deezer" && (
-            <DeezerAudioEngine />
-          )}
+          {needsYoutubeEngine && <YoutubePlayerEngine />}
+          {needsDeezerEngine && <DeezerAudioEngine />}
         </>
       )}
 
-      <Taskbar className="print:hidden">
+      <Taskbar className={`print:hidden${isHostRoute ? " pc-taskbar--host" : ""}`}>
         <NavLink
           to="/"
           end
@@ -269,7 +283,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <span className="hidden sm:inline">Settings</span>
         </NavLink>
 
-        {decks.length > 0 && (
+        {decks.length > 0 && !isHostRoute && (
           <select
             value={activeDeck?.id || ""}
             onChange={(e) => handleDeckChange(e.target.value)}

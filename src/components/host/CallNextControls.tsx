@@ -64,6 +64,8 @@ interface CallNextControlsProps {
   gameStarted: boolean;
   disabled?: boolean;
   isRevealed?: boolean;
+  /** When false, hide YouTube video toggle and related copy (e.g. Deezer Host). */
+  supportsVideoPreview?: boolean;
 }
 
 export const CallNextControls: React.FC<CallNextControlsProps> = ({
@@ -89,6 +91,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   gameStarted,
   disabled = false,
   isRevealed = true,
+  supportsVideoPreview = true,
 }) => {
   const isMobile = useIsMobile();
   const isDeckFinished = remainingCount === 0 && totalCount > 0 && calledCount > 0;
@@ -121,7 +124,8 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
           <span className="font-medium">
             Auto-play next song when snippet ends
             <span className="block text-[10px] font-normal opacity-80 mt-0.5">
-              Reveals the answer a few seconds before the next song, then continues
+              When on, reveals the answer a few seconds before the next song. When off, you
+              control reveal timing.
             </span>
           </span>
         </label>
@@ -201,11 +205,13 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </Button>
         <Button type="button" onClick={onOpenDisplay} className="py-3 sm:shrink-0">
           <Monitor className="w-4 h-4" />
-          Open display window
+          {isMobile ? "Project to TV" : "Open display window"}
         </Button>
       </div>
       <p className="text-[10px] opacity-80 mt-2">
-        Prefer Display for projection. Host Video is off by default so players cannot see titles.
+        {supportsVideoPreview
+          ? "Prefer Display for projection. Host Video is off by default so players cannot see titles."
+          : "Prefer Display for projection. Audio plays on this device; open Display for the room screen."}
       </p>
 
       <div
@@ -224,7 +230,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
               onVolumeChange={onVolumeChange}
               onToggleVideo={onToggleVideo}
               showVideo={showVideo}
-              showVideoToggle={!isMobile}
+              showVideoToggle={supportsVideoPreview && !isMobile}
               compact={isMobile}
             />
           ) : (
@@ -235,7 +241,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
                   <p className="font-bold text-sm truncate">Mystery track playing…</p>
                   <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
                 </div>
-                {!isMobile && (
+                {supportsVideoPreview && !isMobile && (
                   <button
                     type="button"
                     className="pc-button shrink-0"
@@ -247,7 +253,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
                   </button>
                 )}
               </div>
-              {!isMobile && (
+              {supportsVideoPreview && !isMobile && (
                 <p className="text-[10px] opacity-80">
                   Video stays covered until you reveal. For projection, use Display or leave Video off.
                 </p>

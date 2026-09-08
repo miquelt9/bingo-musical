@@ -25,6 +25,8 @@ export interface HostDisplayState {
   isRevealed: boolean;
   isPlaying: boolean;
   progress: number;
+  /** Host paused to verify a bingo claim — Display shows celebration. */
+  bingoCalled: boolean;
   /** 1-based deck-order song number; only set when revealed. */
   songNumber: number | null;
   title: string | null;
@@ -64,6 +66,7 @@ export function buildDisplayStateFromSession(
       isRevealed: false,
       isPlaying: false,
       progress: 0,
+      bingoCalled: false,
       songNumber: null,
       title: null,
       artist: null,
@@ -84,6 +87,7 @@ export function buildDisplayStateFromSession(
     isRevealed,
     isPlaying: playback?.isPlaying ?? false,
     progress: playback?.progress ?? 0,
+    bingoCalled: false,
     songNumber,
     title: isRevealed ? track.title : null,
     artist: isRevealed ? track.artist : null,

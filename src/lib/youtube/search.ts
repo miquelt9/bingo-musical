@@ -1,5 +1,6 @@
 import { Track } from "../../types/deck";
 import { createTrack } from "../tracks";
+import { songIdentityKey } from "../music/songIdentity";
 import {
   fetchWithTimeout,
   getLastYoutubeBackend,
@@ -75,10 +76,13 @@ export function rankYoutubeHits(hits: YoutubeSearchHit[], query: string): Youtub
       if (hay.includes(token)) points += 2;
     }
     if (/official/.test(hit.title)) points += 2;
-    if (/\baudio\b/i.test(hit.title) && !/\blive\b/i.test(hit.title)) points += 1;
-    if (/karaoke|nightcore|8d audio|cover|slowed|sped up|lyrics video|lyric video|flash\s*mob|flashmob|blu-?ray|reaction|tribute|piano\s*tutorial/i.test(hay)) {
-      points -= 4;
+    if (/\b(official\s+)?audio\b/i.test(hit.title) && !/\blive\b/i.test(hit.title)) points += 2;
+    if (/\b(vevo|topic)\b/i.test(hit.author) || / - topic$/i.test(hit.author)) points += 3;
+    if (/\bofficial\b/i.test(hit.author)) points += 2;
+    if (/karaoke|nightcore|8d audio|cover|slowed|sped up|lyrics?\s*video|lyric\s*video|flash\s*mob|flashmob|blu-?ray|reaction|tribute|piano\s*tutorial|dance\s*cover|orchestra\s*cover/i.test(hay)) {
+      points -= 5;
     }
+    if (/\blyrics?\b/i.test(hay) && !/\bofficial\b/i.test(hay)) points -= 2;
     if (/\blive\b/i.test(hay) && !/\bofficial\b/i.test(hay)) points -= 2;
     if (hit.lengthSeconds > 0 && hit.lengthSeconds < 45) points -= 2;
     if (hit.lengthSeconds > 15 * 60) points -= 1;
@@ -86,6 +90,23 @@ export function rankYoutubeHits(hits: YoutubeSearchHit[], query: string): Youtub
   };
 
   return [...hits].sort((a, b) => score(b) - score(a));
+}
+
+/** Keep the first hit per normalized title+artist (caller should pass ranked hits). */
+export function dedupeYoutubeHitsBySong(hits: YoutubeSearchHit[]): {
+  kept: YoutubeSearchHit[];
+  skipped: number;
+} {
+  const seen = new Set<string>();
+  const kept: YoutubeSearchHit[] = [];
+  for (const hit of hits) {
+    const guessed = guessTitleArtist(hit.title, hit.author);
+    const key = songIdentityKey(guessed.artist, guessed.title);
+    if (key === "::" || seen.has(key)) continue;
+    seen.add(key);
+    kept.push(hit);
+  }
+  return { kept, skipped: hits.length - kept.length };
 }
 
 function invidiousThumb(item: { videoThumbnails?: Array<{ quality?: string; url?: string }>; videoId?: string }): string {
@@ -223,12 +244,18 @@ async function searchYoutubeViaWorker(
   page = 1
 ): Promise<YoutubeSearchHit[] | null> {
   const safePage = Math.max(1, page);
-  const body = await fetchWorkerJson<{ data?: Partial<YoutubeSearchHit>[] }>(
-    `/api/youtube/search?q=${encodeURIComponent(query)}&limit=${limit}&page=${safePage}`,
-    signal
-  );
-  if (!body || !Array.isArray(body.data)) return null;
-  const hits = body.data.map(normalizeWorkerHit).filter((h): h is YoutubeSearchHit => Boolean(h));
+  const path = `/api/youtube/search?q=${encodeURIComponent(query)}&limit=${limit}&page=${safePage}`;
+  const body = await fetchWorkerJson<{ data?: Partial<YoutubeSearchHit>[] }>(path, signal, 8000);
+  if (body && Array.isArray(body.data)) {
+    const hits = body.data.map(normalizeWorkerHit).filter((h): h is YoutubeSearchHit => Boolean(h));
+    if (hits.length > 0) return hits;
+  }
+
+  // One quiet retry — worker backends flap; avoid racing CORS-noisy browser fallbacks.
+  if (!SHARE_API_URL || signal?.aborted) return null;
+  const retry = await fetchWorkerJson<{ data?: Partial<YoutubeSearchHit>[] }>(path, signal, 12000);
+  if (!retry || !Array.isArray(retry.data)) return null;
+  const hits = retry.data.map(normalizeWorkerHit).filter((h): h is YoutubeSearchHit => Boolean(h));
   return hits.length > 0 ? hits : null;
 }
 
@@ -289,6 +316,10 @@ export async function searchYoutubeVideos(
   const fromWorker = await searchYoutubeViaWorker(q, limit, signal, safePage);
   if (fromWorker) return rankYoutubeHits(fromWorker, q).slice(0, limit);
 
+  // Browser Piped/Invidious calls often fail CORS and spam the console.
+  // Only use them when no Worker proxy is configured.
+  if (SHARE_API_URL) return [];
+
   const fallback = await searchYoutubeViaFallback(q, limit, signal, safePage);
   return rankYoutubeHits(fallback, q).slice(0, limit);
 }
@@ -311,6 +342,8 @@ export async function fetchRelatedYoutubeVideos(
       .filter((h) => h.videoId !== videoId)
       .slice(0, limit);
   }
+
+  if (SHARE_API_URL) return [];
 
   const backends = getYoutubeBackends();
   const tasks: Array<(taskSignal: AbortSignal) => Promise<YoutubeSearchHit[] | null>> = [
@@ -383,6 +416,8 @@ async function fetchVideoHit(videoId: string, signal?: AbortSignal): Promise<You
   const normalized = fromWorker ? normalizeWorkerHit(fromWorker) : null;
   if (normalized) return normalized;
 
+  if (SHARE_API_URL) return fallback;
+
   const backends = getYoutubeBackends();
   const tasks: Array<(taskSignal: AbortSignal) => Promise<YoutubeSearchHit | null>> = [
     ...backends.invidious.map((instance) => async (taskSignal: AbortSignal) => {
@@ -435,6 +470,12 @@ async function fetchPlaylistHits(
     if (hits.length > 0) {
       return { name: fromWorker.name || "YouTube playlist", hits: hits.slice(0, 50) };
     }
+  }
+
+  if (SHARE_API_URL) {
+    throw new Error(
+      "Could not load that YouTube playlist right now. Try again in a moment, or paste individual video links."
+    );
   }
 
   const backends = getYoutubeBackends();
