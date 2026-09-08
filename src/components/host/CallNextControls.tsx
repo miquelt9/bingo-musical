@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, SlidersHorizontal, Music2, ChevronDown, ChevronUp, Monitor } from "lucide-react";
+import { Shuffle, SlidersHorizontal, Music2, ChevronDown, Monitor } from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/player/player";
 import { getTrackProvider, getTrackSourceId } from "../../lib/music/providers";
@@ -9,35 +9,54 @@ import { useIsMobile } from "../../hooks/useMediaQuery";
 
 function buildDisplayPlayerState(
   currentTrack: Track,
-  playerState: PlayerPlaybackState | null
+  playerState: PlayerPlaybackState | null,
+  isRevealed: boolean
 ): PlayerPlaybackState {
+  let base: PlayerPlaybackState;
+
   if (playerState?.currentClip?.trackId === currentTrack.id) {
-    return playerState;
+    base = playerState;
+  } else {
+    const clipDuration = Math.max(0, currentTrack.endTime - currentTrack.startTime);
+    base = {
+      isReady: playerState?.isReady ?? false,
+      state: "unstarted",
+      currentClip: {
+        provider: getTrackProvider(currentTrack),
+        sourceId: getTrackSourceId(currentTrack) || "",
+        previewUrl:
+          currentTrack.media?.provider === "deezer"
+            ? currentTrack.media.previewUrl ?? undefined
+            : undefined,
+        startTime: currentTrack.startTime,
+        endTime: currentTrack.endTime,
+        trackId: currentTrack.id,
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+      },
+      currentTime: currentTrack.startTime,
+      duration: clipDuration,
+      progress: 0,
+      remainingTime: clipDuration,
+      volume: playerState?.volume ?? 100,
+      isMuted: playerState?.isMuted ?? false,
+      errorMessage: null,
+      activePlayerElementId: playerState?.activePlayerElementId ?? null,
+      visiblePlayerElementId: playerState?.visiblePlayerElementId ?? null,
+    };
   }
 
-  const clipDuration = Math.max(0, currentTrack.endTime - currentTrack.startTime);
+  if (isRevealed || !base.currentClip) {
+    return base;
+  }
+
   return {
-    isReady: playerState?.isReady ?? false,
-    state: "unstarted",
+    ...base,
     currentClip: {
-      provider: getTrackProvider(currentTrack),
-      sourceId: getTrackSourceId(currentTrack) || "",
-      previewUrl: currentTrack.media?.provider === "deezer" ? currentTrack.media.previewUrl ?? undefined : undefined,
-      startTime: currentTrack.startTime,
-      endTime: currentTrack.endTime,
-      trackId: currentTrack.id,
-      title: currentTrack.title,
-      artist: currentTrack.artist,
+      ...base.currentClip,
+      title: "Mystery track playing…",
+      artist: "Artist & title hidden",
     },
-    currentTime: currentTrack.startTime,
-    duration: clipDuration,
-    progress: 0,
-    remainingTime: clipDuration,
-    volume: playerState?.volume ?? 100,
-    isMuted: playerState?.isMuted ?? false,
-    errorMessage: null,
-    activePlayerElementId: playerState?.activePlayerElementId ?? null,
-    visiblePlayerElementId: playerState?.visiblePlayerElementId ?? null,
   };
 }
 
@@ -220,10 +239,10 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         }`}
       >
         {!isMobile && <p className="text-xs font-semibold mb-2">Now Playing</p>}
-        {hasPlayableTrack && currentTrack ? (
-          isRevealed ? (
+        <div className="host-now-playing-slot__body">
+          {hasPlayableTrack && currentTrack ? (
             <NowPlayingControls
-              playerState={buildDisplayPlayerState(currentTrack, playerState)}
+              playerState={buildDisplayPlayerState(currentTrack, playerState, isRevealed)}
               onPlayPause={handlePlayPause}
               onStop={onStop}
               onToggleMute={onToggleMute}
@@ -233,57 +252,35 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
               showVideoToggle={supportsVideoPreview && !isMobile}
               compact={isMobile}
             />
-          ) : (
-            <div className="flex flex-col gap-2">
-              <div className="host-now-playing-placeholder">
-                <Music2 className="w-5 h-5 shrink-0 opacity-60" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-sm truncate">Mystery track playing…</p>
-                  <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
-                </div>
-                {supportsVideoPreview && !isMobile && (
-                  <button
-                    type="button"
-                    className="pc-button shrink-0"
-                    onClick={onToggleVideo}
-                    title="Toggle visual video preview (covered until reveal)"
-                  >
-                    <span>Video</span>
-                    {showVideo ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                  </button>
+          ) : currentTrack ? (
+            <div className="host-now-playing-placeholder">
+              <Music2 className="w-5 h-5 shrink-0 opacity-60" />
+              <div className="min-w-0">
+                {isRevealed ? (
+                  <>
+                    <p className="font-bold text-sm truncate">{currentTrack.title}</p>
+                    <p className="text-xs text-muted truncate">{currentTrack.artist}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-sm truncate">Mystery track playing…</p>
+                    <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
+                  </>
                 )}
-              </div>
-              {supportsVideoPreview && !isMobile && (
-                <p className="text-[10px] opacity-80">
-                  Video stays covered until you reveal. For projection, use Display or leave Video off.
+                <p className="text-[11px] text-pc-warning mt-0.5">
+                  No{" "}
+                  {currentTrack?.media?.provider === "deezer" ? "Deezer preview" : "YouTube video"}{" "}
+                  linked for this track
                 </p>
-              )}
+              </div>
             </div>
-          )
-        ) : currentTrack ? (
-          <div className="host-now-playing-placeholder">
-            <Music2 className="w-5 h-5 shrink-0 opacity-60" />
-            <div className="min-w-0">
-              {isRevealed ? (
-                <>
-                  <p className="font-bold text-sm truncate">{currentTrack.title}</p>
-                  <p className="text-xs text-muted truncate">{currentTrack.artist}</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-bold text-sm truncate">Mystery track playing…</p>
-                  <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
-                </>
-              )}
-              <p className="text-[11px] text-pc-warning mt-0.5">No {currentTrack?.media?.provider === "deezer" ? "Deezer preview" : "YouTube video"} linked for this track</p>
+          ) : (
+            <div className="host-now-playing-placeholder host-now-playing-placeholder--empty">
+              <Music2 className="w-5 h-5 shrink-0 opacity-40" />
+              <p className="text-xs text-muted">No song playing yet — call a song to start</p>
             </div>
-          </div>
-        ) : (
-          <div className="host-now-playing-placeholder host-now-playing-placeholder--empty">
-            <Music2 className="w-5 h-5 shrink-0 opacity-40" />
-            <p className="text-xs text-muted">No song playing yet — call a song to start</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {isMobile ? (

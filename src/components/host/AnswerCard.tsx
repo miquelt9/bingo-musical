@@ -67,19 +67,6 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
 
   const clipDuration = track.endTime - track.startTime;
 
-  const clipMeta = (
-    <div className="host-answer-card-meta shrink-0">
-      <span className="px-2 py-1 text-xs font-mono pc-bevel-inset whitespace-nowrap">
-        Clip: {track.startTime}s – {track.endTime}s ({clipDuration}s)
-      </span>
-      {isPlaying && (
-        <span className="px-2 py-1 text-xs font-mono pc-bevel-inset whitespace-nowrap">
-          {remainingTime.toFixed(1)}s left
-        </span>
-      )}
-    </div>
-  );
-
   return (
     <Window fill={fill} className={className} title={`Call #${callNumber}`}>
       <div className={bodyClassName}>
@@ -141,61 +128,75 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         )}
 
         <div className="host-answer-card-content">
-          {!isRevealed ? (
-            <div className="host-answer-card-main">
-              <div className="host-answer-card-thumb relative">
+          <div className="host-answer-card-main">
+            <div className="host-answer-card-thumb relative">
+              {!isRevealed ? (
                 <div className="host-answer-card-thumb-inner pc-bevel-inset flex items-center justify-center select-none">
                   <span className="text-5xl font-black">?</span>
                 </div>
-              </div>
-              <div className="host-answer-card-details min-w-0">
-                <h2 className="text-xl font-extrabold leading-tight truncate">Mystery Track Playing…</h2>
-                <p className="text-sm font-medium truncate">Artist &amp; title hidden</p>
-                <p className="text-[11px] text-muted mt-0.5 line-clamp-2">
-                  Players are listening to identify the song.
-                </p>
-              </div>
-              {clipMeta}
+              ) : thumbUrl ? (
+                <div className="host-answer-card-thumb-inner pc-bevel-inset overflow-hidden bg-black/5">
+                  <img src={thumbUrl} alt={track.title} className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="host-answer-card-thumb-inner pc-bevel-inset flex items-center justify-center">
+                  <Music2 className="w-12 h-12" />
+                </div>
+              )}
+              {isRevealed && providerUrl && (
+                <a
+                  href={providerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="pc-button absolute bottom-1 right-1"
+                  title={`Open ${providerLabel} source in new tab`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
             </div>
-          ) : (
-            <div className="host-answer-card-main">
-              <div className="host-answer-card-thumb relative">
-                {thumbUrl ? (
-                  <div className="host-answer-card-thumb-inner pc-bevel-inset overflow-hidden bg-black/5">
-                    <img src={thumbUrl} alt={track.title} className="h-full w-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="host-answer-card-thumb-inner pc-bevel-inset flex items-center justify-center">
-                    <Music2 className="w-12 h-12" />
-                  </div>
-                )}
-                {providerUrl && (
-                  <a
-                    href={providerUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="pc-button absolute bottom-1 right-1"
-                    title={`Open ${providerLabel} source in new tab`}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
-              <div className="host-answer-card-details min-w-0">
-                {songNumber != null && (
-                  <p className="text-sm font-black tabular-nums text-muted mb-0.5">
-                    Song #{songNumber}
-                  </p>
-                )}
-                <h2 className="text-xl font-extrabold leading-tight truncate">{track.title}</h2>
-                <p className="text-sm font-medium truncate">{track.artist}</p>
-                {track.album && (
-                  <p className="text-[11px] text-muted truncate mt-0.5">Album: {track.album}</p>
-                )}
-              </div>
-              {clipMeta}
+            <div className="host-answer-card-details min-w-0">
+              <p
+                className={`host-answer-card-song-number text-sm font-black tabular-nums mb-0.5 ${
+                  isRevealed && songNumber != null ? "text-muted" : "invisible"
+                }`}
+                aria-hidden={!(isRevealed && songNumber != null)}
+              >
+                {isRevealed && songNumber != null ? `Song #${songNumber}` : "Song #00"}
+              </p>
+              <h2 className="text-xl font-extrabold leading-tight truncate">
+                {isRevealed ? track.title : "Mystery Track Playing…"}
+              </h2>
+              <p className="text-sm font-medium truncate">
+                {isRevealed ? track.artist : "Artist & title hidden"}
+              </p>
+              <p
+                className={`host-answer-card-album text-[11px] text-muted truncate mt-0.5 ${
+                  !isRevealed || track.album ? "" : "invisible"
+                }`}
+                aria-hidden={isRevealed && !track.album}
+              >
+                {!isRevealed
+                  ? "Players are listening to identify the song."
+                  : track.album
+                    ? `Album: ${track.album}`
+                    : "Album placeholder"}
+              </p>
             </div>
-          )}
+            <div className="host-answer-card-meta shrink-0">
+              <span className="px-2 py-1 text-xs font-mono pc-bevel-inset whitespace-nowrap">
+                Clip: {track.startTime}s – {track.endTime}s ({clipDuration}s)
+              </span>
+              <span
+                className={`px-2 py-1 text-xs font-mono pc-bevel-inset whitespace-nowrap ${
+                  isPlaying ? "" : "invisible"
+                }`}
+                aria-hidden={!isPlaying}
+              >
+                {isPlaying ? `${remainingTime.toFixed(1)}s left` : "0.0s left"}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </Window>
