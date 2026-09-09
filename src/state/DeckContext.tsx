@@ -23,10 +23,18 @@ interface ShareDeckTarget {
   shareUrl?: string;
 }
 
+export interface BackgroundTaskStatus {
+  label: string;
+  completed: number;
+  total: number;
+}
+
 interface DeckContextType {
   decks: Deck[];
   activeDeck: Deck | null;
   isLoading: boolean;
+  backgroundTasks: Record<string, BackgroundTaskStatus>;
+  setBackgroundTask: (id: string, status: BackgroundTaskStatus | null) => void;
   loadDeck: (id: string) => Deck | null;
   createDeck: (deck: Deck) => Deck;
   updateDeck: (deck: Deck) => Deck;
@@ -50,6 +58,17 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
+  const [backgroundTasks, setBackgroundTasks] = useState<Record<string, BackgroundTaskStatus>>({});
+
+  const setBackgroundTask = useCallback((id: string, status: BackgroundTaskStatus | null) => {
+    setBackgroundTasks((current) => {
+      if (status) return { ...current, [id]: status };
+      if (!(id in current)) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }, []);
 
   const hydrateDefaultDeezerSample = useCallback(async () => {
     if (deezerSampleHydrateInFlight) {
@@ -76,52 +95,68 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      const needsRefresh = withKnownIds.some(
+      const tracksToResolve = withKnownIds.filter(
         (track) =>
-          track.media?.provider !== "deezer" ||
-          !track.media.previewUrl ||
-          trackNeedsDeezerPreviewRefresh(track)
+          track.media?.provider === "deezer" &&
+          Boolean(track.media.id) &&
+          (!track.media.previewUrl || trackNeedsDeezerPreviewRefresh(track))
       );
-      if (!needsRefresh) return;
+      if (tracksToResolve.length === 0) return;
+
+      const taskId = `deezer-hydration:${sample.id}`;
+      setBackgroundTask(taskId, {
+        label: "Loading Deezer previews",
+        completed: 0,
+        total: tracksToResolve.length,
+      });
 
       try {
         // Resolve by known Deezer track ID — do not re-search by title (that can wipe IDs).
-        const tracks = await Promise.all(
-          withKnownIds.map(async (track) => {
-            if (track.media?.provider !== "deezer" || !track.media.id) return track;
-            if (track.media.previewUrl && !trackNeedsDeezerPreviewRefresh(track)) return track;
-            try {
-              const hit = await resolveDeezerTrack(track.media.id);
-              if (!hit.previewUrl) return track;
-              const resolved = deezerHitToTrack(hit);
-              return {
-                ...track,
-                album: resolved.album || track.album,
-                albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
-                durationMs: resolved.durationMs || track.durationMs,
-                media: resolved.media,
-                // Keep the sample clip window when we already had one.
-                startTime: track.media?.id === hit.id ? track.startTime : resolved.startTime,
-                endTime: track.media?.id === hit.id ? track.endTime : resolved.endTime,
-                matchStatus: "matched" as const,
-              };
-            } catch {
-              return track;
-            }
-          })
-        );
-        const changed = tracks.some((track, index) => JSON.stringify(track) !== JSON.stringify(sample.tracks[index]));
-        if (!changed) return;
+        // Commit each result as it arrives so the deck becomes playable progressively
+        // instead of showing every track as needing attention until the final request.
+        const tracks = [...withKnownIds];
+        for (let index = 0; index < tracks.length; index += 1) {
+          const track = tracks[index];
+          if (track.media?.provider !== "deezer" || !track.media.id) continue;
+          if (track.media.previewUrl && !trackNeedsDeezerPreviewRefresh(track)) continue;
 
-        const saved = persistDeck({
-          ...sample,
-          tracks,
-          updatedAt: new Date().toISOString(),
-        });
-        setDecks(getStoredDecks());
-        setActiveDeck((current) => (current?.id === saved.id ? saved : current));
+          try {
+            const hit = await resolveDeezerTrack(track.media.id);
+            if (!hit.previewUrl) continue;
+            const resolved = deezerHitToTrack(hit);
+            tracks[index] = {
+              ...track,
+              album: resolved.album || track.album,
+              albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
+              durationMs: resolved.durationMs || track.durationMs,
+              media: resolved.media,
+              // Keep the sample clip window when we already had one.
+              startTime: track.media.id === hit.id ? track.startTime : resolved.startTime,
+              endTime: track.media.id === hit.id ? track.endTime : resolved.endTime,
+              matchStatus: "matched" as const,
+            };
+
+            const saved = persistDeck({
+              ...sample,
+              tracks,
+              updatedAt: new Date().toISOString(),
+            });
+            setDecks(getStoredDecks());
+            setActiveDeck((current) => (current?.id === saved.id ? saved : current));
+          } catch {
+            // Keep this track available for manual matching and continue hydrating the rest.
+          } finally {
+            setBackgroundTask(taskId, {
+              label: "Loading Deezer previews",
+              completed: tracksToResolve.findIndex((candidate) => candidate.id === track.id) + 1,
+              total: tracksToResolve.length,
+            });
+          }
+        }
       } catch {
         // The starter remains available for manual matching when the Worker or Deezer is offline.
+      } finally {
+        setBackgroundTask(taskId, null);
       }
     })();
 
@@ -283,6 +318,8 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
         importDeck,
         importSharedDeck,
         refreshDecks,
+        backgroundTasks,
+        setBackgroundTask,
       }}
     >
       {children}

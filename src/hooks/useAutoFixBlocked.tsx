@@ -17,7 +17,7 @@ export function useAutoFixBlocked(
   deck: Deck | null,
   options: UseAutoFixBlockedOptions = {}
 ) {
-  const { updateDeck } = useDeck();
+  const { updateDeck, setBackgroundTask } = useDeck();
   const { showToast } = useToast();
   const [isMatching, setIsMatching] = useState(false);
   const [matchProgress, setMatchProgress] = useState<BatchMatchProgress | null>(null);
@@ -57,10 +57,22 @@ export function useAutoFixBlocked(
 
     setIsMatching(true);
     cancelMatchingRef.current = false;
+    const taskId = `auto-fix:${currentDeck.id}`;
+    const taskLabel = `Fixing ${currentDeck.provider === "deezer" ? "Deezer" : "YouTube"} songs`;
+    setBackgroundTask(taskId, {
+      label: taskLabel,
+      completed: 0,
+      total: blockedTrackIds.size,
+    });
 
     try {
       const onProgress = (progress: BatchMatchProgress, updatedTrack: Track) => {
           setMatchProgress(progress);
+          setBackgroundTask(taskId, {
+            label: taskLabel,
+            completed: progress.completed,
+            total: progress.total,
+          });
           const latestDeck = deckRef.current;
           if (!latestDeck) return;
           const nextTracks = latestDeck.tracks.map((t) =>
@@ -76,7 +88,14 @@ export function useAutoFixBlocked(
       applyDeckUpdate(finalDeck);
 
       const recheck = await ensureDeckPlayable(updatedTracks, {
-        onProgress: setValidationProgress,
+        onProgress: (progress) => {
+          setValidationProgress(progress);
+          setBackgroundTask(taskId, {
+            label: "Verifying fixed songs",
+            completed: progress.completed,
+            total: progress.total,
+          });
+        },
       });
 
       if (recheck.invalidTracks.length > 0) {
@@ -122,8 +141,9 @@ export function useAutoFixBlocked(
       setIsMatching(false);
       setMatchProgress(null);
       setValidationProgress(null);
+      setBackgroundTask(taskId, null);
     }
-  }, [applyDeckUpdate, showToast, options.onViewProblems]);
+  }, [applyDeckUpdate, showToast, options.onViewProblems, setBackgroundTask]);
 
   return {
     handleAutoFixBlocked,

@@ -5,6 +5,13 @@ const API_URL = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 5000;
 const BATCH_TIMEOUT_MS = 45000;
 const MAX_RETRIES = 2;
+const DEEZER_TRACK_REQUEST_INTERVAL_MS = 500;
+
+// Deezer can reject a burst of individual track lookups even when the Worker
+// rate limit has not been reached. Keep all track metadata requests in one
+// browser-wide queue so separate hydration paths cannot recreate that burst.
+let deezerTrackRequestQueue = Promise.resolve();
+let lastDeezerTrackRequestAt = 0;
 
 export interface DeezerTrackHit {
   provider: "deezer";
@@ -42,6 +49,28 @@ export function looksLikeDeezerInput(value: string): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function enqueueDeezerTrackRequest<T>(
+  request: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const queuedRequest = deezerTrackRequestQueue.then(async () => {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+    const elapsed = Date.now() - lastDeezerTrackRequestAt;
+    if (elapsed < DEEZER_TRACK_REQUEST_INTERVAL_MS) {
+      await sleep(DEEZER_TRACK_REQUEST_INTERVAL_MS - elapsed);
+    }
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+    lastDeezerTrackRequestAt = Date.now();
+    return request();
+  });
+
+  // A failed or aborted request must not stop later requests from leaving the queue.
+  deezerTrackRequestQueue = queuedRequest.then(() => undefined, () => undefined);
+  return queuedRequest;
 }
 
 function parseRetryAfterMs(response: Response): number {
@@ -183,7 +212,10 @@ export async function searchDeezerTracksBatch(
 export async function resolveDeezerTrack(input: string, signal?: AbortSignal): Promise<DeezerTrackHit> {
   const id = parseDeezerTrackId(input);
   if (!id) throw new Error("Paste a Deezer track URL or numeric track ID.");
-  const body = await fetchJson<Partial<DeezerTrackHit>>(`/api/deezer/track/${encodeURIComponent(id)}`, signal);
+  const body = await enqueueDeezerTrackRequest(
+    () => fetchJson<Partial<DeezerTrackHit>>(`/api/deezer/track/${encodeURIComponent(id)}`, signal),
+    signal,
+  );
   const hit = mapHit(body);
   if (!hit) throw new Error("That Deezer track is unavailable.");
   return hit;
@@ -196,9 +228,12 @@ export async function fetchDeezerRelatedTracks(
 ): Promise<DeezerTrackHit[]> {
   const id = parseDeezerTrackId(trackId);
   if (!id) return [];
-  const body = await fetchJson<{ data?: Partial<DeezerTrackHit>[] }>(
-    `/api/deezer/track/${encodeURIComponent(id)}/related?limit=${Math.max(1, Math.min(20, limit))}`,
-    signal
+  const body = await enqueueDeezerTrackRequest(
+    () => fetchJson<{ data?: Partial<DeezerTrackHit>[] }>(
+      `/api/deezer/track/${encodeURIComponent(id)}/related?limit=${Math.max(1, Math.min(20, limit))}`,
+      signal
+    ),
+    signal,
   );
   return (body.data || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null);
 }

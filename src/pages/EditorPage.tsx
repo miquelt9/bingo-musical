@@ -56,7 +56,7 @@ export const EditorPage: React.FC = () => {
   const { id, deck: routeDeck, notFound } = useDeckRoute();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeDeck, updateDeck, createDeck, shareDeck } = useDeck();
+  const { activeDeck, updateDeck, createDeck, shareDeck, setBackgroundTask } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
@@ -169,8 +169,22 @@ export const EditorPage: React.FC = () => {
 
     let cancelled = false;
     backgroundVerifyRef.current = deck.id;
+    const taskId = `youtube-validation:${deck.id}`;
+    const taskLabel = "Checking YouTube playback";
+    setBackgroundTask(taskId, { label: taskLabel, completed: 0, total: uncached.length });
 
-    void validateTracksEmbeddability(uncached, 3).then(({ invalidTracks }) => {
+    void validateTracksEmbeddability(
+      uncached,
+      3,
+      (progress) => {
+        if (cancelled) return;
+        setBackgroundTask(taskId, {
+          label: taskLabel,
+          completed: progress.completed,
+          total: uncached.length,
+        });
+      }
+    ).then(({ invalidTracks }) => {
       if (cancelled || invalidTracks.length === 0) return;
 
       setDeck((current) => {
@@ -183,22 +197,32 @@ export const EditorPage: React.FC = () => {
         updateDeck(nextDeck);
         return nextDeck;
       });
+    }).finally(() => {
+      setBackgroundTask(taskId, null);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [deck?.id, deck?.tracks.length, isMatching, isAutoFixing, updateDeck]);
+  }, [deck?.id, deck?.tracks.length, isMatching, isAutoFixing, updateDeck, setBackgroundTask]);
 
   const handleAutoMatchAll = useCallback(async () => {
     if (!deck) return;
 
     setIsMatching(true);
     cancelMatchingRef.current = false;
+    const taskId = `auto-match:${deck.id}`;
+    const taskLabel = `Matching ${deck.provider === "deezer" ? "Deezer" : "YouTube"} songs`;
+    setBackgroundTask(taskId, { label: taskLabel, completed: 0, total: deck.tracks.length });
 
     try {
       const onProgress = (progress: BatchMatchProgress, updatedTrack: Track) => {
         setMatchProgress(progress);
+        setBackgroundTask(taskId, {
+          label: taskLabel,
+          completed: progress.completed,
+          total: progress.total,
+        });
         setDeck((current) => {
           if (!current) return null;
           const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
@@ -222,8 +246,9 @@ export const EditorPage: React.FC = () => {
     } finally {
       setIsMatching(false);
       setMatchProgress(null);
+      setBackgroundTask(taskId, null);
     }
-  }, [deck, updateDeck]);
+  }, [deck, updateDeck, setBackgroundTask]);
 
   useEffect(() => {
     if (!deck || !autostartMatch || autostartMatchRef.current) return;

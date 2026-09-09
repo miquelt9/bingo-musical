@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
+import { Button, Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
   FolderOpen,
   Edit3,
   Printer,
   Radio,
   Settings,
+  Loader2,
 } from "lucide-react";
 import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
@@ -15,6 +16,7 @@ import { useIsMobile } from "../../hooks/useMediaQuery";
 import { useToast } from "../../state/ToastContext";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
+import { PcModal } from "../ui/PcModal";
 import { YoutubePlayerEngine } from "../player/YoutubePlayerEngine";
 import { DeezerAudioEngine } from "../player/DeezerAudioEngine";
 import { NowPlayingControls } from "../player/NowPlayingControls";
@@ -30,7 +32,7 @@ import {
 import { readHostSessionRaw } from "../../lib/host/session";
 
 const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { decks, activeDeck, loadDeck } = useDeck();
+  const { decks, activeDeck, loadDeck, backgroundTasks } = useDeck();
   const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -48,10 +50,17 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isMobile = useIsMobile();
   const { showToast } = useToast();
   const currentDeckId = activeDeck?.id || decks[0]?.id;
+  const backgroundTaskEntries = Object.values(backgroundTasks);
+  const backgroundTask = backgroundTaskEntries[backgroundTaskEntries.length - 1] ?? null;
   const { canOpenHost, canOpenCards, hostBlockReason, cardsBlockReason } =
     useDeckNavGuards(currentDeckId);
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
+  const [pendingDeckSwitch, setPendingDeckSwitch] = useState<{
+    deckId: string;
+    deckName: string;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     return subscribeToPlayerState((state) => {
@@ -119,6 +128,18 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
+  const switchDeck = (deckId: string) => {
+    loadDeck(deckId);
+    if (location.pathname.startsWith("/deck/")) {
+      const suffix = location.pathname.includes("/cards")
+        ? "/cards"
+        : location.pathname.includes("/play")
+          ? "/play"
+          : "";
+      navigate(`/deck/${deckId}${suffix}`);
+    }
+  };
+
   const handleDeckChange = (deckId: string) => {
     if (deckId === activeDeck?.id) return;
 
@@ -143,18 +164,19 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         activeTab === "host"
           ? `Switch to "${targetName}"? You'll leave the current host session.`
           : `Switch to "${targetName}"? You'll leave the current deck.`;
-      if (!window.confirm(message)) return;
+      setPendingDeckSwitch({ deckId, deckName: targetName, message });
+      return;
     }
 
-    loadDeck(deckId);
-    if (location.pathname.startsWith("/deck/")) {
-      const suffix = location.pathname.includes("/cards")
-        ? "/cards"
-        : location.pathname.includes("/play")
-          ? "/play"
-          : "";
-      navigate(`/deck/${deckId}${suffix}`);
-    }
+    switchDeck(deckId);
+  };
+
+  const cancelDeckSwitch = () => setPendingDeckSwitch(null);
+
+  const confirmDeckSwitch = () => {
+    if (!pendingDeckSwitch) return;
+    switchDeck(pendingDeckSwitch.deckId);
+    setPendingDeckSwitch(null);
   };
 
   const handleBlockedNav = (reason: string | undefined) => {
@@ -289,7 +311,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <select
             value={activeDeck?.id || ""}
             onChange={(e) => handleDeckChange(e.target.value)}
-            className="pc-select pc-taskbar-deck-select min-w-0 flex-1 sm:max-w-[160px] sm:flex-none"
+            className="pc-select pc-taskbar-deck-select min-w-0 flex-1 sm:w-[420px] sm:max-w-[420px] sm:flex-none"
             title="Active deck"
             aria-label="Active deck"
           >
@@ -302,7 +324,37 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         )}
 
         <div className="pc-taskbar-trailing" />
+        {backgroundTask && (
+          <div
+            className="flex min-w-0 max-w-[15rem] items-center gap-1.5 text-[11px] opacity-80"
+            role="status"
+            aria-live="polite"
+            title={`${backgroundTask.label} (${backgroundTask.completed}/${backgroundTask.total})`}
+          >
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+            <span className="hidden truncate sm:inline">
+              {backgroundTask.label} ({backgroundTask.completed}/{backgroundTask.total})
+            </span>
+            <span className="sm:hidden">
+              {backgroundTask.completed}/{backgroundTask.total}
+            </span>
+          </div>
+        )}
       </Taskbar>
+
+      {pendingDeckSwitch && (
+        <PcModal title="Switch deck?" onClose={cancelDeckSwitch}>
+          <p className="text-sm mb-4">{pendingDeckSwitch.message}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={cancelDeckSwitch}>
+              Cancel
+            </Button>
+            <Button type="button" variant="primary" onClick={confirmDeckSwitch}>
+              Switch to {pendingDeckSwitch.deckName}
+            </Button>
+          </div>
+        </PcModal>
+      )}
     </Desktop>
   );
 };
