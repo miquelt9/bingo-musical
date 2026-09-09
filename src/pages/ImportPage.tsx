@@ -21,7 +21,7 @@ export const ImportPage: React.FC = () => {
     setIsImporting(true);
     try {
       const imported = await importDeck(file);
-      trackEvent("deck_imported");
+      trackEvent("deck_imported", "import");
       navigate(`/deck/${imported.id}`);
     } catch (err) {
       setError((err as Error).message);

@@ -6,6 +6,7 @@ import {
   canonicalPayloadsEqual,
   computeShareId,
 } from "./deckCanonical";
+import { getTrafficAudienceHeader } from "../usage/audience";
 
 const API_URL = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
 
@@ -41,7 +42,9 @@ async function tryResolveExistingShare(
   shareId: string,
   canonical: ReturnType<typeof buildCanonicalSharePayload>
 ): Promise<string | null> {
-  const response = await fetch(`${API_URL}/api/decks/${encodeURIComponent(shareId)}`);
+  const response = await fetch(`${API_URL}/api/decks/${encodeURIComponent(shareId)}`, {
+    headers: getTrafficAudienceHeader(),
+  });
   if (response.status === 404) {
     return null;
   }
@@ -73,7 +76,7 @@ export async function publishSharedDeck(deck: Deck): Promise<PublishedSharedDeck
   const { exportObject } = serializeDeckForExport(deck);
   const response = await fetch(`${API_URL}/api/decks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getTrafficAudienceHeader() },
     body: JSON.stringify(exportObject),
   });
 
@@ -98,7 +101,9 @@ export async function fetchSharedDeckPayload(shareId: string): Promise<unknown> 
     throw new Error("Link sharing is not configured yet.");
   }
 
-  const response = await fetch(`${API_URL}/api/decks/${encodeURIComponent(shareId)}`);
+  const response = await fetch(`${API_URL}/api/decks/${encodeURIComponent(shareId)}`, {
+    headers: getTrafficAudienceHeader(),
+  });
   if (!response.ok) {
     throw new Error(await readApiError(response));
   }

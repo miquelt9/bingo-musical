@@ -294,7 +294,7 @@ export const CardsPage: React.FC = () => {
           setPdfProgress({ current, total });
         }
       );
-      trackEvent("cards_printed");
+      trackEvent("cards_printed", "cards", { output: "pdf" });
     } catch (err) {
       console.error("PDF generation failed:", err);
       alert("Failed to generate PDF: " + (err as Error).message);
@@ -316,7 +316,7 @@ export const CardsPage: React.FC = () => {
   useEffect(() => {
     if (!pendingPrint || printCards === null) return;
     setPendingPrint(false);
-    trackEvent("cards_printed");
+    trackEvent("cards_printed", "cards", { output: "browser" });
     window.print();
   }, [pendingPrint, printCards]);
 

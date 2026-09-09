@@ -102,20 +102,50 @@ The worker writes anonymous, aggregate events to the `bingo_musical_usage` datas
 | `deck_imported` | JSON deck import succeeds |
 | `cards_printed` | Browser print or PDF export |
 
+Each event stores a bounded audience label in Analytics Engine:
+
+- `public` — the default for ordinary traffic and older clients.
+- `tester` — enabled in one browser with `?traffic=tester`; reset with `?traffic=public`.
+
+The selection is persisted in browser `localStorage`, not a cookie. It is an analytics label, not an authentication mechanism.
+
+Analytics Engine blob layout is fixed as follows:
+
+| Blob | Meaning |
+|------|---------|
+| `blob1` | Event name |
+| `blob2` | Route, when applicable |
+| `blob3` | `public` or `tester` |
+| `blob4` | `browser` or `pdf` output, when applicable |
+
 View data in the Cloudflare dashboard → **Workers Analytics Engine** → SQL, for example:
 
 ```sql
-SELECT blob1 AS event, COUNT() AS count
+SELECT blob1 AS event, SUM(_sample_interval) AS count
 FROM bingo_musical_usage
 WHERE timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY event
 ORDER BY count DESC
 ```
 
+For Grafana time-series queries, use `SUM(_sample_interval)` for counts so the result remains correct if Analytics Engine sampling is applied. The repository includes an importable dashboard at [`observability/grafana/bingo-musical-usage-dashboard.json`](../observability/grafana/bingo-musical-usage-dashboard.json).
+
+### Grafana dashboard setup
+
+Cloudflare recommends the Altinity ClickHouse data-source plugin for querying Workers Analytics Engine from Grafana.
+
+1. Install or enable the Altinity ClickHouse data source in Grafana Cloud.
+2. Configure the URL as `https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/analytics_engine/sql`.
+3. Add a custom `Authorization` header with `Bearer <ACCOUNT_ANALYTICS_READ_TOKEN>`.
+4. Import `observability/grafana/bingo-musical-usage-dashboard.json`.
+5. Map the dashboard's `Bingo Musical Analytics Engine` data source to the configured ClickHouse data source.
+
+The dashboard includes an `audience` selector (`All`, `tester`, `public`) and time-series panels for shared decks, host sessions, and printed cards. Credentials are intentionally not stored in the repository.
+
 Page views by route:
 
 ```sql
-SELECT blob2 AS route, COUNT() AS count
+SELECT blob2 AS route, SUM(_sample_interval) AS count
 FROM bingo_musical_usage
 WHERE blob1 = 'page_view'
   AND timestamp > NOW() - INTERVAL '7' DAY

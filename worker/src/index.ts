@@ -70,6 +70,9 @@ const ALLOWED_EVENTS = new Set([
   "page_view",
 ]);
 
+const ALLOWED_AUDIENCES = new Set(["public", "tester"]);
+const ALLOWED_OUTPUTS = new Set(["browser", "pdf"]);
+
 const ALLOWED_ROUTE_LABELS = new Set([
   "home",
   "editor",
@@ -101,7 +104,7 @@ function corsHeaders(request: Request, env: Env): Headers {
     headers.set("Vary", "Origin");
   }
   headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Bingo-Audience");
   headers.set("Access-Control-Max-Age", "86400");
   return headers;
 }
@@ -722,10 +725,34 @@ async function handleYoutubePlaylist(request: Request, env: Env, playlistId: str
   }
 }
 
-function trackUsageEvent(env: Env, event: string, route?: string): void {
+type TrafficAudience = "public" | "tester";
+type UsageOutput = "browser" | "pdf";
+
+interface UsageEventContext {
+  route?: string;
+  audience?: TrafficAudience;
+  output?: UsageOutput;
+}
+
+function normalizeAudience(value: unknown): TrafficAudience {
+  return typeof value === "string" && ALLOWED_AUDIENCES.has(value)
+    ? value as TrafficAudience
+    : "public";
+}
+
+function requestAudience(request: Request): TrafficAudience {
+  return normalizeAudience(request.headers.get("X-Bingo-Audience"));
+}
+
+function trackUsageEvent(env: Env, event: string, context: UsageEventContext = {}): void {
   if (!env.USAGE_EVENTS) return;
 
-  const blobs = route ? [event, route] : [event];
+  const blobs = [
+    event,
+    context.route ?? "",
+    normalizeAudience(context.audience),
+    context.output ?? "",
+  ];
   env.USAGE_EVENTS.writeDataPoint({
     blobs,
     doubles: [],
@@ -1138,7 +1165,9 @@ async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
       return errorResponse(request, env, "Could not create share link. Please try again.", 503);
     }
 
-    trackUsageEvent(env, result.created ? "share_created" : "share_deduplicated");
+    trackUsageEvent(env, result.created ? "share_created" : "share_deduplicated", {
+      audience: requestAudience(request),
+    });
     return jsonResponse(request, env, { shareId: result.shareId }, result.created ? 201 : 200);
   } catch (err) {
     if (err instanceof ShareWriteError) {
@@ -1155,13 +1184,13 @@ async function handleGetDeck(request: Request, env: Env, shareId: string): Promi
 
   const stored = await env.SHARED_DECKS.get(`${SHARE_KEY_PREFIX}${shareId}`);
   if (!stored) {
-    trackUsageEvent(env, "share_not_found");
+    trackUsageEvent(env, "share_not_found", { audience: requestAudience(request) });
     return errorResponse(request, env, "Shared deck not found.", 404);
   }
 
   try {
     const payload = JSON.parse(stored);
-    trackUsageEvent(env, "share_opened");
+    trackUsageEvent(env, "share_opened", { audience: requestAudience(request) });
     return jsonResponse(request, env, payload, 200);
   } catch {
     return errorResponse(request, env, "Stored deck is corrupted.", 500);
@@ -1189,7 +1218,12 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     return errorResponse(request, env, "Invalid event payload.", 400);
   }
 
-  const { event, route } = body as { event?: unknown; route?: unknown };
+  const { event, route, audience, output } = body as {
+    event?: unknown;
+    route?: unknown;
+    audience?: unknown;
+    output?: unknown;
+  };
   if (typeof event !== "string" || !ALLOWED_EVENTS.has(event)) {
     return errorResponse(request, env, "Invalid event.", 400);
   }
@@ -1198,10 +1232,17 @@ async function handleTrackEvent(request: Request, env: Env): Promise<Response> {
     if (typeof route !== "string" || !ALLOWED_ROUTE_LABELS.has(route)) {
       return errorResponse(request, env, "Invalid route.", 400);
     }
-    trackUsageEvent(env, event, route);
-  } else {
-    trackUsageEvent(env, event);
   }
+
+  if (output !== undefined && (typeof output !== "string" || !ALLOWED_OUTPUTS.has(output))) {
+    return errorResponse(request, env, "Invalid output.", 400);
+  }
+
+  trackUsageEvent(env, event, {
+    route: typeof route === "string" ? route : undefined,
+    audience: normalizeAudience(audience),
+    output: typeof output === "string" ? output as UsageOutput : undefined,
+  });
 
   return emptyResponse(request, env);
 }

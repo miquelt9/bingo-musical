@@ -386,7 +386,7 @@ export const HostPage: React.FC = () => {
   useEffect(() => {
     if (!sessionReady || hostTrackedRef.current) return;
     hostTrackedRef.current = true;
-    trackEvent("host_started");
+    trackEvent("host_started", "host");
   }, [sessionReady]);
 
   useEffect(() => {

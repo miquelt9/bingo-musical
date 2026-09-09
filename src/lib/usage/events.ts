@@ -1,4 +1,5 @@
 import { getShareApiUrl, isShareApiConfigured } from "../share/sharedDecksApi";
+import { getTrafficAudience } from "./audience";
 
 export type ProductEvent =
   | "host_started"
@@ -15,12 +16,33 @@ export type RouteLabel =
   | "share"
   | "settings";
 
-export function trackEvent(event: ProductEvent, route?: RouteLabel): void {
+export type UsageOutput = "browser" | "pdf";
+
+export interface UsageEventContext {
+  output?: UsageOutput;
+}
+
+export function trackEvent(
+  event: ProductEvent,
+  route?: RouteLabel,
+  context?: UsageEventContext
+): void {
   if (!isShareApiConfigured()) return;
 
-  const body: { event: ProductEvent; route?: RouteLabel } = { event };
+  const body: {
+    event: ProductEvent;
+    route?: RouteLabel;
+    audience: ReturnType<typeof getTrafficAudience>;
+    output?: UsageOutput;
+  } = {
+    event,
+    audience: getTrafficAudience(),
+  };
   if (route) {
     body.route = route;
+  }
+  if (context?.output) {
+    body.output = context.output;
   }
 
   const apiUrl = getShareApiUrl();
