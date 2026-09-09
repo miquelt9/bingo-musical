@@ -80,6 +80,8 @@ export function setPlayerPrivacyMode(hidden: boolean): void {
 
 let slots: [PlayerSlot, PlayerSlot] | null = null;
 let playerMountCount = 0;
+let mountPromise: Promise<void> | null = null;
+let teardownTimer: number | null = null;
 let activeSlotIndex = 0;
 let pollTimer: number | null = null;
 let activeClip: Clip | null = null;
@@ -345,12 +347,40 @@ function areSlotsMounted(): boolean {
   );
 }
 
-export async function mountDualPlayers(
+function cancelScheduledTeardown(): void {
+  if (teardownTimer !== null) {
+    window.clearTimeout(teardownTimer);
+    teardownTimer = null;
+  }
+}
+
+function scheduleTeardown(): void {
+  cancelScheduledTeardown();
+  // React Strict Mode replays effects synchronously in development. Defer the
+  // final release so the replayed mount can retain the shared players.
+  teardownTimer = window.setTimeout(() => {
+    teardownTimer = null;
+    if (playerMountCount !== 0) return;
+    stopPlayback();
+    destroyPlayers();
+  }, 0);
+}
+
+function destroyDetachedPlayer(player: YT.Player, container: HTMLElement): void {
+  try {
+    player.destroy();
+  } catch {
+    // ignore
+  }
+  if (!container.isConnected) container.replaceChildren();
+}
+
+export function mountDualPlayers(
   wrapA: HTMLElement,
   wrapB: HTMLElement
 ): Promise<void> {
   playerMountCount += 1;
-  await loadYoutubeApi();
+  cancelScheduledTeardown();
 
   if (slots && areSlotsMounted()) {
     currentState.isReady = true;
@@ -358,31 +388,70 @@ export async function mountDualPlayers(
     updateActiveElementId();
     notifyListeners();
     flushPendingPlay();
-    return;
+    return Promise.resolve();
   }
 
-  destroyPlayers();
+  // Multiple effects can request the engine before the first pair of iframes
+  // is ready. Share one mount operation instead of letting the requests race.
+  if (mountPromise) return mountPromise;
 
-  slots = [
-    { wrapperId: YOUTUBE_SLOT_WRAP_A, container: wrapA, player: null, clip: null, preloadedClip: null },
-    { wrapperId: YOUTUBE_SLOT_WRAP_B, container: wrapB, player: null, clip: null, preloadedClip: null },
-  ];
-  activeSlotIndex = 0;
-  visibleSlotIndex = 0;
+  const promise = (async () => {
+    await loadYoutubeApi();
+    if (playerMountCount === 0) return;
 
-  const [primaryPlayer, standbyPlayer] = await Promise.all([
-    createPlayer(wrapA, 0),
-    createPlayer(wrapB, 1),
-  ]);
+    if (slots && areSlotsMounted()) {
+      currentState.isReady = true;
+      setVisibleSlot(visibleSlotIndex);
+      updateActiveElementId();
+      notifyListeners();
+      flushPendingPlay();
+      return;
+    }
 
-  if (!slots) return;
-  slots[0].player = primaryPlayer;
-  slots[1].player = standbyPlayer;
-  setPlayerPrivacyMode(privacyModeHidden);
-  setVisibleSlot(0);
-  updateActiveElementId();
-  notifyListeners();
-  flushPendingPlay();
+    destroyPlayers();
+
+    const nextSlots: [PlayerSlot, PlayerSlot] = [
+      { wrapperId: YOUTUBE_SLOT_WRAP_A, container: wrapA, player: null, clip: null, preloadedClip: null },
+      { wrapperId: YOUTUBE_SLOT_WRAP_B, container: wrapB, player: null, clip: null, preloadedClip: null },
+    ];
+    slots = nextSlots;
+    activeSlotIndex = 0;
+    visibleSlotIndex = 0;
+
+    const [primaryPlayer, standbyPlayer] = await Promise.all([
+      createPlayer(wrapA, 0),
+      createPlayer(wrapB, 1),
+    ]);
+
+    if (slots !== nextSlots || playerMountCount === 0) {
+      if (slots === nextSlots) {
+        destroyPlayers();
+      } else {
+        destroyDetachedPlayer(primaryPlayer, wrapA);
+        destroyDetachedPlayer(standbyPlayer, wrapB);
+      }
+      return;
+    }
+
+    nextSlots[0].player = primaryPlayer;
+    nextSlots[1].player = standbyPlayer;
+    setPlayerPrivacyMode(privacyModeHidden);
+    setVisibleSlot(0);
+    updateActiveElementId();
+    notifyListeners();
+    flushPendingPlay();
+  })();
+
+  mountPromise = promise;
+  void promise.then(
+    () => {
+      if (mountPromise === promise) mountPromise = null;
+    },
+    () => {
+      if (mountPromise === promise) mountPromise = null;
+    }
+  );
+  return promise;
 }
 
 /** @deprecated Use mountDualPlayers with wrapper elements */
@@ -424,10 +493,7 @@ function destroyPlayers(): void {
 /** Release a player mount; tears down iframes when the last mount is released. */
 export function teardownYoutubePlayers(): void {
   playerMountCount = Math.max(0, playerMountCount - 1);
-  if (playerMountCount === 0) {
-    stopPlayback();
-    destroyPlayers();
-  }
+  if (playerMountCount === 0) scheduleTeardown();
 }
 
 function mapYTState(data: number): PlayerStateName {

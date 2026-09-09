@@ -76,6 +76,8 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               : null;
 
   const isHostRoute = activeTab === "host";
+  // Pre-mount YouTube while editing so the first Preview click retains its user gesture.
+  const isYoutubeEditorRoute = activeTab === "editor" && activeDeck?.provider === "youtube";
 
   useEffect(() => {
     if (isHostRoute) {
@@ -96,7 +98,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }, [isHostRoute, hasActiveClip, engineRequested, releasePlayerEngine]);
 
   const needsYoutubeEngine =
-    (isHostRoute || hasActiveClip || engineRequested) &&
+    (isHostRoute || isYoutubeEditorRoute || hasActiveClip || engineRequested) &&
     (playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider ?? "youtube") ===
       "youtube";
   const needsDeezerEngine =

@@ -76,6 +76,11 @@ export const ClipPreviewButton: React.FC<ClipPreviewButtonProps> = ({
       let playTrack = track;
       if (track.media?.provider === "deezer") {
         setIsRefreshing(true);
+        requestPlayerEngine("deezer");
+        // Give React one paint for the loading state before resolving a fresh
+        // signed URL. A cached/failed refresh can otherwise batch both state
+        // updates and make the button appear not to react to the click.
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
         try {
           const fresh = await ensureFreshDeezerPreview(track.media);
           playTrack = withFreshDeezerMedia(track, fresh.media);
