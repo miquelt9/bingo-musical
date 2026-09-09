@@ -27,6 +27,35 @@ export const SUGGEST_PAGE_SIZE = 8;
 export const SUGGEST_SEED_CAP = 5;
 /** How many candidates to pull before filtering excludes (related / catalog). */
 const SUGGEST_FETCH_HEADROOM = 32;
+const CATALOG_QUERY_CONCURRENCY = 3;
+const YOUTUBE_RESOLVE_CONCURRENCY = 4;
+
+async function mapConcurrent<T, R>(
+  items: T[],
+  concurrency: number,
+  signal: AbortSignal | undefined,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<Array<R | null>> {
+  const results: Array<R | null> = Array.from({ length: items.length }, () => null);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (!signal?.aborted) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      try {
+        results[index] = await worker(items[index], index);
+      } catch {
+        // One slow or unavailable source must not hold up the other candidates.
+        results[index] = null;
+      }
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return results;
+}
 
 export type SuggestHit =
   | { provider: "deezer"; hit: DeezerTrackHit }
@@ -133,21 +162,31 @@ async function collectCatalogSuggestions(
     ),
   ].slice(0, SUGGEST_SEED_CAP);
 
-  // Try primary artist name, then a looser "artist songs" query for more headroom on "Find more".
-  const queries = [
-    ...artistQueries,
-    ...artistQueries.map((artist) => `${artist} songs`),
+  // Search the primary artist names together. The looser queries are only needed
+  // when those results do not provide enough headroom for playable matches.
+  const queryGroups = [
+    artistQueries,
+    artistQueries.map((artist) => `${artist} songs`),
   ];
 
-  for (const artist of queries) {
+  for (const queries of queryGroups) {
     if (signal?.aborted || bySong.size >= limit) break;
-    try {
-      const songs = await searchCatalogSongs(artist, signal);
+
+    const queryResults = await mapConcurrent(
+      queries,
+      CATALOG_QUERY_CONCURRENCY,
+      signal,
+      (query) => searchCatalogSongs(query, signal),
+    );
+
+    for (let queryIndex = 0; queryIndex < queries.length && bySong.size < limit; queryIndex += 1) {
+      const query = queries[queryIndex];
+      const songs = queryResults[queryIndex] || [];
       for (const song of songs) {
         const key = songIdentityKey(song.artist, song.title);
         if (key === "::" || excludeSongs.has(key) || bySong.has(key)) continue;
         // Keep results that look like the queried artist (avoid total query noise).
-        const seedArtist = normalizeArtistKey(firstArtistName(artist.replace(/\s+songs$/i, "")));
+        const seedArtist = normalizeArtistKey(firstArtistName(query.replace(/\s+songs$/i, "")));
         const songArtist = normalizeArtistKey(firstArtistName(song.artist));
         if (
           seedArtist &&
@@ -160,8 +199,6 @@ async function collectCatalogSuggestions(
         bySong.set(key, song);
         if (bySong.size >= limit) break;
       }
-    } catch {
-      // Continue with remaining artists.
     }
   }
 
@@ -193,42 +230,63 @@ async function suggestYoutube(
   limit: number,
   signal?: AbortSignal
 ): Promise<SuggestHit[]> {
-  const catalogTarget = Math.max(limit * 4, SUGGEST_FETCH_HEADROOM);
+  const catalogTarget = Math.max(limit * 2, SUGGEST_FETCH_HEADROOM);
   const catalogSongs = await collectCatalogSuggestions(seeds, excludeSongs, catalogTarget, signal);
   if (catalogSongs.length === 0 || signal?.aborted) return [];
 
-  const results: SuggestHit[] = [];
+  const results: Array<{ index: number; item: SuggestHit }> = [];
   const usedVideoIds = new Set(excludeIds);
   const usedSongs = new Set(excludeSongs);
+  let nextIndex = 0;
 
-  for (const song of catalogSongs) {
-    if (signal?.aborted || results.length >= limit) break;
-    const songKey = songIdentityKey(song.artist, song.title);
-    if (usedSongs.has(songKey)) continue;
+  // Searching and validating each song serially made this path feel stalled,
+  // especially when a search backend or noembed is slow. Keep a small pool so
+  // the browser and the Worker are not flooded while several songs resolve at once.
+  async function resolveWorker(): Promise<void> {
+    while (!signal?.aborted && results.length < limit) {
+      const index = nextIndex++;
+      if (index >= catalogSongs.length) return;
+      const song = catalogSongs[index];
+      const songKey = songIdentityKey(song.artist, song.title);
+      if (usedSongs.has(songKey)) continue;
 
-    try {
-      const resolved = await resolveCatalogToYoutube(song, signal);
-      if (!resolved || usedVideoIds.has(resolved.hit.videoId)) continue;
-      usedVideoIds.add(resolved.hit.videoId);
-      usedSongs.add(songKey);
-      results.push({
-        provider: "youtube",
-        hit: resolved.hit,
-        embeddable: resolved.embeddable,
-        catalog: {
-          title: song.title,
-          artist: song.artist,
-          album: song.album,
-          artworkUrl: song.artworkUrl,
-          durationMs: song.durationMs,
-        },
-      });
-    } catch {
-      // Continue with remaining catalog songs.
+      try {
+        const resolved = await resolveCatalogToYoutube(song, signal);
+        if (!resolved || usedVideoIds.has(resolved.hit.videoId) || results.length >= limit) continue;
+        usedVideoIds.add(resolved.hit.videoId);
+        usedSongs.add(songKey);
+        results.push({
+          index,
+          item: {
+            provider: "youtube",
+            hit: resolved.hit,
+            embeddable: resolved.embeddable,
+            catalog: {
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              artworkUrl: song.artworkUrl,
+              durationMs: song.durationMs,
+            },
+          },
+        });
+      } catch {
+        // Continue with remaining catalog songs.
+      }
     }
   }
 
-  return results.slice(0, limit);
+  await Promise.all(
+    Array.from(
+      { length: Math.min(YOUTUBE_RESOLVE_CONCURRENCY, catalogSongs.length) },
+      () => resolveWorker(),
+    ),
+  );
+
+  return results
+    .sort((a, b) => a.index - b.index)
+    .slice(0, limit)
+    .map(({ item }) => item);
 }
 
 export async function suggestSongs(options: SuggestSongsOptions): Promise<SuggestHit[]> {

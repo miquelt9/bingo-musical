@@ -133,6 +133,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const blurTimer = useRef<number | null>(null);
   const skipCatalogQuery = useRef<string | null>(null);
+  const catalogAbort = useRef<AbortController | null>(null);
   const youtubeAbort = useRef<AbortController | null>(null);
   const lastYoutubeSearchQueryRef = useRef("");
   const lyricsFallbackAttemptedRef = useRef(false);
@@ -245,6 +246,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
     }
 
     const controller = new AbortController();
+    catalogAbort.current = controller;
     setIsCatalogLoading(true);
     const timer = window.setTimeout(async () => {
       try {
@@ -257,11 +259,13 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
         if (!controller.signal.aborted) setSuggestions([]);
       } finally {
         if (!controller.signal.aborted) setIsCatalogLoading(false);
+        if (catalogAbort.current === controller) catalogAbort.current = null;
       }
     }, 400);
 
     return () => {
       controller.abort();
+      if (catalogAbort.current === controller) catalogAbort.current = null;
       window.clearTimeout(timer);
     };
   }, [query]);
@@ -271,6 +275,12 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
     catalog?: CatalogSong | null,
     options?: { isLyricsFallback?: boolean }
   ) => {
+    catalogAbort.current?.abort();
+    catalogAbort.current = null;
+    setSuggestions([]);
+    setIsCatalogLoading(false);
+    setHighlightedIndex(-1);
+
     youtubeAbort.current?.abort();
     const controller = new AbortController();
     youtubeAbort.current = controller;
