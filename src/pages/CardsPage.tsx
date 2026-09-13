@@ -34,6 +34,7 @@ import { trackEvent } from "../lib/usage/events";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { buildSharedDeckUrl } from "../lib/share/deckShare";
+import { estimateBingoTimes, formatEstimateDraws, formatEstimateDuration } from "../lib/bingo/estimator";
 import {
   isShareApiConfigured,
   publishSharedDeck,
@@ -128,6 +129,19 @@ export const CardsPage: React.FC = () => {
   );
   const poolCount = poolTracks.length;
   const poolLabelPlural = usesAuthorPool(cellContent) ? "authors" : "songs";
+  const averageClipSeconds = useMemo(() => {
+    if (poolTracks.length === 0) return 0;
+    return (
+      poolTracks.reduce(
+        (total, track) => total + Math.max(0, track.endTime - track.startTime),
+        0
+      ) / poolTracks.length
+    );
+  }, [poolTracks]);
+  const bingoEstimate = useMemo(
+    () => estimateBingoTimes(poolCount, gridSize, gridSize, cardCount, averageClipSeconds),
+    [poolCount, gridSize, cardCount, averageClipSeconds]
+  );
 
   const cardOptions = useMemo(() => {
     if (!deck) return null;
@@ -661,6 +675,39 @@ export const CardsPage: React.FC = () => {
                     ? ` · Need ${cellCount(gridSize)}+ ${poolLabelPlural} for this grid`
                     : ""}
                 </p>
+                {canGenerate && (
+                  <div className="pc-bevel-inset p-2.5 mt-2 space-y-2" aria-live="polite">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold">Estimated game time</span>
+                      <span className="text-[10px] text-muted">
+                        ~{Math.round(averageClipSeconds)}s per song
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="block text-muted">First line</span>
+                        <span className="block font-bold">
+                          {formatEstimateDuration(bingoEstimate.line.estimatedSeconds)}
+                        </span>
+                        <span className="block text-[10px] text-muted">
+                          {formatEstimateDraws(bingoEstimate.line.expectedDraws)} called
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-muted">Full card</span>
+                        <span className="block font-bold">
+                          {formatEstimateDuration(bingoEstimate.fullCard.estimatedSeconds)}
+                        </span>
+                        <span className="block text-[10px] text-muted">
+                          {formatEstimateDraws(bingoEstimate.fullCard.expectedDraws)} called
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted">
+                      Expected values for {cardCount} card{cardCount === 1 ? "" : "s"}; actual games vary.
+                    </p>
+                  </div>
+                )}
                 {shareStatus === "loading" && (
                   <p className="text-muted inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />

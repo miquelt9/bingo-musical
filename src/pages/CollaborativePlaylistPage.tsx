@@ -170,7 +170,7 @@ export const CollaborativePlaylistPage: React.FC = () => {
           <div><h2 className="font-bold mb-2">Songs in this playlist</h2><div className="pc-bevel-inset p-2 max-h-80 overflow-y-auto"><ul className="space-y-1 text-sm">{displayedTracks.map((track) => <li key={`${trackKey(track)}-${track.id}`} className="flex items-center gap-2 p-1.5"><span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>{pending.some((item) => trackKey(item) === trackKey(track)) ? <span className="text-xs opacity-70">Syncing…</span> : track.media ? <ClipPreviewButton track={track} size="sm" /> : <Check className="w-3.5 h-3.5 text-pc-warning" />}</li>)}</ul></div></div>
         </div> : null}
       </Window>
-      <p className="text-xs text-center opacity-70">No account or roles are required. This link is the access.</p>
+      <p className="text-xs text-center opacity-70">No account required. This link is the access.</p>
       {playlist && <Link to="/" className="pc-link text-xs">Go to my decks</Link>}
     </div>
   );

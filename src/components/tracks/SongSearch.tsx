@@ -611,26 +611,6 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
           {suggestionPanel && createPortal(suggestionPanel, document.body)}
         </div>
         <button
-          type="button"
-          onClick={async () => {
-            try {
-              const pasted = (await navigator.clipboard.readText()).trim();
-              if (!pasted) return;
-              setQuery(pasted);
-              setSelectedCatalog(null);
-              setError(null);
-              setShowSuggestions(false);
-            } catch {
-              setError("Could not read the clipboard. Please paste into the search field instead.");
-            }
-          }}
-          className="pc-button shrink-0 inline-flex items-center justify-center"
-          aria-label="Paste from clipboard"
-          title="Paste from clipboard"
-        >
-          <ClipboardPaste className="w-4 h-4" />
-        </button>
-        <button
           type="submit"
           disabled={isSearching || !query.trim()}
           className="pc-button pc-button--primary shrink-0"
@@ -647,6 +627,27 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
               Find clips
             </>
           )}
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const pasted = await navigator.clipboard.readText();
+              if (!pasted.trim()) return;
+              setQuery(pasted);
+              setSelectedCatalog(null);
+              setError(null);
+              setShowSuggestions(false);
+            } catch {
+              setError("Could not read the clipboard. Please paste into the search field instead.");
+            }
+          }}
+          onContextMenu={(event) => event.preventDefault()}
+          className="pc-button shrink-0 inline-flex items-center justify-center"
+          aria-label="Paste from clipboard"
+          title="Paste from clipboard"
+        >
+          <ClipboardPaste className="w-4 h-4" />
         </button>
       </form>
 

@@ -148,27 +148,28 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
             className="pc-input w-full pl-8"
           />
         </div>
+        <Button type="submit" variant="primary" disabled={isSearching || !query.trim()}>
+          {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          {isSearching ? "Searching…" : "Search Deezer"}
+        </Button>
         <Button
           type="button"
           onClick={async () => {
             try {
-              const pasted = (await navigator.clipboard.readText()).trim();
-              if (!pasted) return;
+              const pasted = await navigator.clipboard.readText();
+              if (!pasted.trim()) return;
               setQuery(pasted);
               setError(null);
             } catch {
               setError("Could not read the clipboard. Please paste into the search field instead.");
             }
           }}
+          onContextMenu={(event) => event.preventDefault()}
           className="shrink-0 inline-flex items-center justify-center"
           aria-label="Paste from clipboard"
           title="Paste from clipboard"
         >
           <ClipboardPaste className="w-4 h-4" />
-        </Button>
-        <Button type="submit" variant="primary" disabled={isSearching || !query.trim()}>
-          {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          {isSearching ? "Searching…" : "Search Deezer"}
         </Button>
       </form>
       <p className="text-xs">Search Deezer metadata or paste a numeric track ID / track URL. Only Deezer’s short preview is used.</p>
