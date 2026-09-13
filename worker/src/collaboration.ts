@@ -109,19 +109,19 @@ function normalizeTrack(raw: unknown, playlistProvider: "youtube" | "deezer"): C
   return { ...raw, provider: playlistProvider, id: stableId, title, artist };
 }
 
-function normalizeTracks(raw: unknown, playlistProvider: "youtube" | "deezer"): CollaborationTrack[] | null {
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_COLLAB_TRACKS) return null;
+function normalizeTracks(raw: unknown, playlistProvider: "youtube" | "deezer", allowEmpty = false): CollaborationTrack[] | null {
+  if (!Array.isArray(raw) || (!allowEmpty && raw.length === 0) || raw.length > MAX_COLLAB_TRACKS) return null;
   const tracks = raw.map((item) => normalizeTrack(item, playlistProvider));
   return tracks.every((item): item is CollaborationTrack => item !== null) ? tracks : null;
 }
 
-function playlistFromInput(input: unknown, id: string, now = new Date().toISOString()): CollaborationPlaylist | null {
+function playlistFromInput(input: unknown, id: string, now = new Date().toISOString(), allowEmpty = false): CollaborationPlaylist | null {
   if (!record(input)) return null;
   const name = text(input.name, MAX_NAME_LENGTH);
   const playlistProvider = provider(input.provider);
   if (!name || !playlistProvider) return null;
   const source = Array.isArray(input.tracks) ? input.tracks : input.songs;
-  const tracks = normalizeTracks(source, playlistProvider);
+  const tracks = normalizeTracks(source, playlistProvider, allowEmpty);
   if (!tracks) return null;
 
   const unique = new Set<string>();
@@ -210,6 +210,44 @@ export async function handleCreateCollaboration(request: Request, env: Collabora
 export async function handleGetCollaboration(env: CollaborationEnv, id: string): Promise<Response> {
   const playlist = await readPlaylist(env, id);
   return playlist ? json(playlist) : error("Collaboration not found.", 404);
+}
+
+export async function handleUpdateCollaboration(request: Request, env: CollaborationEnv, id: string): Promise<Response> {
+  const current = await readPlaylist(env, id);
+  if (!current) return error("Collaboration not found.", 404);
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return error("Invalid collaboration payload.", 400);
+  }
+  if (!record(body) || typeof body.baseRevision !== "number" || !Number.isInteger(body.baseRevision) || body.baseRevision < 0) {
+    return error("baseRevision is required.", 400);
+  }
+  if (body.baseRevision !== current.revision) return error("Collaboration revision is stale.", 409);
+
+  const next = playlistFromInput(body, id, current.updatedAt, true);
+  if (!next || next.provider !== current.provider) return error("Invalid collaboration payload.", 400);
+
+  const unchanged = next.name === current.name && JSON.stringify(next.tracks) === JSON.stringify(current.tracks);
+  if (unchanged) {
+    return json({ changed: false, revision: current.revision, playlist: current });
+  }
+
+  const updated: CollaborationPlaylist = {
+    ...current,
+    name: next.name,
+    tracks: next.tracks,
+    revision: current.revision + 1,
+    updatedAt: new Date().toISOString(),
+  };
+  try {
+    await env.SHARED_DECKS.put(collaborationKey(id), JSON.stringify(updated));
+  } catch {
+    return error("Could not persist collaboration.", 503);
+  }
+  return json({ changed: true, revision: updated.revision, playlist: updated });
 }
 
 export async function handleAppendTracks(request: Request, env: CollaborationEnv, id: string): Promise<Response> {

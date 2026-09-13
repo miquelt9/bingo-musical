@@ -65,7 +65,8 @@ Rebuild/redeploy the frontend after setting the secret.
 | `POST` | `/api/decks` | Store deck export JSON if not already present. Returns `{ "shareId": "..." }` with `201` on first write or `200` when content already exists (no KV write). |
 | `GET` | `/api/decks/:shareId` | Fetch stored deck export JSON |
 | `POST` | `/api/collaborations` | Create a collaborative playlist from a deck-like export; returns `{ collaborationId, revision, playlist }` |
-| `GET` | `/api/collaborations/:id` | Read the authoritative collaborative playlist |
+| `GET` | `/api/collaborations/:id` | Read the current collaborative playlist |
+| `PUT` | `/api/collaborations/:id` | Replace the editable playlist fields with `{ baseRevision, name, provider, tracks }` |
 | `POST` | `/api/collaborations/:id/tracks` | Append tracks with `{ operationId, baseRevision, tracks }`; duplicate tracks are ignored |
 | `POST` | `/api/events` | Record anonymous usage event (returns `204`) |
 | `GET` | `/api/health` | Health check |
@@ -100,7 +101,7 @@ Collaborative IDs are generated from 128 random bits and encoded as base64url. C
 }
 ```
 
-Track appends use optimistic revision checks: `baseRevision` must equal the current revision read from KV; stale writes receive `409`. The app is append-only, and a successful mutation returns `changed`, `revision`, `playlist`, `addedTrackIds`, and `duplicateTrackIds`. Duplicate detection uses provider media id or normalized artist/title. Payloads are limited to 150 tracks and 256 KiB. This is sufficient for normal low-concurrency usage, but simultaneous writes can still result in a rare last-writer race; this is not strict atomic serialization.
+Collaborative edits use optimistic revision checks: `baseRevision` must equal the current revision read from KV; stale writes receive `409`. The playlist supports adding, removing, renaming, source/clip edits, and other full-deck updates. No-op updates do not write KV. Track appends return `changed`, `revision`, `playlist`, `addedTrackIds`, and `duplicateTrackIds`; full updates return `changed`, `revision`, and `playlist`. Payloads are limited to 150 tracks and 256 KiB. This is sufficient for normal low-concurrency usage, but simultaneous writes can still result in a rare last-writer race; this is not strict atomic serialization.
 
 ## Usage analytics (Workers Analytics Engine)
 

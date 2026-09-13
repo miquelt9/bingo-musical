@@ -27,6 +27,12 @@ export interface AppendTracksResponse {
   duplicateTrackIds?: string[];
 }
 
+export interface UpdateCollaborativePlaylistResponse {
+  changed: boolean;
+  revision: number;
+  playlist: CollaborativePlaylist;
+}
+
 export class CollaborativeApiError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -98,5 +104,16 @@ export function appendCollaborativeTracks(
   return request<AppendTracksResponse>(`/api/collaborations/${encodeURIComponent(id)}/tracks`, {
     method: "POST",
     body: JSON.stringify({ operationId: operationId(), baseRevision, tracks }),
+  });
+}
+
+export function updateCollaborativePlaylist(
+  id: string,
+  baseRevision: number,
+  playlist: Pick<CollaborativePlaylist, "name" | "provider" | "tracks">,
+): Promise<UpdateCollaborativePlaylistResponse> {
+  return request<UpdateCollaborativePlaylistResponse>(`/api/collaborations/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify({ baseRevision, ...playlist }),
   });
 }

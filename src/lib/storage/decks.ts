@@ -30,6 +30,15 @@ function providerFrom(value: unknown): MusicProvider {
   return value === "deezer" ? "deezer" : "youtube";
 }
 
+function normalizeCollaboration(raw: unknown): Deck["collaboration"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  const id = typeof value.id === "string" ? value.id.trim() : "";
+  const revision = value.revision;
+  if (!id || typeof revision !== "number" || !Number.isInteger(revision) || revision < 0) return undefined;
+  return { id, revision };
+}
+
 function readMedia(raw: unknown, provider: MusicProvider, legacy: Record<string, unknown>): TrackMedia | null {
   if (raw && typeof raw === "object") {
     const media = raw as Record<string, unknown>;
@@ -120,6 +129,7 @@ function normalizeDeck(raw: unknown): Deck | null {
     .filter((track): track is Track => track !== null);
   if (tracks.length !== value.tracks.length) return null;
   const now = new Date().toISOString();
+  const collaboration = normalizeCollaboration(value.collaboration);
   return {
     schemaVersion: 2,
     id: typeof value.id === "string" && value.id.trim() ? value.id : `deck-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -128,6 +138,7 @@ function normalizeDeck(raw: unknown): Deck | null {
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : now,
     provider,
     source: value.source && typeof value.source === "object" ? value.source as DeckSource : { type: "manual" },
+    ...(collaboration ? { collaboration } : {}),
     tracks,
   };
 }

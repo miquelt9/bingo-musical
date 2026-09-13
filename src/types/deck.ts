@@ -38,6 +38,11 @@ export interface DeckSource {
   convertedFrom?: MusicProvider;
 }
 
+export interface DeckCollaboration {
+  id: string;
+  revision: number;
+}
+
 export interface Deck {
   schemaVersion: 2;
   id: string;
@@ -46,6 +51,7 @@ export interface Deck {
   updatedAt: string;
   provider: MusicProvider;
   source?: DeckSource;
+  collaboration?: DeckCollaboration;
   tracks: Track[];
 }
 

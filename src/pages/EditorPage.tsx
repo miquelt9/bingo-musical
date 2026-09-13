@@ -41,6 +41,13 @@ import { stopPlayback } from "../lib/player/player";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { getTrackSourceId } from "../lib/music/providers";
 import {
+  CollaborativeApiError,
+  CollaborativePlaylist,
+  fetchCollaborativePlaylist,
+  updateCollaborativePlaylist,
+} from "../lib/share/collaborativePlaylistsApi";
+import { songIdentityKey } from "../lib/music/songIdentity";
+import {
   Edit3,
   Printer,
   Radio,
@@ -52,7 +59,29 @@ import {
   Sparkles,
   ArrowRightLeft,
   Wand2,
+  RefreshCw,
 } from "lucide-react";
+
+function collaborativeTrackKey(track: Track): string {
+  if (track.media) return `media:${track.media.provider}:${track.media.id.toLowerCase()}`;
+  return `text:${songIdentityKey(track.artist, track.title)}`;
+}
+
+type CollaborativeDeckMutation = (latest: Deck) => Deck;
+
+function mergeCollaborativeTracks(localTracks: Track[], remoteTracks: Track[]): { tracks: Track[]; addedCount: number } {
+  const tracks = [...localTracks];
+  const seen = new Set(localTracks.map(collaborativeTrackKey));
+  let addedCount = 0;
+  for (const track of remoteTracks) {
+    const key = collaborativeTrackKey(track);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tracks.push(track);
+    addedCount += 1;
+  }
+  return { tracks, addedCount };
+}
 
 export const EditorPage: React.FC = () => {
   const { id, deck: routeDeck, notFound } = useDeckRoute();
@@ -71,6 +100,8 @@ export const EditorPage: React.FC = () => {
   const [isMatching, setIsMatching] = useState(false);
   const [matchProgress, setMatchProgress] = useState<BatchMatchProgress | null>(null);
   const cancelMatchingRef = useRef(false);
+  const collaborativeMutationRef = useRef<(mutation: CollaborativeDeckMutation, successMessage?: string) => void>(() => undefined);
+  const collaborativeWriteQueueRef = useRef(Promise.resolve());
 
   const { showToast } = useToast();
   const { requestPlayerEngine, releasePlayerEngine } = usePlayerUI();
@@ -78,6 +109,7 @@ export const EditorPage: React.FC = () => {
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
   const [showCollaborateModal, setShowCollaborateModal] = useState(false);
+  const [isCollaborativeSyncing, setIsCollaborativeSyncing] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [suggestSeeds, setSuggestSeeds] = useState<Track[] | null>(null);
   const [addSongRainbowDismissed, setAddSongRainbowDismissed] = useState(false);
@@ -90,7 +122,16 @@ export const EditorPage: React.FC = () => {
   const blockedToastShownRef = useRef(false);
 
   const { handleAutoFixBlocked, isMatching: isAutoFixing } = useAutoFixBlocked(deck, {
-    onDeckUpdate: setDeck,
+    onDeckUpdate: (nextDeck) => {
+      setDeck(nextDeck);
+      if (nextDeck.collaboration) {
+        const desiredTracks = new Map(nextDeck.tracks.map((track) => [collaborativeTrackKey(track), track]));
+        collaborativeMutationRef.current((latest) => ({
+          ...latest,
+          tracks: latest.tracks.map((track) => desiredTracks.get(collaborativeTrackKey(track)) ?? track),
+        }));
+      }
+    },
     onViewProblems: deck ? () => navigate(`/deck/${deck.id}?filter=blocked`) : undefined,
   });
 
@@ -200,7 +241,19 @@ export const EditorPage: React.FC = () => {
           invalidIds.has(track.id) ? { ...track, matchStatus: "failed" as const } : track
         );
         const nextDeck = { ...current, tracks: nextTracks };
-        updateDeck(nextDeck);
+        if (current.collaboration) {
+          const invalidKeys = new Set(invalidTracks.map((entry) => collaborativeTrackKey(entry.track)));
+          collaborativeMutationRef.current((latest) => ({
+            ...latest,
+            tracks: latest.tracks.map((track) =>
+              invalidKeys.has(collaborativeTrackKey(track))
+                ? { ...track, matchStatus: "failed" as const }
+                : track
+            ),
+          }));
+        } else {
+          updateDeck(nextDeck);
+        }
         return nextDeck;
       });
     }).finally(() => {
@@ -233,7 +286,7 @@ export const EditorPage: React.FC = () => {
           if (!current) return null;
           const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
           const nextDeck = { ...current, tracks: nextTracks };
-          updateDeck(nextDeck);
+          if (!current.collaboration) updateDeck(nextDeck);
           return nextDeck;
         });
       };
@@ -244,7 +297,15 @@ export const EditorPage: React.FC = () => {
       setDeck((current) => {
         if (!current) return null;
         const finalDeck = { ...current, tracks: updatedTracks };
-        updateDeck(finalDeck);
+        if (current.collaboration) {
+          const desiredTracks = new Map(updatedTracks.map((track) => [collaborativeTrackKey(track), track]));
+          collaborativeMutationRef.current((latest) => ({
+            ...latest,
+            tracks: latest.tracks.map((track) => desiredTracks.get(collaborativeTrackKey(track)) ?? track),
+          }), "Matched songs were synced to the collaborative playlist.");
+        } else {
+          updateDeck(finalDeck);
+        }
         return finalDeck;
       });
     } catch (err) {
@@ -290,7 +351,135 @@ export const EditorPage: React.FC = () => {
     );
   }
 
+  const handleCollaborationLinked = (collaborationId: string, revision = 0) => {
+    setDeck((current) => {
+      if (!current) return current;
+      const currentRevision = current.collaboration?.revision ?? -1;
+      if (current.collaboration?.id === collaborationId && currentRevision >= revision) return current;
+      const nextDeck = {
+        ...current,
+        collaboration: { id: collaborationId, revision: Math.max(currentRevision, revision) },
+      };
+      const saved = updateDeck(nextDeck);
+      return saved;
+    });
+  };
+
+  const mergeRemoteCollaboration = (currentDeck: Deck, remote: CollaborativePlaylist): {
+    deck: Deck;
+    addedCount: number;
+  } => {
+    const merged = mergeCollaborativeTracks(currentDeck.tracks, remote.tracks);
+    const revisionChanged = currentDeck.collaboration?.id !== remote.id
+      || (currentDeck.collaboration?.revision ?? -1) !== remote.revision;
+    if (!revisionChanged && merged.addedCount === 0) {
+      return { deck: currentDeck, addedCount: 0 };
+    }
+    const saved = updateDeck({
+      ...currentDeck,
+      tracks: merged.tracks,
+      collaboration: { id: remote.id, revision: remote.revision },
+    });
+    setDeck(saved);
+    return { deck: saved, addedCount: merged.addedCount };
+  };
+
+  const publishCollaborativeMutation = (mutation: CollaborativeDeckMutation, successMessage?: string) => {
+    const run = async () => {
+      if (!deck?.collaboration) return;
+      setIsCollaborativeSyncing(true);
+      try {
+        let remote = await fetchCollaborativePlaylist(deck.collaboration.id);
+        let latest: Deck = {
+          ...deck,
+          name: remote.name,
+          provider: remote.provider,
+          tracks: remote.tracks,
+          collaboration: { id: remote.id, revision: remote.revision },
+        };
+        let next = mutation(latest);
+        let response;
+        try {
+          response = await updateCollaborativePlaylist(remote.id, remote.revision, {
+            name: next.name,
+            provider: next.provider,
+            tracks: next.tracks,
+          });
+        } catch (err) {
+          if (!(err instanceof CollaborativeApiError) || err.status !== 409) throw err;
+          remote = await fetchCollaborativePlaylist(deck.collaboration.id);
+          latest = {
+            ...latest,
+            name: remote.name,
+            provider: remote.provider,
+            tracks: remote.tracks,
+            collaboration: { id: remote.id, revision: remote.revision },
+          };
+          next = mutation(latest);
+          response = await updateCollaborativePlaylist(remote.id, remote.revision, {
+            name: next.name,
+            provider: next.provider,
+            tracks: next.tracks,
+          });
+        }
+
+        const saved = updateDeck({
+          ...next,
+          name: response.playlist.name,
+          provider: response.playlist.provider,
+          tracks: response.playlist.tracks,
+          collaboration: { id: response.playlist.id, revision: response.playlist.revision },
+        });
+        setDeck(saved);
+        if (successMessage) showToast({ title: "Collaborative playlist updated", message: successMessage, duration: 3500 });
+      } catch (err) {
+        showToast({
+          title: "Could not sync collaborative playlist",
+          message: (err as Error).message || "The local change was not published. Try again.",
+          duration: 6000,
+        });
+      } finally {
+        setIsCollaborativeSyncing(false);
+      }
+    };
+
+    collaborativeWriteQueueRef.current = collaborativeWriteQueueRef.current.then(run, run);
+  };
+
+  collaborativeMutationRef.current = publishCollaborativeMutation;
+
+  const handleRefreshCollaborative = async () => {
+    if (!deck?.collaboration) return;
+    setIsCollaborativeSyncing(true);
+    try {
+      const remote = await fetchCollaborativePlaylist(deck.collaboration.id);
+      const result = mergeRemoteCollaboration(deck, remote);
+      showToast({
+        title: result.addedCount > 0 ? "Playlist updated" : "Playlist up to date",
+        message: result.addedCount > 0
+          ? `${result.addedCount} new song${result.addedCount === 1 ? "" : "s"} added.`
+          : "No new songs were found.",
+        duration: 4000,
+      });
+    } catch (err) {
+      showToast({ title: "Could not fetch updates", message: (err as Error).message || "Your current deck is unchanged. Try again later.", duration: 6000 });
+    } finally {
+      setIsCollaborativeSyncing(false);
+    }
+  };
+
   const handleUpdateTrack = (updated: Track) => {
+    if (deck.collaboration) {
+      const original = deck.tracks.find((track) => track.id === updated.id);
+      const originalKey = original ? collaborativeTrackKey(original) : updated.id;
+      collaborativeMutationRef.current((latest) => ({
+        ...latest,
+        tracks: latest.tracks.map((track) =>
+          track.id === updated.id || collaborativeTrackKey(track) === originalKey ? updated : track
+        ),
+      }), `${updated.title} was synced to the collaborative playlist.`);
+      return;
+    }
     const updatedTracks = deck.tracks.map((t) => (t.id === updated.id ? updated : t));
     const newDeck = { ...deck, tracks: updatedTracks };
     setDeck(newDeck);
@@ -298,6 +487,15 @@ export const EditorPage: React.FC = () => {
   };
 
   const handleDeleteTrack = (trackId: string) => {
+    if (deck.collaboration) {
+      const deleted = deck.tracks.find((track) => track.id === trackId);
+      const deletedKey = deleted ? collaborativeTrackKey(deleted) : trackId;
+      collaborativeMutationRef.current((latest) => ({
+        ...latest,
+        tracks: latest.tracks.filter((track) => track.id !== trackId && collaborativeTrackKey(track) !== deletedKey),
+      }), "The song was removed from the collaborative playlist.");
+      return;
+    }
     const updatedTracks = deck.tracks.filter((t) => t.id !== trackId);
     const newDeck = { ...deck, tracks: updatedTracks };
     setDeck(newDeck);
@@ -306,13 +504,31 @@ export const EditorPage: React.FC = () => {
 
   const handleSaveDeckName = () => {
     if (!deckName.trim()) return;
+    if (deck.collaboration) {
+      const nextName = deckName.trim();
+      collaborativeMutationRef.current((latest) => ({ ...latest, name: nextName }), "The playlist name was synced.");
+      setIsEditingName(false);
+      return;
+    }
     const newDeck = { ...deck, name: deckName.trim() };
     setDeck(newDeck);
     updateDeck(newDeck);
     setIsEditingName(false);
   };
 
+
   const handleAddTrack = (track: Track) => {
+    if (deck.collaboration) {
+      collaborativeMutationRef.current(
+        (latest) => {
+          const key = collaborativeTrackKey(track);
+          if (latest.tracks.some((existing) => collaborativeTrackKey(existing) === key)) return latest;
+          return { ...latest, tracks: [track, ...latest.tracks] };
+        },
+        `${track.title} was added to the collaborative playlist.`,
+      );
+      return;
+    }
     const sourceId = getTrackSourceId(track);
     const duplicate = deck.tracks.some((existing) => {
       const sameSource = sourceId && getTrackSourceId(existing) === sourceId;
@@ -334,6 +550,22 @@ export const EditorPage: React.FC = () => {
   };
 
   const handleAddTracks = (tracks: Track[]) => {
+    if (deck.collaboration) {
+      collaborativeMutationRef.current(
+        (latest) => {
+          const seen = new Set(latest.tracks.map(collaborativeTrackKey));
+          const fresh = tracks.filter((track) => {
+            const key = collaborativeTrackKey(track);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          return fresh.length > 0 ? { ...latest, tracks: [...fresh, ...latest.tracks] } : latest;
+        },
+        `${tracks.length} song${tracks.length === 1 ? "" : "s"} synced to the collaborative playlist.`,
+      );
+      return;
+    }
     const seen = new Set(deck.tracks.map((t) => getTrackSourceId(t)).filter((id): id is string => Boolean(id)));
     const metadata = new Set(deck.tracks.map((t) => `${t.artist.trim().toLowerCase()}\u0000${t.title.trim().toLowerCase()}`));
     const fresh = tracks.filter((track) => {
@@ -395,7 +627,19 @@ export const EditorPage: React.FC = () => {
         );
         const updatedDeck = { ...deck, tracks: updatedTracks };
         setDeck(updatedDeck);
-        updateDeck(updatedDeck);
+        if (deck.collaboration) {
+          const invalidKeys = new Set(result.invalidTracks.map((entry) => collaborativeTrackKey(entry.track)));
+          collaborativeMutationRef.current((latest) => ({
+            ...latest,
+            tracks: latest.tracks.map((track) =>
+              invalidKeys.has(collaborativeTrackKey(track))
+                ? { ...track, matchStatus: "failed" as const }
+                : track
+            ),
+          }));
+        } else {
+          updateDeck(updatedDeck);
+        }
         setHostGateInvalid(result.invalidTracks);
       } else {
         navigate(`/deck/${deck.id}/play`);
@@ -448,6 +692,22 @@ export const EditorPage: React.FC = () => {
               >
                 <Users className="w-4 h-4" />
               </Button>
+              {deck.collaboration && (
+                <>
+                  <span className="pc-button opacity-80" title="This deck is collaborative" aria-label="Collaborative playlist">
+                    <Users className="w-4 h-4" />
+                  </span>
+                  <Button
+                    type="button"
+                    onClick={() => void handleRefreshCollaborative()}
+                    disabled={isCollaborativeSyncing}
+                    title="Check for collaborative updates"
+                    aria-label="Check for collaborative updates"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
+                  </Button>
+                </>
+              )}
               {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
                 <span
                   title={
@@ -511,6 +771,23 @@ export const EditorPage: React.FC = () => {
               <Users className="w-3.5 h-3.5" />
               Collaborate
             </Button>
+            {deck.collaboration && (
+              <>
+                <span className="pc-button opacity-80" title="This deck is collaborative">
+                  <Users className="w-3.5 h-3.5" />
+                  Collaborative
+                </span>
+                <Button
+                  type="button"
+                  onClick={() => void handleRefreshCollaborative()}
+                  disabled={isCollaborativeSyncing}
+                  title="Check for collaborative updates"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
+                  {isCollaborativeSyncing ? "Checking…" : "Check for updates"}
+                </Button>
+              </>
+            )}
             {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
               <span
                 title={
@@ -738,6 +1015,7 @@ export const EditorPage: React.FC = () => {
         <CollaborateModal
           deck={deck}
           onClose={() => setShowCollaborateModal(false)}
+          onLinked={handleCollaborationLinked}
         />
       )}
 

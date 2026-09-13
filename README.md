@@ -34,7 +34,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Export decks as portable `.json` files.
   - Import JSON decks with instant schema validation and pre-matched YouTube IDs.
   - **Share decks** via an immutable short link (`#/share/abc123`) or the native share sheet; JSON file export remains a fallback.
-  - **Collaborate on playlists** through a separate permanent link (`#/collab/<random-id>`); anyone with the link can add songs, check for updates, and safely merge new tracks.
+  - **Collaborate on playlists** through a separate permanent link (`#/collab/<random-id>`); anyone with the link can edit the playlist, check for updates, and safely merge changes.
   - Shared decks retain their provider and can be converted into a new YouTube or Deezer copy with review for ambiguous matches.
   - Dedicated **Import** page (`#/import`) for `.json` files and **Shared deck** page (`#/share/:id`) for links.
   - Built-in Deezer starter deck for testing without an external account; previews are matched automatically when the Worker is configured.
@@ -130,7 +130,7 @@ The beacon loads only in production builds and does not use cookies.
 1. Open a non-empty deck and choose **Collaborate**.
 2. The app creates a separate random link like `…/bingo-musical/#/collab/7Rk9xV2mQpL4sN8dTzY3`.
 3. Anyone with the link can add songs; no account or roles are required.
-4. Users can click **Check for updates** to fetch the latest revision. Before every add, the app also fetches the latest revision and safely merges append-only additions. If a sync cannot be completed, the page keeps the current view and offers retry/reload actions.
+4. Users can click **Check for updates** to fetch the latest revision. Before every edit, the app fetches the latest revision and publishes the requested change with optimistic revision checks. If a sync cannot be completed, the page keeps the current view and offers retry/reload actions.
 5. Collaborative snapshots are stored under `collab:` KV keys without an expiration TTL.
 
 Older random share links (`#/share/…`) keep working until they expire.

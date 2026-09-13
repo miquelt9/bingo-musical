@@ -9,6 +9,7 @@ import {
   collaborationBodyTooLarge,
   handleAppendTracks,
   handleCreateCollaboration,
+  handleUpdateCollaboration,
   handleGetCollaboration,
   isValidCollaborationId,
 } from "./collaboration";
@@ -1160,12 +1161,14 @@ async function handleCollaborationRoute(request: Request, env: Env, id: string):
   if (!checkRateLimit(request, "collaboration")) {
     return rateLimitResponse(request, env, "Too many collaboration requests. Please try again later.");
   }
-  if (request.method === "POST" && collaborationBodyTooLarge(request)) {
+  if ((request.method === "POST" || request.method === "PUT") && collaborationBodyTooLarge(request)) {
     return errorResponse(request, env, "Collaboration payload is too large.", 413);
   }
   const response = request.method === "GET"
     ? await handleGetCollaboration(env, id)
-    : await handleAppendTracks(request, env, id);
+    : request.method === "PUT"
+      ? await handleUpdateCollaboration(request, env, id)
+      : await handleAppendTracks(request, env, id);
   return withCors(response, request, env);
 }
 
@@ -1306,7 +1309,7 @@ export default {
     }
 
     const collaborationMatch = url.pathname.match(/^\/api\/collaborations\/([^/]+)$/);
-    if (collaborationMatch && request.method === "GET") {
+    if (collaborationMatch && (request.method === "GET" || request.method === "PUT")) {
       const id = decodeURIComponent(collaborationMatch[1]);
       if (!isValidCollaborationId(id)) return errorResponse(request, env, "Invalid collaboration id.", 400);
       return handleCollaborationRoute(request, env, id);

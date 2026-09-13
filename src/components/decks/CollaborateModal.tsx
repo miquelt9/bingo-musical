@@ -7,7 +7,11 @@ import { useToast } from "../../state/ToastContext";
 import { buildCollaborativeUrl, buildCollaborativeMessage, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
 import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
 
-interface CollaborateModalProps { deck: Deck; onClose: () => void; }
+interface CollaborateModalProps {
+  deck: Deck;
+  onClose: () => void;
+  onLinked?: (collaborationId: string, revision?: number) => void;
+}
 
 const COLLABORATION_LINKS_KEY = "bingo-musical:collaboration-links";
 
@@ -35,7 +39,7 @@ function rememberCollaborationLink(deckId: string, collaborationId: string): voi
   }
 }
 
-export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClose }) => {
+export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClose, onLinked }) => {
   const { showToast } = useToast();
   const [url, setUrl] = useState<string>();
   const [error, setError] = useState<string | null>(null);
@@ -50,20 +54,22 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
     }
     const storedCollaborationId = readStoredCollaborationLinks()[deck.id];
     if (storedCollaborationId) {
+      onLinked?.(storedCollaborationId);
       setUrl(buildCollaborativeUrl(storedCollaborationId));
       setCreating(false);
       return () => { cancelled = true; };
     }
 
     void createCollaborativePlaylist({ name: deck.name, provider: deck.provider, tracks: deck.tracks })
-      .then(({ collaborationId }) => {
+      .then(({ collaborationId, revision }) => {
         rememberCollaborationLink(deck.id, collaborationId);
+        onLinked?.(collaborationId, revision);
         if (!cancelled) setUrl(buildCollaborativeUrl(collaborationId));
       })
       .catch((err: Error) => { if (!cancelled) setError(err.message || "Could not create a collaborative link."); })
       .finally(() => { if (!cancelled) setCreating(false); });
     return () => { cancelled = true; };
-  }, [deck]);
+  }, [deck, onLinked]);
 
   const copy = async (value: string, message: string) => {
     try {
@@ -79,7 +85,7 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
       <div className="space-y-4">
         {creating ? <p className="text-sm inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Creating collaborative playlist…</p> : url ? (
           <>
-            <p className="text-sm">Anyone with this link can add songs. New songs appear for everyone automatically.</p>
+            <p className="text-sm">Anyone with this link can edit the playlist. Linked decks can check for updates from the editor.</p>
             <div className="pc-bevel-inset p-3 break-all text-xs">{url}</div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="primary" onClick={() => void copy(url, "Collaborative link copied to clipboard.")}><Copy className="w-4 h-4" />Copy link</Button>
