@@ -62,11 +62,6 @@ async function drawShareFooter(
     // Continue without QR if image embed fails.
   }
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.5);
-  doc.setTextColor(82, 82, 91);
-  const linkLines = doc.splitTextToSize(`Scan or open: ${shareUrl}`, pageWidth - marginX * 2 - qrSize - 6);
-  doc.text(linkLines, marginX, footerY + 2);
 }
 
 function drawMasterListPages(
@@ -220,16 +215,6 @@ export async function generateBingoPdf(
     doc.text(eventTitle, pageWidth / 2, cursorY, { align: "center", maxWidth: 170 });
     cursorY += 8;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(113, 113, 122);
-    doc.text(
-      `Card #${card.cardNumber} • ${gridSize}×${gridSize} • Listen carefully & mark the matched songs`,
-      pageWidth / 2,
-      cursorY,
-      { align: "center" }
-    );
-    cursorY += 8;
 
     const cellHeight = cellSize;
     for (let row = 0; row < gridSize; row++) {
@@ -348,16 +333,6 @@ export async function generateBingoPdf(
     }
 
     const footerY = cursorY + gridSize * cellHeight + 9;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(161, 161, 170);
-    doc.text("Musical Bingo Creator", marginX, footerY);
-    doc.text(
-      `Card #${card.cardNumber} of ${cards.length} · Mark ${gridSize} in a row`,
-      pageWidth - marginX,
-      footerY,
-      { align: "right" }
-    );
 
     if (shareUrl) {
       await drawShareFooter(doc, shareUrl, marginX, pageWidth, footerY + 8, qrCache);

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { Copy, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
+import { Copy, Loader2, Mail } from "lucide-react";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
 import { buildCollaborativeUrl, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
 import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
+import { getStoredCollaborationId, rememberCollaborationLink } from "../../lib/share/collaborationLinks";
 
 interface CollaborateModalProps {
   deck: Deck;
@@ -13,31 +14,6 @@ interface CollaborateModalProps {
   onLinked?: (collaborationId: string, revision?: number) => void;
 }
 
-const COLLABORATION_LINKS_KEY = "bingo-musical:collaboration-links";
-
-type StoredCollaborationLinks = Record<string, string>;
-
-function readStoredCollaborationLinks(): StoredCollaborationLinks {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(COLLABORATION_LINKS_KEY) || "{}");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
-    );
-  } catch {
-    return {};
-  }
-}
-
-function rememberCollaborationLink(deckId: string, collaborationId: string): void {
-  try {
-    const links = readStoredCollaborationLinks();
-    links[deckId] = collaborationId;
-    localStorage.setItem(COLLABORATION_LINKS_KEY, JSON.stringify(links));
-  } catch {
-    // Link creation still succeeds if local storage is unavailable.
-  }
-}
 
 export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClose, onLinked }) => {
   const { showToast } = useToast();
@@ -52,7 +28,7 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
       setCreating(false);
       return () => { cancelled = true; };
     }
-    const storedCollaborationId = readStoredCollaborationLinks()[deck.id];
+    const storedCollaborationId = deck.collaboration?.id ?? getStoredCollaborationId(deck.id);
     if (storedCollaborationId) {
       onLinked?.(storedCollaborationId);
       setUrl(buildCollaborativeUrl(storedCollaborationId));
@@ -92,8 +68,6 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
 
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, url).whatsapp}><MessageCircle className="w-4 h-4" />WhatsApp<ExternalLink className="w-3 h-3 opacity-75" /></a>
-              <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, url).telegram}><Send className="w-4 h-4" />Telegram<ExternalLink className="w-3 h-3 opacity-75" /></a>
               <a className="pc-button inline-flex items-center gap-1.5" href={getCollaborativeShareUrls(deck, url).email}><Mail className="w-4 h-4" />Email</a>
             </div>
           </>

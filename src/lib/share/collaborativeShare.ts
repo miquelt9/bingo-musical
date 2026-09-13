@@ -14,6 +14,6 @@ export function getCollaborativeShareUrls(deck: Deck, url: string) {
   return {
     whatsapp: `https://wa.me/?text=${encodeURIComponent(message)}`,
     telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(message)}`,
-    email: `mailto:?subject=${encodeURIComponent(`Collaborative playlist: ${deck.name}`)}&body=${encodeURIComponent(message)}`,
+    email: `mailto:?subject=${encodeURIComponent(`Collaborative playlist: ${deck.name}`)}&body=${encodeURIComponent(url)}`,
   };
 }

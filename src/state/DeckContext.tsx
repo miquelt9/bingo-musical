@@ -9,15 +9,14 @@ import {
   importDeckFromData,
   parseAndImportDeckFile,
 } from "../lib/storage/decks";
-import { fetchSharedDeckPayload, isShareApiConfigured, publishSharedDeck } from "../lib/share/sharedDecksApi";
-import { buildSharedDeckUrl, shareDeckNative } from "../lib/share/deckShare";
+import { fetchSharedDeckPayload } from "../lib/share/sharedDecksApi";
 import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
 import { trackNeedsDeezerPreviewRefresh } from "../lib/deezer/previewUrl";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { useToast } from "./ToastContext";
-import { AlertCircle, Check, Loader2 } from "lucide-react";
+import { AlertCircle, Check } from "lucide-react";
 
 interface ShareDeckTarget {
   deck: Deck;
@@ -62,7 +61,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
   const [backgroundTasks, setBackgroundTasks] = useState<Record<string, BackgroundTaskStatus>>({});
-  const { showToast, dismissToast } = useToast();
+  const { showToast } = useToast();
 
   const setBackgroundTask = useCallback((id: string, status: BackgroundTaskStatus | null) => {
     setBackgroundTasks((current) => {
@@ -265,50 +264,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const shareDeck = async (deck: Deck, onLinked?: (collaborationId: string, revision?: number) => void) => {
     if (isEmptyDeck(deck)) return;
-
-    if (!isShareApiConfigured()) {
-      setShareTarget({ deck, onLinked });
-      showToast({
-        title: "Share link unavailable",
-        icon: <AlertCircle className="w-3.5 h-3.5" />,
-        message: "Download the JSON file from the share dialog to share this deck manually.",
-        duration: 7000,
-      });
-      return;
-    }
-
-    const loadingToastId = showToast({
-      title: "Creating share link",
-      icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
-      message: "Preparing your deck for sharing…",
-      duration: undefined,
-    });
-
-    try {
-      const { shareId } = await publishSharedDeck(deck);
-      const shareUrl = buildSharedDeckUrl(shareId);
-      const shared = await shareDeckNative(deck, shareUrl);
-      dismissToast(loadingToastId);
-      showToast({
-        title: "Share link ready",
-        icon: <Check className="w-3.5 h-3.5" />,
-        message: shared
-          ? "The native share sheet is ready."
-          : "Choose a sharing method or copy the link from the share dialog.",
-        duration: 6000,
-      });
-      // Keep the share dialog open so it also exposes collaboration-link generation.
-      setShareTarget({ deck, shareId, shareUrl, onLinked });
-    } catch (err) {
-      dismissToast(loadingToastId);
-      setShareTarget({ deck, onLinked });
-      showToast({
-        title: "Sharing failed",
-        icon: <AlertCircle className="w-3.5 h-3.5" />,
-        message: err instanceof Error ? err.message : "Could not create a share link. Use the JSON fallback instead.",
-        duration: 10000,
-      });
-    }
+    setShareTarget({ deck, onLinked });
   };
 
   const importDeck = async (file: File): Promise<Deck> => {

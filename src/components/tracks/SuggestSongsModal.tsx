@@ -289,7 +289,8 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
               const added = alreadyInDeck.has(id);
               const playable = suggestHitPlayable(item);
               return (
-                <div key={id} className="flex items-center gap-3 p-2 pc-bevel-outset">
+                <div key={id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-2 pc-bevel-outset">
+                  <div className="flex flex-1 min-w-0 items-center gap-3">
                   <img
                     src={hitArtUrl(item)}
                     alt=""
@@ -315,7 +316,8 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
                         : "Unavailable"}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  </div>
+                  <div className="ml-auto flex w-full sm:w-auto shrink-0 justify-end items-center gap-2">
                     <ClipPreviewButton
                       track={hitToPreviewTrack(item)}
                       size="sm"

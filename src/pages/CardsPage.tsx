@@ -33,6 +33,7 @@ import { trackEvent } from "../lib/usage/events";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { buildSharedDeckUrl } from "../lib/share/deckShare";
+import { generateQrDataUrl } from "../lib/bingo/qr";
 import { estimateBingoTimes, formatEstimateDraws, formatEstimateDuration } from "../lib/bingo/estimator";
 import {
   isShareApiConfigured,
@@ -100,9 +101,7 @@ export const CardsPage: React.FC = () => {
   const [pdfError, setPdfError] = useState<string | null>(null);
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-
-  const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [shareError, setShareError] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   const handleTracksUpdated = useCallback(
     (updatedTracks: Track[]) => {
@@ -243,28 +242,20 @@ export const CardsPage: React.FC = () => {
   useEffect(() => {
     if (!deck || !isShareApiConfigured() || deck.tracks.length === 0) {
       setShareUrl(null);
-      setShareStatus("idle");
-      setShareError(null);
+      setQrDataUrl(null);
       return;
     }
 
     let cancelled = false;
-    setShareStatus("loading");
-    setShareError(null);
-
     void (async () => {
       try {
         const { shareId } = await publishSharedDeck(deck);
         if (cancelled) return;
         const url = buildSharedDeckUrl(shareId);
         setShareUrl(url);
-
-        setShareStatus("ready");
-      } catch (err) {
+      } catch {
         if (cancelled) return;
         setShareUrl(null);
-        setShareStatus("error");
-        setShareError((err as Error).message || "Could not create share link");
       }
     })();
 
@@ -272,6 +263,21 @@ export const CardsPage: React.FC = () => {
       cancelled = true;
     };
   }, [deck?.id, deck?.updatedAt, deck?.tracks.length]);
+
+  useEffect(() => {
+    if (!shareUrl) {
+      setQrDataUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    void generateQrDataUrl(shareUrl, 180).then((dataUrl) => {
+      if (!cancelled) setQrDataUrl(dataUrl);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [shareUrl]);
 
   const handleRegenerate = () => {
     if (!deck || !cardOptions || poolCount === 0) return;
@@ -298,7 +304,7 @@ export const CardsPage: React.FC = () => {
           ...cardOptions,
           tracks: deck.tracks,
           cellContent,
-          shareUrl: undefined,
+          shareUrl: shareUrl ?? undefined,
           includeMasterList,
         },
         () => {}
@@ -654,27 +660,6 @@ export const CardsPage: React.FC = () => {
 
                   </div>
                 )}
-                {shareStatus === "loading" && (
-                  <p className="text-muted inline-flex items-center gap-1.5">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Preparing share link…
-                  </p>
-                )}
-                {shareStatus === "ready" && shareUrl && (
-                  <p className="text-muted break-all">
-                    Share link ready: {shareUrl}
-                  </p>
-                )}
-                {shareStatus === "error" && (
-                  <p className="text-pc-warning">
-                    Share link unavailable{shareError ? `: ${shareError}` : ""}.
-                  </p>
-                )}
-                {shareStatus === "idle" && !isShareApiConfigured() && (
-                  <p className="text-muted">
-                    Share links are unavailable.
-                  </p>
-                )}
               </div>
             </div>
           </Window>
@@ -729,8 +714,7 @@ export const CardsPage: React.FC = () => {
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
                 cellContent={cellContent}
-                shareUrl={null}
-                qrDataUrl={null}
+                qrDataUrl={qrDataUrl}
                 interactiveMarks={false}
               />
             </Window>
@@ -760,8 +744,7 @@ export const CardsPage: React.FC = () => {
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
                 cellContent={cellContent}
-                shareUrl={null}
-                qrDataUrl={null}
+                qrDataUrl={qrDataUrl}
                 interactiveMarks={false}
               />
             </div>

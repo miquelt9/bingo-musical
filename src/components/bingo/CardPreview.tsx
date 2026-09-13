@@ -17,7 +17,6 @@ interface CardPreviewProps {
   /** Full deck track list in order — used to resolve song / author numbers. */
   tracks: Track[];
   cellContent?: BingoCellContentSelection;
-  shareUrl?: string | null;
   qrDataUrl?: string | null;
   interactiveMarks?: boolean;
 }
@@ -27,7 +26,6 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   eventTitle,
   tracks,
   cellContent = DEFAULT_CELL_CONTENT,
-  shareUrl = null,
   qrDataUrl = null,
   interactiveMarks = true,
 }) => {
@@ -90,22 +88,16 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
         <h2 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-950 uppercase print:text-xl">
           {eventTitle}
         </h2>
-        <div className="flex items-center justify-between text-xs text-zinc-500 font-medium mt-1">
-          <span>Card #{card.cardNumber}</span>
-          {interactiveMarks && (
-            <button
-              onClick={resetMarks}
-              className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-700 transition-colors print:hidden"
-              title="Reset stamps"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset</span>
-            </button>
-          )}
-          <span>
-            {gridSize}×{gridSize} Musical Bingo
-          </span>
-        </div>
+        {interactiveMarks && (
+          <button
+            onClick={resetMarks}
+            className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-700 transition-colors print:hidden mt-1"
+            title="Reset stamps"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset</span>
+          </button>
+        )}
       </div>
 
       <div className="bingo-card-preview-scroll print:overflow-visible">
@@ -182,28 +174,15 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-zinc-100 flex items-start justify-between gap-3 text-[9px] text-zinc-400 font-medium">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p>Musical Bingo Creator</p>
-          <p>
-            Mark {gridSize} in a row. Empty squares appear when the deck has fewer songs than cells.
-          </p>
-          {shareUrl && (
-            <p className="break-all text-[8px] text-zinc-500 leading-snug pt-1">
-              Scan or open to get this deck: {shareUrl}
-            </p>
-          )}
+      {qrDataUrl && (
+        <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-end">
+          <img
+            src={qrDataUrl}
+            alt="QR code linking to this deck"
+            className="w-16 h-16 sm:w-[72px] sm:h-[72px] print:w-[72px] print:h-[72px]"
+          />
         </div>
-        {qrDataUrl && shareUrl && (
-          <div className="shrink-0 text-center">
-            <img
-              src={qrDataUrl}
-              alt="QR code linking to this deck"
-              className="w-16 h-16 sm:w-[72px] sm:h-[72px] print:w-[72px] print:h-[72px]"
-            />
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

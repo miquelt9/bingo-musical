@@ -194,15 +194,15 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
               const added = alreadyInDeck.has(hit.id);
               const playable = Boolean(hit.previewUrl);
               return (
-                <div key={hit.id} className="flex items-center gap-3 p-2 pc-bevel-outset">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div key={hit.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-2 pc-bevel-outset">
+                  <div className="flex flex-1 min-w-0 items-center gap-3">
                     <img src={hit.albumArtUrl} alt="" className="w-16 h-16 object-cover shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate">{hit.title}</p>
                     <p className="text-xs truncate">{hit.artist}{hit.album ? ` · ${hit.album}` : ""}</p>
                   </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="ml-auto flex w-full sm:w-auto shrink-0 justify-end items-center gap-2">
                     <ClipPreviewButton track={hitToPreviewTrack(hit)} size="sm" showLabel className="!h-8 !min-h-8" />
                     <button type="button" disabled={added || !playable || addingId === hit.id} onClick={() => void addHit(hit)} className={`pc-button inline-flex items-center justify-center gap-1.5 shrink-0 h-8 !min-h-8 px-2.5 py-1 text-xs ${added ? "active" : playable ? "pc-button--primary" : ""}`}>
                       {addingId === hit.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : added ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
