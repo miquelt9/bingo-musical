@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { Copy, Loader2, Mail } from "lucide-react";
+import { AlertTriangle, Copy, Loader2, Mail } from "lucide-react";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
@@ -61,7 +61,10 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
       <div className="space-y-4">
         {creating ? <p className="text-sm inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Creating collaborative playlist…</p> : url ? (
           <>
-            <p className="text-sm">Anyone with this link can edit the playlist. Linked decks can check for updates from the editor.</p>
+            <div className="flex items-start gap-2 border-l-4 border-pc-warning bg-pc-warning p-3 text-xs text-pc-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p><span className="font-bold">Anyone with this link can edit this playlist.</span> Only share it with people you trust. Linked decks can check for updates from the editor.</p>
+            </div>
             <div className="pc-bevel-inset p-3 break-all text-xs">{url}</div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="primary" onClick={() => void copy(url, "Collaborative link copied to clipboard.")}><Copy className="w-4 h-4" />Copy link</Button>

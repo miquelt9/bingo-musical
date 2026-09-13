@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { AlertCircle, Check, Copy, Download, Loader2, Share2, Users } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Copy, Download, Loader2, Share2, Users } from "lucide-react";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
@@ -211,7 +211,10 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
         <section className="space-y-3 border-t border-zinc-200 pt-5">
           <div>
             <p className="text-sm font-semibold">Collaborate on this deck</p>
-            <p className="text-sm">Anyone with this link can edit the playlist.</p>
+            <div className="mt-2 flex items-start gap-2 border-l-4 border-pc-warning bg-pc-warning p-3 text-xs text-pc-warning">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p><span className="font-bold">Anyone with this link can edit this playlist.</span> Only share it with people you trust.</p>
+            </div>
           </div>
           {collaborationUrl ? (
             <>

@@ -17,7 +17,7 @@ import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtub
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 
-import { PromptModal } from "../components/ui/AppDialog";
+import { PcModal } from "../components/ui/PcModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
@@ -75,6 +75,7 @@ export const HomePage: React.FC = () => {
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
   const [deckNamePrompt, setDeckNamePrompt] = useState<{ provider: MusicProvider; defaultName: string } | null>(null);
+  const [newDeckProvider, setNewDeckProvider] = useState<MusicProvider>("youtube");
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
@@ -122,6 +123,7 @@ export const HomePage: React.FC = () => {
   };
 
   const handleCreateEmptyDeck = (provider: MusicProvider = "youtube") => {
+    setNewDeckProvider(provider);
     setDeckNamePrompt({
       provider,
       defaultName: getNextDeckName(decks.map((d) => d.name)),
@@ -130,8 +132,9 @@ export const HomePage: React.FC = () => {
 
   const createNamedDeck = (entered: string) => {
     if (!deckNamePrompt) return;
-    const { provider, defaultName } = deckNamePrompt;
+    const { defaultName } = deckNamePrompt;
     const name = entered.trim() || defaultName;
+    const provider = newDeckProvider;
     const now = new Date().toISOString();
     const saved = createDeck({
       schemaVersion: 2,
@@ -270,12 +273,11 @@ export const HomePage: React.FC = () => {
                   <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
                   {isCollaborative && (
                     <span
-                      className="home-deck-recommended text-[10px] shrink-0 inline-flex items-center gap-1"
+                      className="inline-flex items-center shrink-0"
                       title="Collaborative deck"
                       aria-label="Collaborative deck"
                     >
-                      <Users className="w-3 h-3" aria-hidden />
-                      Collaborative
+                      <Users className="w-4 h-4" aria-hidden />
                     </span>
                   )}
                   {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
@@ -317,12 +319,11 @@ export const HomePage: React.FC = () => {
                 <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
                 {isCollaborative && (
                   <span
-                    className="home-deck-recommended text-[10px] shrink-0 inline-flex items-center gap-1"
+                    className="inline-flex items-center shrink-0"
                     title="Collaborative deck"
                     aria-label="Collaborative deck"
                   >
-                    <Users className="w-3 h-3" aria-hidden />
-                    Collaborative
+                    <Users className="w-4 h-4" aria-hidden />
                   </span>
                 )}
                 {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
@@ -453,43 +454,80 @@ export const HomePage: React.FC = () => {
       )}
 
       <div className="home-decks-grid">
-        <div className="home-deck-add home-deck-add--providers">
+        <button
+          type="button"
+          className="home-deck-add home-deck-add--providers"
+          onClick={() => handleCreateEmptyDeck()}
+        >
           <Plus className="w-5 h-5 shrink-0 opacity-80" aria-hidden />
           <span className="font-semibold text-sm">Empty deck</span>
           <span className="text-xs text-muted">Choose a music provider</span>
-          <div className="home-deck-add-options">
-            <button
-              type="button"
-              className="home-deck-add-option"
-              onClick={() => handleCreateEmptyDeck("youtube")}
-            >
-              <Music2 className="w-5 h-5 opacity-80" aria-hidden />
+          <div className="home-deck-add-options" aria-hidden="true">
+            <span className="home-deck-add-option">
+              <Music2 className="w-5 h-5 opacity-80" />
               <span className="font-semibold text-xs">YouTube</span>
-              <span className="text-[11px] text-muted">Video clips (fully customizable, YT Ads may appear)</span>
-            </button>
-            <button
-              type="button"
-              className="home-deck-add-option"
-              onClick={() => handleCreateEmptyDeck("deezer")}
-            >
-              <Disc3 className="w-5 h-5 opacity-80" aria-hidden />
+            </span>
+            <span className="home-deck-add-option">
+              <Disc3 className="w-5 h-5 opacity-80" />
               <span className="font-semibold text-xs">Deezer</span>
-              <span className="text-[11px] text-muted">30-second previews (ad-free)</span>
-            </button>
+            </span>
           </div>
-        </div>
+        </button>
 
         {sortedDecks.map(renderDeckCard)}
       </div>
 
       {deckNamePrompt && (
-        <PromptModal
-          title="Name this deck"
-          defaultValue={deckNamePrompt.defaultName}
-          confirmLabel="Create deck"
-          onCancel={() => setDeckNamePrompt(null)}
-          onConfirm={createNamedDeck}
-        />
+        <PcModal title="Create a deck" onClose={() => setDeckNamePrompt(null)}>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const input = event.currentTarget.elements.namedItem("deck-name");
+              createNamedDeck(input instanceof HTMLInputElement ? input.value : "");
+            }}
+          >
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold">Music provider</legend>
+              <label className="flex items-start gap-2 pc-bevel-inset p-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="new-deck-provider"
+                  value="youtube"
+                  checked={newDeckProvider === "youtube"}
+                  onChange={() => setNewDeckProvider("youtube")}
+                  className="mt-1"
+                />
+                <span className="flex items-start gap-2 text-sm">
+                  <Music2 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+                  <span><strong>YouTube</strong><span className="block text-xs text-muted">Video clips, fully customizable; YouTube ads may appear.</span></span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 pc-bevel-inset p-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="new-deck-provider"
+                  value="deezer"
+                  checked={newDeckProvider === "deezer"}
+                  onChange={() => setNewDeckProvider("deezer")}
+                  className="mt-1"
+                />
+                <span className="flex items-start gap-2 text-sm">
+                  <Disc3 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+                  <span><strong>Deezer</strong><span className="block text-xs text-muted">30-second previews, ad-free.</span></span>
+                </span>
+              </label>
+            </fieldset>
+            <label className="block text-sm font-semibold" htmlFor="new-deck-name">
+              Deck name
+              <input id="new-deck-name" name="deck-name" type="text" className="pc-input w-full mt-1" defaultValue={deckNamePrompt.defaultName} autoFocus />
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className="pc-button" onClick={() => setDeckNamePrompt(null)}>Cancel</button>
+              <button type="submit" className="pc-button pc-button--primary">Create deck</button>
+            </div>
+          </form>
+        </PcModal>
       )}
 
 

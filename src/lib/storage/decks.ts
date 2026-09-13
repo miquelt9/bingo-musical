@@ -235,9 +235,11 @@ function nextCopyName(baseName: string, existingNames: string[]): string {
 export function duplicateDeck(id: string): Deck | null {
   const deck = getDeckById(id);
   if (!deck) return null;
+  const { collaboration, ...deckToDuplicate } = deck;
+  void collaboration;
   const now = new Date().toISOString();
   return saveDeck({
-    ...deck,
+    ...deckToDuplicate,
     id: `deck-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     name: nextCopyName(deck.name, getStoredDecks().map((item) => item.name)),
     createdAt: now,
