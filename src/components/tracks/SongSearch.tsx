@@ -21,6 +21,7 @@ import {
 import { AlertCircle, Check, ClipboardPaste, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { DeezerSongSearch } from "./DeezerSongSearch";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 
 interface SongSearchProps {
   provider?: MusicProvider;
@@ -111,6 +112,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   onAddTrack,
   onAfterAdd,
 }) => {
+  const isMobile = useIsMobile();
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
@@ -632,7 +634,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
             </>
           )}
         </button>
-        <button
+        {!isMobile && <button
           type="button"
           onClick={async () => {
             try {
@@ -652,7 +654,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
           title="Paste from clipboard"
         >
           <ClipboardPaste className="w-4 h-4" />
-        </button>
+        </button>}
       </form>
 
       <p className="text-xs">
@@ -705,7 +707,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
               return (
                 <div
                   key={hit.videoId}
-                  className={`flex items-center gap-3 p-2 pc-bevel-outset ${isBlocked ? "opacity-80" : ""}`}
+                  className={`flex ${isMobile ? "flex-col items-stretch" : "items-center"} gap-3 p-2 pc-bevel-outset ${isBlocked ? "opacity-80" : ""}`}
                 >
                   <img
                     src={hit.thumbnailUrl}

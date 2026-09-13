@@ -5,7 +5,7 @@ import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
 import { ConvertDeckModal } from "../components/decks/ConvertDeckModal";
-import { CollaborateModal } from "../components/decks/CollaborateModal";
+
 import { SongSearch } from "../components/tracks/SongSearch";
 import { SuggestSongsModal } from "../components/tracks/SuggestSongsModal";
 import { pickSuggestSeeds } from "../lib/music/suggest";
@@ -69,18 +69,20 @@ function collaborativeTrackKey(track: Track): string {
 
 type CollaborativeDeckMutation = (latest: Deck) => Deck;
 
-function mergeCollaborativeTracks(localTracks: Track[], remoteTracks: Track[]): { tracks: Track[]; addedCount: number } {
-  const tracks = [...localTracks];
+function mergeCollaborativeTracks(localTracks: Track[], remoteTracks: Track[]): {
+  tracks: Track[];
+  addedTracks: Track[];
+  addedCount: number;
+} {
+  const addedTracks: Track[] = [];
   const seen = new Set(localTracks.map(collaborativeTrackKey));
-  let addedCount = 0;
   for (const track of remoteTracks) {
     const key = collaborativeTrackKey(track);
     if (seen.has(key)) continue;
     seen.add(key);
-    tracks.push(track);
-    addedCount += 1;
+    addedTracks.push(track);
   }
-  return { tracks, addedCount };
+  return { tracks: [...addedTracks, ...localTracks], addedTracks, addedCount: addedTracks.length };
 }
 
 export const EditorPage: React.FC = () => {
@@ -102,13 +104,15 @@ export const EditorPage: React.FC = () => {
   const cancelMatchingRef = useRef(false);
   const collaborativeMutationRef = useRef<(mutation: CollaborativeDeckMutation, successMessage?: string) => Promise<boolean>>(() => Promise.resolve(false));
   const collaborativeWriteQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const collaborativeRefreshRef = useRef<string | null>(null);
+  const [recentCollaborativeTrackKeys, setRecentCollaborativeTrackKeys] = useState<Set<string>>(new Set());
 
   const { showToast } = useToast();
   const { requestPlayerEngine, releasePlayerEngine } = usePlayerUI();
   const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
-  const [showCollaborateModal, setShowCollaborateModal] = useState(false);
+
   const [isCollaborativeSyncing, setIsCollaborativeSyncing] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [suggestSeeds, setSuggestSeeds] = useState<Track[] | null>(null);
@@ -148,6 +152,57 @@ export const EditorPage: React.FC = () => {
     setDeck(routeDeck);
     setDeckName(routeDeck.name);
   }, [routeDeck]);
+
+  useEffect(() => {
+    const deckId = deck?.id;
+    const collaborationId = deck?.collaboration?.id;
+    if (!deckId || !collaborationId) {
+      collaborativeRefreshRef.current = null;
+      setRecentCollaborativeTrackKeys(new Set());
+      return;
+    }
+
+    const refreshKey = `${deckId}:${collaborationId}`;
+    if (collaborativeRefreshRef.current === refreshKey) return;
+    collaborativeRefreshRef.current = refreshKey;
+    setRecentCollaborativeTrackKeys(new Set());
+
+    let cancelled = false;
+    setIsCollaborativeSyncing(true);
+    void fetchCollaborativePlaylist(collaborationId)
+      .then((remote) => {
+        if (cancelled) return;
+        setDeck((current) => {
+          if (!current || current.id !== deckId || current.collaboration?.id !== collaborationId) return current;
+          const merged = mergeCollaborativeTracks(current.tracks, remote.tracks);
+          const revisionChanged = current.collaboration.revision !== remote.revision;
+          if (!revisionChanged && merged.addedCount === 0 && current.name === remote.name && current.provider === remote.provider) {
+            return current;
+          }
+          if (merged.addedTracks.length > 0) {
+            setRecentCollaborativeTrackKeys(new Set(merged.addedTracks.map(collaborativeTrackKey)));
+          }
+          if (!isEditingName) setDeckName(remote.name);
+          return updateDeck({
+            ...current,
+            name: remote.name,
+            provider: remote.provider,
+            tracks: merged.tracks,
+            collaboration: { id: remote.id, revision: remote.revision },
+          });
+        });
+      })
+      .catch(() => {
+        // Keep the local snapshot available; the manual update button can retry.
+      })
+      .finally(() => {
+        if (!cancelled) setIsCollaborativeSyncing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck?.id, deck?.collaboration?.id]);
 
   useEffect(() => {
     blockedToastShownRef.current = false;
@@ -375,11 +430,17 @@ export const EditorPage: React.FC = () => {
     if (!revisionChanged && merged.addedCount === 0) {
       return { deck: currentDeck, addedCount: 0 };
     }
+    if (merged.addedTracks.length > 0) {
+      setRecentCollaborativeTrackKeys(new Set(merged.addedTracks.map(collaborativeTrackKey)));
+    }
     const saved = updateDeck({
       ...currentDeck,
+      name: remote.name,
+      provider: remote.provider,
       tracks: merged.tracks,
       collaboration: { id: remote.id, revision: remote.revision },
     });
+    setDeckName(remote.name);
     setDeck(saved);
     return { deck: saved, addedCount: merged.addedCount };
   };
@@ -676,22 +737,14 @@ export const EditorPage: React.FC = () => {
             <div className="flex w-full items-center justify-end gap-2">
               <Button
                 type="button"
-                onClick={() => shareDeck(deck)}
+                onClick={() => void shareDeck(deck, handleCollaborationLinked)}
                 disabled={emptyDeck}
                 title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Share"}
                 aria-label="Share"
               >
                 <Share2 className="w-4 h-4" />
               </Button>
-              <Button
-                type="button"
-                onClick={() => setShowCollaborateModal(true)}
-                disabled={emptyDeck}
-                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Collaborate"}
-                aria-label="Collaborate"
-              >
-                <Users className="w-4 h-4" />
-              </Button>
+
               {deck.collaboration && (
                 <>
                   <span className="pc-button opacity-80" title="This deck is collaborative" aria-label="Collaborative playlist">
@@ -755,22 +808,14 @@ export const EditorPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              onClick={() => shareDeck(deck)}
+              onClick={() => void shareDeck(deck, handleCollaborationLinked)}
               disabled={emptyDeck}
               title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
             >
               <Share2 className="w-3.5 h-3.5" />
               Share
             </Button>
-            <Button
-              type="button"
-              onClick={() => setShowCollaborateModal(true)}
-              disabled={emptyDeck}
-              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
-            >
-              <Users className="w-3.5 h-3.5" />
-              Collaborate
-            </Button>
+
             {deck.collaboration && (
               <>
                 <span className="pc-button opacity-80" title="This deck is collaborative">
@@ -912,6 +957,7 @@ export const EditorPage: React.FC = () => {
         matchProgress={matchProgress}
         initialStatusFilter={initialStatusFilter}
         isLoadingDeezerPreviews={isLoadingDeezerPreviews}
+        isRecentlyAdded={deck.collaboration ? (track) => recentCollaborativeTrackKeys.has(collaborativeTrackKey(track)) : undefined}
         onCancelMatching={() => {
           cancelMatchingRef.current = true;
         }}
@@ -1011,13 +1057,7 @@ export const EditorPage: React.FC = () => {
         />
       )}
 
-      {showCollaborateModal && (
-        <CollaborateModal
-          deck={deck}
-          onClose={() => setShowCollaborateModal(false)}
-          onLinked={handleCollaborationLinked}
-        />
-      )}
+
 
       <ConvertDeckModal
         deck={deck}

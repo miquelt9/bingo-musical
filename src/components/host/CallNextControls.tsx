@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, SlidersHorizontal, Music2, ChevronDown, Monitor } from "lucide-react";
+import { Shuffle, SlidersHorizontal, Music2, ChevronDown } from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/player/player";
 import { getTrackProvider, getTrackSourceId } from "../../lib/music/providers";
@@ -81,7 +81,6 @@ interface CallNextControlsProps {
   onToggleAutoReveal: () => void;
   crossfadeOverlapMs: number;
   onCrossfadeOverlapChange: (ms: number) => void;
-  onOpenDisplay: () => void;
   gameStarted: boolean;
   disabled?: boolean;
   isRevealed?: boolean;
@@ -110,7 +109,6 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   onToggleAutoReveal,
   crossfadeOverlapMs,
   onCrossfadeOverlapChange,
-  onOpenDisplay,
   gameStarted,
   disabled = false,
   isRevealed = true,
@@ -182,7 +180,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
           <input
             type="range"
             min={0}
-            max={3000}
+            max={10000}
             step={100}
             value={crossfadeOverlapMs}
             onChange={(e) => onCrossfadeOverlapChange(Number(e.target.value))}
@@ -244,16 +242,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
                 : "Start Game & Call First Song"
               : "Call Next Song"}
         </Button>
-        <Button type="button" onClick={onOpenDisplay} className="py-3 sm:shrink-0">
-          <Monitor className="w-4 h-4" />
-          {isMobile ? "Project to TV" : "Open display window"}
-        </Button>
       </div>
-      <p className="text-[10px] opacity-80 mt-2">
-        {supportsVideoPreview
-          ? "Prefer Display for projection. Host Video is off by default so players cannot see titles."
-          : "Prefer Display for projection. Audio plays on this device; open Display for the room screen."}
-      </p>
 
       <div
         className={`host-now-playing-slot mt-4 pt-3 border-t border-[var(--pc-border)] ${

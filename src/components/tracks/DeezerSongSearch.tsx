@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { AlertCircle, Check, ClipboardPaste, Loader2, Plus, Search, Volume2 } from "lucide-react";
+import { AlertCircle, Check, ClipboardPaste, Loader2, Plus, Search } from "lucide-react";
 import { Track } from "../../types/deck";
 import {
   DeezerTrackHit,
@@ -11,6 +11,7 @@ import {
   searchDeezerTracks,
 } from "../../lib/deezer/api";
 import { ClipPreviewButton } from "./ClipPreviewButton";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 
 interface DeezerSongSearchProps {
   existingIds?: Array<string | null | undefined>;
@@ -39,6 +40,7 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
   const [nextIndex, setNextIndex] = useState(0);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchQueryRef = useRef("");
   const hitsRef = useRef<DeezerTrackHit[]>([]);
@@ -156,7 +158,7 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
           {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           {isSearching ? "Searching…" : "Search Deezer"}
         </Button>
-        <Button
+        {!isMobile && <Button
           type="button"
           onClick={async () => {
             try {
@@ -174,7 +176,7 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
           title="Paste from clipboard"
         >
           <ClipboardPaste className="w-4 h-4" />
-        </Button>
+        </Button>}
       </form>
       <p className="text-xs">Search Deezer metadata or paste a numeric track ID / track URL. Only Deezer’s short preview is used.</p>
       {error && (
@@ -192,21 +194,19 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
               const added = alreadyInDeck.has(hit.id);
               const playable = Boolean(hit.previewUrl);
               return (
-                <div key={hit.id} className="flex items-center gap-3 p-2 pc-bevel-outset">
-                  <img src={hit.albumArtUrl} alt="" className="w-16 h-16 object-cover shrink-0" />
+                <div key={hit.id} className={`flex ${isMobile ? "flex-col items-stretch" : "items-center"} gap-3 p-2 pc-bevel-outset`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={hit.albumArtUrl} alt="" className="w-16 h-16 object-cover shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate">{hit.title}</p>
                     <p className="text-xs truncate">{hit.artist}{hit.album ? ` · ${hit.album}` : ""}</p>
-                    <p className={`text-[11px] mt-1 flex items-center gap-1 ${playable ? "text-pc-success" : "text-pc-warning"}`}>
-                      {playable ? <Volume2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                      {playable ? "30-second preview available" : "No preview available"}
-                    </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  </div>
+                  <div className={`${isMobile ? "w-full justify-end" : ""} flex shrink-0 items-center gap-2`}>
                     <ClipPreviewButton track={hitToPreviewTrack(hit)} size="sm" showLabel className="!h-8 !min-h-8" />
                     <button type="button" disabled={added || !playable || addingId === hit.id} onClick={() => void addHit(hit)} className={`pc-button inline-flex items-center justify-center gap-1.5 shrink-0 h-8 !min-h-8 px-2.5 py-1 text-xs ${added ? "active" : playable ? "pc-button--primary" : ""}`}>
                       {addingId === hit.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : added ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                      {added ? "Added" : playable ? "Add" : "Unavailable"}
+                      {added ? "Added" : "Add"}
                     </button>
                   </div>
                 </div>

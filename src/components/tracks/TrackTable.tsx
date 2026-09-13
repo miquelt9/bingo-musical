@@ -28,6 +28,7 @@ interface TrackTableProps {
   initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
   onCancelMatching?: () => void;
   isLoadingDeezerPreviews?: boolean;
+  isRecentlyAdded?: (track: Track) => boolean;
 }
 
 function AutoMatchButton({
@@ -83,6 +84,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   initialStatusFilter = "all",
   onCancelMatching,
   isLoadingDeezerPreviews = false,
+  isRecentlyAdded,
 }) => {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
@@ -314,6 +316,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
           isTrackBlocked={isTrackBlocked}
           isBusy={isMatching || editClipBusyId !== null}
           editClipBusyId={editClipBusyId}
+          isRecentlyAdded={isRecentlyAdded}
         />
       )}
 

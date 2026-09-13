@@ -14,12 +14,11 @@ import {
   toggleCellContent,
   usesAuthorPool,
 } from "../lib/bingo/cellContent";
-import { generateQrDataUrl } from "../lib/bingo/qr";
+
 import {
   getDeckReadiness,
   getLargestValidGridSize,
   isGridSizeValidForDeck,
-  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { CardPreview } from "../components/bingo/CardPreview";
 import { MasterSongList } from "../components/bingo/MasterSongList";
@@ -55,7 +54,7 @@ import {
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
-const CARD_COUNT_PRESETS = [5, 10, 20, 50, 100] as const;
+
 const BINGO_PERCENT = 100;
 const EVENT_TITLE_MAX = 80;
 
@@ -97,11 +96,11 @@ export const CardsPage: React.FC = () => {
   const [printJob, setPrintJob] = useState<PrintJob>("all");
   const [pendingPrint, setPendingPrint] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
-  const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
+
   const [pdfError, setPdfError] = useState<string | null>(null);
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
   const [shareStatus, setShareStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [shareError, setShareError] = useState<string | null>(null);
 
@@ -128,7 +127,7 @@ export const CardsPage: React.FC = () => {
     [deck, cellContent]
   );
   const poolCount = poolTracks.length;
-  const poolLabelPlural = usesAuthorPool(cellContent) ? "authors" : "songs";
+
   const averageClipSeconds = useMemo(() => {
     if (poolTracks.length === 0) return 0;
     return (
@@ -199,15 +198,10 @@ export const CardsPage: React.FC = () => {
   }, [cards.length]);
 
   useEffect(() => {
-    if (!deck || deck.tracks.length < MIN_CARDS_TRACKS || poolCount < MIN_CARDS_TRACKS) {
+    if (!deck || poolCount === 0) {
       setCards([]);
       setActivePreviewIndex(0);
       layoutKeyRef.current = "";
-      return;
-    }
-
-    if (!isGridSizeValidForDeck(poolCount, gridSize)) {
-      setCards([]);
       return;
     }
 
@@ -243,16 +237,12 @@ export const CardsPage: React.FC = () => {
 
   // If author-only mode shrinks the pool below the current grid, step down.
   useEffect(() => {
-    if (!deck || poolCount < MIN_CARDS_TRACKS) return;
-    if (!isGridSizeValidForDeck(poolCount, gridSize)) {
-      setGridSize(getLargestValidGridSize(poolCount));
-    }
+    if (!deck || poolCount === 0) return;
   }, [deck, poolCount, gridSize]);
 
   useEffect(() => {
-    if (!deck || !isShareApiConfigured() || deck.tracks.length < MIN_CARDS_TRACKS) {
+    if (!deck || !isShareApiConfigured() || deck.tracks.length === 0) {
       setShareUrl(null);
-      setQrDataUrl(null);
       setShareStatus("idle");
       setShareError(null);
       return;
@@ -268,14 +258,11 @@ export const CardsPage: React.FC = () => {
         if (cancelled) return;
         const url = buildSharedDeckUrl(shareId);
         setShareUrl(url);
-        const qr = await generateQrDataUrl(url, 160);
-        if (cancelled) return;
-        setQrDataUrl(qr);
+
         setShareStatus("ready");
       } catch (err) {
         if (cancelled) return;
         setShareUrl(null);
-        setQrDataUrl(null);
         setShareStatus("error");
         setShareError((err as Error).message || "Could not create share link");
       }
@@ -287,8 +274,7 @@ export const CardsPage: React.FC = () => {
   }, [deck?.id, deck?.updatedAt, deck?.tracks.length]);
 
   const handleRegenerate = () => {
-    if (!deck || !cardOptions || deck.tracks.length < MIN_CARDS_TRACKS) return;
-    if (!isGridSizeValidForDeck(poolCount, gridSize)) return;
+    if (!deck || !cardOptions || poolCount === 0) return;
     const generated = generateBingoCards(deck.tracks, cardOptions);
     setCards(generated);
     setActivePreviewIndex(0);
@@ -297,7 +283,7 @@ export const CardsPage: React.FC = () => {
   const handleDownloadPdf = async () => {
     if (!deck || !cardOptions || cards.length === 0 || isExportingPdf) return;
     setIsExportingPdf(true);
-    setPdfProgress({ current: 0, total: cards.length });
+
     const loadingToastId = showToast({
       title: "Generating PDF",
       message: `Preparing ${cards.length} bingo cards…`,
@@ -312,12 +298,10 @@ export const CardsPage: React.FC = () => {
           ...cardOptions,
           tracks: deck.tracks,
           cellContent,
-          shareUrl: shareUrl ?? undefined,
+          shareUrl: undefined,
           includeMasterList,
         },
-        (current, total) => {
-          setPdfProgress({ current, total });
-        }
+        () => {}
       );
       trackEvent("cards_printed", "cards", { output: "pdf" });
       dismissToast(loadingToastId);
@@ -340,7 +324,7 @@ export const CardsPage: React.FC = () => {
       });
     } finally {
       setIsExportingPdf(false);
-      setPdfProgress(null);
+
     }
   };
 
@@ -388,14 +372,12 @@ export const CardsPage: React.FC = () => {
   const deezerHydration = backgroundTasks[`deezer-hydration:${deck.id}`];
   const currentCard = cards[activePreviewIndex] || cards[0];
   const cardsForPrint = printCards ?? cards;
-  const canGenerate = poolCount > 0 && isGridSizeValidForDeck(poolCount, gridSize);
+  const canGenerate = poolCount > 0;
   const exportsDisabled = cards.length === 0 || !canGenerate;
   const showCardsInPrint = printJob === "cards" || printJob === "all";
   const eventTitle = customTitle || deck.name;
 
-  const pdfButtonLabel = isExportingPdf
-    ? `Generating PDF (${pdfProgress?.current}/${pdfProgress?.total})...`
-    : `Download PDF (${cards.length} cards)`;
+  const pdfButtonLabel = "Download PDF cards";
 
   const previewEmptyState = (
     <Window title="Preview">
@@ -406,16 +388,6 @@ export const CardsPage: React.FC = () => {
             <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary inline-flex items-center gap-2">
               <Edit3 className="w-4 h-4" />
               Open deck
-            </Link>
-          </>
-        ) : deck.tracks.length < MIN_CARDS_TRACKS ? (
-          <>
-            <p className="text-sm">
-              Need at least {MIN_CARDS_TRACKS} songs for a 3×3 bingo card (you have {deck.tracks.length}).
-            </p>
-            <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary inline-flex items-center gap-2">
-              <Edit3 className="w-4 h-4" />
-              Add more songs
             </Link>
           </>
         ) : (
@@ -447,31 +419,21 @@ export const CardsPage: React.FC = () => {
           back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
           title={`Cards`}
           primaryAction={
-            <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
-              <Printer className="w-4 h-4" />
-              Print
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
+                <Printer className="w-4 h-4" />
+                Print
+              </Button>
+              <Button type="button" variant="primary" onClick={() => void handleDownloadPdf()} disabled={isExportingPdf || exportsDisabled}>
+                {isExportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Download PDF cards
+              </Button>
+              <Button type="button" onClick={handlePrintMasterOnly} disabled={deck.tracks.length === 0}>
+                <ListOrdered className="w-4 h-4" />
+                Master list
+              </Button>
+            </div>
           }
-          overflowItems={[
-            {
-              icon: isExportingPdf ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              ),
-              label: isExportingPdf
-                ? `Generating PDF (${pdfProgress?.current ?? 0}/${pdfProgress?.total ?? cards.length})`
-                : `Download PDF (${cards.length} cards)`,
-              onClick: () => void handleDownloadPdf(),
-              disabled: exportsDisabled,
-            },
-            {
-              icon: <ListOrdered className="w-4 h-4" />,
-              label: "Print master list",
-              onClick: handlePrintMasterOnly,
-              disabled: deck.tracks.length === 0,
-            },
-          ]}
         />
       ) : (
         <PageHeader
@@ -567,7 +529,7 @@ export const CardsPage: React.FC = () => {
                 <span>
                   Include master song list
                   <span className="block font-normal text-muted mt-0.5">
-                    Prints a number → song key sheet for the host (and PDF first pages).
+                    Adds a number-to-song key sheet for the host.
                   </span>
                 </span>
               </label>
@@ -594,24 +556,24 @@ export const CardsPage: React.FC = () => {
                     aria-label="Grid size"
                   >
                     {GRID_SIZES.map((size) => {
-                      const valid = isGridSizeValidForDeck(poolCount, size);
+                      const valid = true;
                       return (
                       <option key={size} value={size} disabled={!valid}>
-                        {size}×{size}{!valid ? ` (need ${cellCount(size)}+ ${poolLabelPlural})` : ""}
+                        {size}×{size}
                       </option>
                     );})}
                   </select>
                 ) : (
                   <div className="flex items-center gap-2">
                     {GRID_SIZES.map((size) => {
-                      const valid = isGridSizeValidForDeck(poolCount, size);
+                      const valid = true;
                       return (
                       <Button
                         key={size}
                         type="button"
                         active={gridSize === size}
                         disabled={!valid}
-                        title={valid ? undefined : `Need at least ${cellCount(size)} ${poolLabelPlural} for ${size}×${size}`}
+                        title={undefined}
                         onClick={() => setGridSize(size)}
                         className="flex-1"
                       >
@@ -624,34 +586,22 @@ export const CardsPage: React.FC = () => {
 
               <div>
                 <p className="text-xs font-bold mb-1.5">Number of Cards ({cardCount})</p>
-                {isMobile ? (
-                  <select
-                    className="pc-select w-full"
+                <div className="space-y-1.5">
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    step={1}
                     value={cardCount}
                     onChange={(e) => setCardCount(Number(e.target.value))}
                     aria-label="Number of cards"
-                  >
-                    {CARD_COUNT_PRESETS.map((num) => (
-                      <option key={num} value={num}>
-                        {num} cards
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    {CARD_COUNT_PRESETS.map((num) => (
-                      <Button
-                        key={num}
-                        type="button"
-                        active={cardCount === num}
-                        onClick={() => setCardCount(num)}
-                        className="flex-1"
-                      >
-                        {num}
-                      </Button>
-                    ))}
+                    className="w-full cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-muted">
+                    <span>1 card</span>
+                    <span>100 cards</span>
                   </div>
-                )}
+                </div>
               </div>
 
               <Button
@@ -671,9 +621,7 @@ export const CardsPage: React.FC = () => {
                     ? ` · ${poolCount} unique author${poolCount === 1 ? "" : "s"}`
                     : ""}{" "}
                   · {slots} squares per card
-                  {!isGridSizeValidForDeck(poolCount, gridSize)
-                    ? ` · Need ${cellCount(gridSize)}+ ${poolLabelPlural} for this grid`
-                    : ""}
+
                 </p>
                 {canGenerate && (
                   <div className="pc-bevel-inset p-2.5 mt-2 space-y-2" aria-live="polite">
@@ -703,30 +651,28 @@ export const CardsPage: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <p className="text-[10px] text-muted">
-                      Expected values for {cardCount} card{cardCount === 1 ? "" : "s"}; actual games vary.
-                    </p>
+
                   </div>
                 )}
                 {shareStatus === "loading" && (
                   <p className="text-muted inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    Preparing share link for QR…
+                    Preparing share link…
                   </p>
                 )}
                 {shareStatus === "ready" && shareUrl && (
                   <p className="text-muted break-all">
-                    QR / link on prints: {shareUrl}
+                    Share link ready: {shareUrl}
                   </p>
                 )}
                 {shareStatus === "error" && (
                   <p className="text-pc-warning">
-                    Share link unavailable{shareError ? `: ${shareError}` : ""}. Cards still print without QR.
+                    Share link unavailable{shareError ? `: ${shareError}` : ""}.
                   </p>
                 )}
                 {shareStatus === "idle" && !isShareApiConfigured() && (
                   <p className="text-muted">
-                    Share API not configured — prints will omit the deck QR / link.
+                    Share links are unavailable.
                   </p>
                 )}
               </div>
@@ -783,8 +729,8 @@ export const CardsPage: React.FC = () => {
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
                 cellContent={cellContent}
-                shareUrl={shareUrl}
-                qrDataUrl={qrDataUrl}
+                shareUrl={null}
+                qrDataUrl={null}
                 interactiveMarks={false}
               />
             </Window>
@@ -801,8 +747,8 @@ export const CardsPage: React.FC = () => {
               <MasterSongList
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
-                shareUrl={shareUrl}
-                qrDataUrl={qrDataUrl}
+                shareUrl={null}
+                qrDataUrl={null}
               />
             </div>
           )}
@@ -814,8 +760,8 @@ export const CardsPage: React.FC = () => {
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
                 cellContent={cellContent}
-                shareUrl={shareUrl}
-                qrDataUrl={qrDataUrl}
+                shareUrl={null}
+                qrDataUrl={null}
                 interactiveMarks={false}
               />
             </div>

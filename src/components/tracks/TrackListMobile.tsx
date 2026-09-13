@@ -27,6 +27,7 @@ interface TrackListMobileProps {
   isTrackBlocked: (track: Track) => boolean;
   isBusy?: boolean;
   editClipBusyId?: string | null;
+  isRecentlyAdded?: (track: Track) => boolean;
 }
 
 function getErrorStatus(
@@ -64,6 +65,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
   isTrackBlocked,
   isBusy = false,
   editClipBusyId = null,
+  isRecentlyAdded,
 }) => {
   const isMobile = useIsMobile();
   const actionBtnClass =
@@ -177,6 +179,12 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 <p className={`text-muted ${isMobile ? "text-sm line-clamp-2" : "text-base truncate"}`}>
                   {track.artist}
                 </p>
+                {isRecentlyAdded?.(track) && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-pc-success">
+                    <Sparkles className="w-3 h-3" />
+                    Recently added
+                  </span>
+                )}
               </div>
             </div>
 

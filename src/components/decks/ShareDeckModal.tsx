@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { AlertCircle, Check, Copy, Download, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
+import { AlertCircle, Check, Copy, Download, ExternalLink, Loader2, Mail, MessageCircle, Send, Users } from "lucide-react";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
-import {
-  buildShareMessage,
-  buildSharedDeckUrl,
-  getPlatformShareUrls,
-} from "../../lib/share/deckShare";
+import { buildSharedDeckUrl, getPlatformShareUrls } from "../../lib/share/deckShare";
+import { buildCollaborativeUrl, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
+import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
 import { isShareApiConfigured, publishSharedDeck } from "../../lib/share/sharedDecksApi";
 import { exportDeckToJson } from "../../lib/storage/decks";
 
@@ -16,6 +14,7 @@ interface ShareDeckModalProps {
   deck: Deck;
   initialShareId?: string;
   initialShareUrl?: string;
+  onLinked?: (collaborationId: string, revision?: number) => void;
   onClose: () => void;
 }
 
@@ -23,6 +22,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   deck,
   initialShareId,
   initialShareUrl,
+  onLinked,
   onClose,
 }) => {
   const { showToast } = useToast();
@@ -30,6 +30,9 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   const [shareUrl, setShareUrl] = useState<string | undefined>(initialShareUrl);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [collaborationUrl, setCollaborationUrl] = useState<string>();
+  const [isCreatingCollaboration, setIsCreatingCollaboration] = useState(false);
+  const [collaborationError, setCollaborationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isShareApiConfigured() || initialShareUrl) {
@@ -66,13 +69,13 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     };
   }, [deck, initialShareUrl]);
 
-  const copyLink = async () => {
-    if (!shareUrl) return;
+  const copyLink = async (url = shareUrl, message = "Share link copied to clipboard.") => {
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(url);
       showToast({
         title: "Link copied",
-        message: "Share link copied to clipboard.",
+        message,
         duration: 3000,
       });
     } catch {
@@ -84,22 +87,26 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     }
   };
 
-  const copyMessage = async () => {
-    if (!shareUrl) return;
-    const message = buildShareMessage(deck, shareUrl);
+
+  const generateCollaborationLink = async () => {
+    if (collaborationUrl || isCreatingCollaboration) return;
+    setCollaborationError(null);
+    setIsCreatingCollaboration(true);
     try {
-      await navigator.clipboard.writeText(message);
-      showToast({
-        title: "Copied",
-        message: "Share message copied to clipboard.",
-        duration: 3000,
+      if (!isCollaborativeApiConfigured()) {
+        throw new Error("Collaborative links are not configured on this site yet.");
+      }
+      const { collaborationId, revision } = await createCollaborativePlaylist({
+        name: deck.name,
+        provider: deck.provider,
+        tracks: deck.tracks,
       });
-    } catch {
-      showToast({
-        title: "Copy failed",
-        message: "Could not copy to clipboard.",
-        duration: 5000,
-      });
+      onLinked?.(collaborationId, revision);
+      setCollaborationUrl(buildCollaborativeUrl(collaborationId));
+    } catch (err) {
+      setCollaborationError(err instanceof Error ? err.message : "Could not create a collaborative link.");
+    } finally {
+      setIsCreatingCollaboration(false);
     }
   };
 
@@ -139,10 +146,35 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
                 <Copy className="w-4 h-4" />
                 Copy link
               </Button>
-              <Button type="button" onClick={() => void copyMessage()}>
-                <Copy className="w-4 h-4" />
-                Copy message
-              </Button>
+            </div>
+            <div className="border-t border-zinc-200 pt-4 space-y-3">
+              {collaborationUrl ? (
+                <>
+                  <p className="text-sm">Anyone with this link can edit the playlist.</p>
+                  <div className="pc-bevel-inset p-3 break-all text-xs">{collaborationUrl}</div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button type="button" variant="primary" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
+                      <Copy className="w-4 h-4" />
+                      Copy link
+                    </Button>
+                    <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, collaborationUrl).whatsapp}>
+                      <MessageCircle className="w-4 h-4" />WhatsApp<ExternalLink className="w-3 h-3 opacity-75" />
+                    </a>
+                    <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, collaborationUrl).telegram}>
+                      <Send className="w-4 h-4" />Telegram<ExternalLink className="w-3 h-3 opacity-75" />
+                    </a>
+                    <a className="pc-button inline-flex items-center gap-1.5" href={getCollaborativeShareUrls(deck, collaborationUrl).email}>
+                      <Mail className="w-4 h-4" />Email
+                    </a>
+                  </div>
+                </>
+              ) : (
+                <Button type="button" onClick={() => void generateCollaborationLink()} disabled={isCreatingCollaboration}>
+                  {isCreatingCollaboration ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                  {isCreatingCollaboration ? "Creating collaboration link…" : "Generate collaboration link"}
+                </Button>
+              )}
+              {collaborationError ? <p className="text-xs pc-bevel-inset p-3">{collaborationError}</p> : null}
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <a

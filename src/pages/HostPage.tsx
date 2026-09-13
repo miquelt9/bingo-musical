@@ -102,7 +102,7 @@ function readStoredCrossfadeMs(deckId: string): number {
     if (raw == null) return DEFAULT_CROSSFADE_MS;
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return DEFAULT_CROSSFADE_MS;
-    return Math.max(0, Math.min(3000, parsed));
+    return Math.max(0, Math.min(10000, parsed));
   } catch {
     return DEFAULT_CROSSFADE_MS;
   }
@@ -583,11 +583,6 @@ export const HostPage: React.FC = () => {
     setSessionReady(true);
   };
 
-  const openDisplayWindow = useCallback(() => {
-    if (!deck) return;
-    const url = `${window.location.origin}${window.location.pathname}#/deck/${deck.id}/display`;
-    window.open(url, `bingo-display-${deck.id}`, "noopener,noreferrer,width=1024,height=768");
-  }, [deck]);
 
   const buildDisplayState = useCallback((): HostDisplayState | null => {
     if (!deck) return null;
@@ -763,7 +758,6 @@ export const HostPage: React.FC = () => {
       onToggleAutoReveal={() => setAutoRevealOnEnd(!autoRevealOnEnd)}
       crossfadeOverlapMs={crossfadeOverlapMs}
       onCrossfadeOverlapChange={persistCrossfadeMs}
-      onOpenDisplay={openDisplayWindow}
       gameStarted={calledHistory.length > 0}
       disabled={!canHost}
       isRevealed={isRevealed}

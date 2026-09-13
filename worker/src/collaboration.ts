@@ -295,7 +295,7 @@ export async function handleAppendTracks(request: Request, env: CollaborationEnv
     ...playlist,
     revision: playlist.revision + 1,
     updatedAt: new Date().toISOString(),
-    tracks: [...playlist.tracks, ...added],
+    tracks: [...added, ...playlist.tracks],
   };
   try {
     await env.SHARED_DECKS.put(collaborationKey(id), JSON.stringify(nextPlaylist));

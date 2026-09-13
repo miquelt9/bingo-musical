@@ -23,6 +23,7 @@ interface ShareDeckTarget {
   deck: Deck;
   shareId?: string;
   shareUrl?: string;
+  onLinked?: (collaborationId: string, revision?: number) => void;
 }
 
 export interface BackgroundTaskStatus {
@@ -44,7 +45,7 @@ interface DeckContextType {
   deleteDeck: (id: string) => void;
   duplicateDeck: (id: string) => Deck | null;
   exportDeck: (deck: Deck) => void;
-  shareDeck: (deck: Deck) => Promise<void>;
+  shareDeck: (deck: Deck, onLinked?: (collaborationId: string, revision?: number) => void) => Promise<void>;
   importDeck: (file: File) => Promise<Deck>;
   importSharedDeck: (shareId: string) => Promise<Deck>;
   refreshDecks: () => void;
@@ -262,11 +263,11 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const shareDeck = async (deck: Deck) => {
+  const shareDeck = async (deck: Deck, onLinked?: (collaborationId: string, revision?: number) => void) => {
     if (isEmptyDeck(deck)) return;
 
     if (!isShareApiConfigured()) {
-      setShareTarget({ deck });
+      setShareTarget({ deck, onLinked });
       showToast({
         title: "Share link unavailable",
         icon: <AlertCircle className="w-3.5 h-3.5" />,
@@ -296,12 +297,11 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : "Choose a sharing method or copy the link from the share dialog.",
         duration: 6000,
       });
-      if (!shared) {
-        setShareTarget({ deck, shareId, shareUrl });
-      }
+      // Keep the share dialog open so it also exposes collaboration-link generation.
+      setShareTarget({ deck, shareId, shareUrl, onLinked });
     } catch (err) {
       dismissToast(loadingToastId);
-      setShareTarget({ deck });
+      setShareTarget({ deck, onLinked });
       showToast({
         title: "Sharing failed",
         icon: <AlertCircle className="w-3.5 h-3.5" />,
@@ -375,6 +375,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
           deck={shareTarget.deck}
           initialShareId={shareTarget.shareId}
           initialShareUrl={shareTarget.shareUrl}
+          onLinked={shareTarget.onLinked}
           onClose={() => setShareTarget(null)}
         />
       ) : null}

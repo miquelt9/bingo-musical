@@ -4,7 +4,7 @@ import { Copy, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-r
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
-import { buildCollaborativeUrl, buildCollaborativeMessage, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
+import { buildCollaborativeUrl, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
 import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
 
 interface CollaborateModalProps {
@@ -89,7 +89,7 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
             <div className="pc-bevel-inset p-3 break-all text-xs">{url}</div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="primary" onClick={() => void copy(url, "Collaborative link copied to clipboard.")}><Copy className="w-4 h-4" />Copy link</Button>
-              <Button type="button" onClick={() => void copy(buildCollaborativeMessage(deck, url), "Share message copied to clipboard.")}><Copy className="w-4 h-4" />Copy message</Button>
+
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, url).whatsapp}><MessageCircle className="w-4 h-4" />WhatsApp<ExternalLink className="w-3 h-3 opacity-75" /></a>
