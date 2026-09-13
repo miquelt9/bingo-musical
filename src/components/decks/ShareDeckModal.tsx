@@ -5,7 +5,7 @@ import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
 import { buildSharedDeckUrl, getPlatformShareUrls } from "../../lib/share/deckShare";
-import { buildCollaborativeUrl, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
+import { buildCollaborativeUrl } from "../../lib/share/collaborativeShare";
 import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
 import { isShareApiConfigured, publishSharedDeck } from "../../lib/share/sharedDecksApi";
 import { exportDeckToJson } from "../../lib/storage/decks";
@@ -147,36 +147,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
                 Copy link
               </Button>
             </div>
-            <div className="border-t border-zinc-200 pt-4 space-y-3">
-              {collaborationUrl ? (
-                <>
-                  <p className="text-sm">Anyone with this link can edit the playlist.</p>
-                  <div className="pc-bevel-inset p-3 break-all text-xs">{collaborationUrl}</div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Button type="button" variant="primary" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
-                      <Copy className="w-4 h-4" />
-                      Copy link
-                    </Button>
-                    <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, collaborationUrl).whatsapp}>
-                      <MessageCircle className="w-4 h-4" />WhatsApp<ExternalLink className="w-3 h-3 opacity-75" />
-                    </a>
-                    <a className="pc-button inline-flex items-center gap-1.5" target="_blank" rel="noopener noreferrer" href={getCollaborativeShareUrls(deck, collaborationUrl).telegram}>
-                      <Send className="w-4 h-4" />Telegram<ExternalLink className="w-3 h-3 opacity-75" />
-                    </a>
-                    <a className="pc-button inline-flex items-center gap-1.5" href={getCollaborativeShareUrls(deck, collaborationUrl).email}>
-                      <Mail className="w-4 h-4" />Email
-                    </a>
-                  </div>
-                </>
-              ) : (
-                <Button type="button" onClick={() => void generateCollaborationLink()} disabled={isCreatingCollaboration}>
-                  {isCreatingCollaboration ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                  {isCreatingCollaboration ? "Creating collaboration link…" : "Generate collaboration link"}
-                </Button>
-              )}
-              {collaborationError ? <p className="text-xs pc-bevel-inset p-3">{collaborationError}</p> : null}
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
               <a
                 href={getPlatformShareUrls(deck, shareUrl).whatsapp}
                 target="_blank"
@@ -203,6 +174,26 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
                 <Mail className="w-4 h-4" />
                 Email
               </a>
+            </div>
+            <div className="border-t border-zinc-200 pt-4 space-y-3">
+              <div className="flex flex-col items-end gap-3 md:ml-auto md:w-5/6">
+                {collaborationUrl ? (
+                  <>
+                    <p className="text-sm w-full text-right">Anyone with this link can edit the playlist.</p>
+                    <div className="pc-bevel-inset p-3 break-all text-xs w-full text-right">{collaborationUrl}</div>
+                    <Button type="button" variant="primary" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
+                      <Copy className="w-4 h-4" />
+                      Copy link
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" onClick={() => void generateCollaborationLink()} disabled={isCreatingCollaboration}>
+                    {isCreatingCollaboration ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                    {isCreatingCollaboration ? "Creating collaboration link…" : "Generate collaboration link"}
+                  </Button>
+                )}
+                {collaborationError ? <p className="text-xs pc-bevel-inset p-3 w-full text-right">{collaborationError}</p> : null}
+              </div>
             </div>
           </>
         ) : (

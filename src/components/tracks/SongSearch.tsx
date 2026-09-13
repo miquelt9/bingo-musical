@@ -707,7 +707,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
               return (
                 <div
                   key={hit.videoId}
-                  className={`flex ${isMobile ? "flex-col items-stretch" : "items-center"} gap-3 p-2 pc-bevel-outset ${isBlocked ? "opacity-80" : ""}`}
+                  className={`flex items-center gap-3 p-2 pc-bevel-outset ${isBlocked ? "opacity-80" : ""}`}
                 >
                   <img
                     src={hit.thumbnailUrl}

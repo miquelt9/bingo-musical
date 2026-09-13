@@ -492,6 +492,7 @@ export const EditorPage: React.FC = () => {
           collaboration: { id: response.playlist.id, revision: response.playlist.revision },
         });
         setDeck(saved);
+        setDeckName(response.playlist.name);
         if (successMessage) showToast({ title: "Collaborative playlist updated", message: successMessage, duration: 3500 });
         return true;
       } catch (err) {
@@ -746,20 +747,15 @@ export const EditorPage: React.FC = () => {
               </Button>
 
               {deck.collaboration && (
-                <>
-                  <span className="pc-button opacity-80" title="This deck is collaborative" aria-label="Collaborative playlist">
-                    <Users className="w-4 h-4" />
-                  </span>
-                  <Button
-                    type="button"
-                    onClick={() => void handleRefreshCollaborative()}
-                    disabled={isCollaborativeSyncing}
-                    title="Check for collaborative updates"
-                    aria-label="Check for collaborative updates"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
-                  </Button>
-                </>
+                <Button
+                  type="button"
+                  onClick={() => void handleRefreshCollaborative()}
+                  disabled={isCollaborativeSyncing}
+                  title="Check for collaborative updates"
+                  aria-label="Check for collaborative updates"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
+                </Button>
               )}
               {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
                 <span
@@ -817,21 +813,15 @@ export const EditorPage: React.FC = () => {
             </Button>
 
             {deck.collaboration && (
-              <>
-                <span className="pc-button opacity-80" title="This deck is collaborative">
-                  <Users className="w-3.5 h-3.5" />
-                  Collaborative
-                </span>
-                <Button
-                  type="button"
-                  onClick={() => void handleRefreshCollaborative()}
-                  disabled={isCollaborativeSyncing}
-                  title="Check for collaborative updates"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
-                  {isCollaborativeSyncing ? "Checking…" : "Check for updates"}
-                </Button>
-              </>
+              <Button
+                type="button"
+                onClick={() => void handleRefreshCollaborative()}
+                disabled={isCollaborativeSyncing}
+                title="Check for collaborative updates"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
+                {isCollaborativeSyncing ? "Checking…" : "Check for updates"}
+              </Button>
             )}
             {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
               <span
@@ -906,6 +896,11 @@ export const EditorPage: React.FC = () => {
               )
             )}
             <p className="mt-2 text-xs flex flex-wrap items-center gap-2">
+              {deck.collaboration && (
+                <span className="inline-flex items-center" title="This deck is collaborative" aria-label="Collaborative playlist">
+                  <Users className="w-3.5 h-3.5" />
+                </span>
+              )}
               <span>
                 {isLoadingDeezerPreviews
                   ? `Loading Deezer previews… (${deezerHydration.completed}/${deezerHydration.total})`

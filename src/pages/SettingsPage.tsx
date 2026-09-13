@@ -25,6 +25,8 @@ import {
   Upload,
 } from "lucide-react";
 
+const BUILD_ID = import.meta.env.VITE_BUILD_ID || "dev";
+
 interface CollapsibleSectionProps {
   title: React.ReactNode;
   open: boolean;
@@ -133,6 +135,22 @@ export const SettingsPage: React.FC = () => {
         {GITHUB_REPO_URL}
         <ExternalLink className="w-3 h-3" />
       </a>
+      <p className="text-xs mt-3 text-muted">
+        Build commit: {BUILD_ID === "dev" ? (
+          <code>dev</code>
+        ) : (
+          <a
+            href={`${GITHUB_REPO_URL}/commit/${BUILD_ID}`}
+            target="_blank"
+            rel="noreferrer"
+            className="pc-link inline-flex items-center gap-0.5"
+            title={BUILD_ID}
+          >
+            <code>{BUILD_ID.slice(0, 7)}</code>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </p>
     </>
   );
 

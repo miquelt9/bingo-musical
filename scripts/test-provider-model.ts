@@ -17,7 +17,7 @@ test("migrates a v1 YouTube export to schema v2 media", () => {
   assert.deepEqual(result.deck?.tracks[0].media, { provider: "youtube", id: "dQw4w9WgXcQ" });
 });
 
-test("imports and exports Deezer media with its preview URL", () => {
+test("imports and exports Deezer media using its stable track ID", () => {
   const result = validateDeckSchema({
     format: "bingo-musical-deck",
     schemaVersion: 2,
@@ -32,9 +32,12 @@ test("imports and exports Deezer media with its preview URL", () => {
     }],
   });
   assert.equal(result.isValid, true);
-  const exported = serializeDeckForExport(result.deck!).exportObject as { provider: string; songs: Array<{ media: { provider: string; id: string; previewUrl: string } }> };
+  const exported = serializeDeckForExport(result.deck!).exportObject as {
+    provider: string;
+    songs: Array<{ media: { provider: string; id: string; previewUrl?: string } }>;
+  };
   assert.equal(exported.provider, "deezer");
-  assert.equal(exported.songs[0].media.previewUrl, "https://example.test/preview.mp3");
+  assert.deepEqual(exported.songs[0].media, { provider: "deezer", id: "123" });
 });
 
 test("Deezer clip defaults clamp to the available preview window", () => {
