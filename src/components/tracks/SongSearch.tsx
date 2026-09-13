@@ -22,6 +22,7 @@ import {
 import { AlertCircle, Check, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { DeezerSongSearch } from "./DeezerSongSearch";
+import { ConfirmModal } from "../ui/AppDialog";
 
 interface SongSearchProps {
   provider?: MusicProvider;
@@ -127,6 +128,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   const [embedStatuses, setEmbedStatuses] = useState<Map<string, EmbedValidationResult>>(new Map());
   const [isCheckingEmbeds, setIsCheckingEmbeds] = useState(false);
   const [addingVideoId, setAddingVideoId] = useState<string | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [lyricsFallbackUsed, setLyricsFallbackUsed] = useState(false);
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreResults, setHasMoreResults] = useState(false);
@@ -471,17 +473,15 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
     }
   };
 
-  const addAllVisible = async () => {
+  const addAllVisible = async (confirmed = false) => {
     const fresh = hits.filter(
       (hit) => !alreadyInDeck.has(hit.videoId) && !addedIds.has(hit.videoId)
     );
     if (fresh.length === 0) return;
 
-    if (!selectedCatalog) {
-      const ok = window.confirm(
-        "These results may not match your search. Add all playable videos anyway?"
-      );
-      if (!ok) return;
+    if (!selectedCatalog && !confirmed) {
+      setShowBulkConfirm(true);
+      return;
     }
 
     setIsCheckingEmbeds(true);
@@ -626,6 +626,19 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
 
   return (
     <div className="space-y-3">
+      {showBulkConfirm && (
+        <ConfirmModal
+          title="Add all results?"
+          confirmLabel="Add playable videos"
+          onCancel={() => setShowBulkConfirm(false)}
+          onConfirm={() => {
+            setShowBulkConfirm(false);
+            void addAllVisible(true);
+          }}
+        >
+          These results may not match your search. Add all playable videos anyway?
+        </ConfirmModal>
+      )}
       <form
         onSubmit={handleSearch}
         className={`flex gap-2 ${suggestionsOpen ? "flex-col" : "flex-col sm:flex-row"}`}

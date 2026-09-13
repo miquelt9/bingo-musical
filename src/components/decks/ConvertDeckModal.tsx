@@ -18,7 +18,7 @@ interface ConversionRow {
   source: Track;
   candidates: Candidate[];
   selected: number | null;
-  status: "loading" | "matched" | "review" | "unmatched";
+  status: "loading" | "matched" | "unmatched";
 }
 
 interface ConvertDeckModalProps {
@@ -43,13 +43,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 function rowFromCandidates(source: Track, candidates: Candidate[]): ConversionRow {
-  const playable = candidates.filter((candidate) => candidate.playable && candidate.confidence === "high");
-  const selected = playable.length === 1 ? candidates.indexOf(playable[0]) : null;
+  const firstPlayable = candidates.find((candidate) => candidate.playable);
+  const selected = firstPlayable ? candidates.indexOf(firstPlayable) : null;
   return {
     source,
     candidates,
     selected,
-    status: selected === null ? (candidates.length ? "review" : "unmatched") : "matched",
+    status: selected === null ? "unmatched" : "matched",
   };
 }
 
@@ -209,23 +209,31 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
         </p>
         {error && <p className="pc-bevel-inset p-2 text-pc-warning flex items-center gap-2"><AlertCircle className="w-4 h-4" />{error}</p>}
         <div className="space-y-2 max-h-[52vh] overflow-y-auto">
-          {rows.map((row, rowIndex) => (
-            <div key={row.source.id} className="pc-bevel-inset p-2">
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1"><p className="font-semibold truncate">{row.source.artist} — {row.source.title}</p><p className="text-[11px] opacity-75">{row.status === "loading" ? "Searching…" : row.status === "matched" ? "Matched automatically" : row.status === "review" ? "Choose a candidate" : "No confident match; track will need attention"}</p></div>
-                {row.status === "loading" && <Loader2 className="w-4 h-4 animate-spin" />}
-                {row.status === "matched" && <Check className="w-4 h-4 text-pc-success" />}
-              </div>
-              {row.candidates.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {row.candidates.map((candidate, candidateIndex) => {
-                    const label = candidate.provider === "deezer" ? `${candidate.hit.artist} — ${candidate.hit.title}` : `${candidate.hit.author} — ${candidate.hit.title}`;
-                    return <label key={`${candidate.provider}-${candidate.provider === "deezer" ? candidate.hit.id : candidate.hit.videoId}`} className={`flex items-center gap-2 p-1.5 pc-bevel-outset ${!candidate.playable ? "opacity-50" : ""}`}><input type="radio" name={`conversion-${rowIndex}`} checked={row.selected === candidateIndex} disabled={!candidate.playable} onChange={() => setRows((current) => current.map((item, indexValue) => indexValue === rowIndex ? { ...item, selected: candidateIndex, status: "matched" } : item))} /><span className="min-w-0 flex-1 truncate">{label}</span><span className="text-[10px]">{candidate.playable ? candidate.confidence === "high" ? "High confidence" : "Review" : "Unavailable"}</span></label>;
-                  })}
+          {rows.map((row) => {
+            const selectedCandidate = row.selected === null ? null : row.candidates[row.selected];
+            const label = selectedCandidate
+              ? selectedCandidate.provider === "deezer"
+                ? `${selectedCandidate.hit.artist} — ${selectedCandidate.hit.title}`
+                : `${selectedCandidate.hit.author} — ${selectedCandidate.hit.title}`
+              : null;
+            return (
+              <div key={row.source.id} className="pc-bevel-inset p-2">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{row.source.artist} — {row.source.title}</p>
+                    <p className="text-[11px] opacity-75">
+                      {row.status === "loading" ? "Searching…" : row.status === "matched" ? "Matched automatically" : "No playable match; track will need attention"}
+                    </p>
+                  </div>
+                  {row.status === "loading" && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {row.status === "matched" && <Check className="w-4 h-4 text-pc-success" />}
                 </div>
-              )}
-            </div>
-          ))}
+                {selectedCandidate && label && (
+                  <div className="mt-2 p-1.5 pc-bevel-outset truncate">{label}</div>
+                )}
+              </div>
+            );
+          })}
         </div>
         <div className="flex items-center justify-between gap-2 pt-2"><span className="text-[11px]">Unmatched songs are copied with no source so you can resolve them later.</span><div className="flex gap-2"><Button type="button" onClick={onClose} disabled={isMatching}>Cancel</Button><Button type="button" variant="primary" onClick={handleCreate} disabled={isMatching || rows.length === 0}><RefreshCw className="w-4 h-4" />Create converted copy</Button></div></div>
       </div>

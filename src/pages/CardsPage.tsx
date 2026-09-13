@@ -25,6 +25,7 @@ import { CardPreview } from "../components/bingo/CardPreview";
 import { MasterSongList } from "../components/bingo/MasterSongList";
 import { BingoCard } from "../types/deck";
 import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
+import { AlertModal } from "../components/ui/AppDialog";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -92,6 +93,7 @@ export const CardsPage: React.FC = () => {
   const [pendingPrint, setPendingPrint] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -297,7 +299,7 @@ export const CardsPage: React.FC = () => {
       trackEvent("cards_printed", "cards", { output: "pdf" });
     } catch (err) {
       console.error("PDF generation failed:", err);
-      alert("Failed to generate PDF: " + (err as Error).message);
+      setPdfError("Failed to generate PDF: " + (err as Error).message);
     } finally {
       setIsExportingPdf(false);
       setPdfProgress(null);
@@ -387,6 +389,11 @@ export const CardsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {pdfError && (
+        <AlertModal title="PDF export failed" onClose={() => setPdfError(null)}>
+          {pdfError}
+        </AlertModal>
+      )}
       <CardsPlayabilityBanner
         deckId={deck.id}
         isChecking={isChecking}

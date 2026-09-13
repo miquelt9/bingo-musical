@@ -17,6 +17,7 @@ import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtub
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { CollaborateModal } from "../components/decks/CollaborateModal";
+import { PromptModal } from "../components/ui/AppDialog";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
@@ -72,6 +73,7 @@ export const HomePage: React.FC = () => {
   const isMobile = useIsMobile();
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
   const [deckToCollaborate, setDeckToCollaborate] = useState<Deck | null>(null);
+  const [deckNamePrompt, setDeckNamePrompt] = useState<{ provider: MusicProvider; defaultName: string } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
@@ -119,9 +121,15 @@ export const HomePage: React.FC = () => {
   };
 
   const handleCreateEmptyDeck = (provider: MusicProvider = "youtube") => {
-    const defaultName = getNextDeckName(decks.map((d) => d.name));
-    const entered = window.prompt("Name this deck", defaultName);
-    if (entered === null) return;
+    setDeckNamePrompt({
+      provider,
+      defaultName: getNextDeckName(decks.map((d) => d.name)),
+    });
+  };
+
+  const createNamedDeck = (entered: string) => {
+    if (!deckNamePrompt) return;
+    const { provider, defaultName } = deckNamePrompt;
     const name = entered.trim() || defaultName;
     const now = new Date().toISOString();
     const saved = createDeck({
@@ -134,6 +142,7 @@ export const HomePage: React.FC = () => {
       source: { type: "manual" },
       tracks: [],
     });
+    setDeckNamePrompt(null);
     navigate(`/deck/${saved.id}`);
   };
 
@@ -402,11 +411,11 @@ export const HomePage: React.FC = () => {
           </ol>
           <div className="flex flex-wrap gap-2">
             <Link
-              to={`/deck/${SAMPLE_DECK_ID}/play`}
+              to={`/deck/${SAMPLE_DECK_ID}`}
               className="pc-button pc-button--primary text-xs"
               onClick={dismissOnboarding}
             >
-              Try sample deck
+              See sample deck
             </Link>
             <button type="button" className="pc-button text-xs" onClick={dismissOnboarding}>
               Don&apos;t show again
@@ -448,7 +457,7 @@ export const HomePage: React.FC = () => {
             >
               <Music2 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">YouTube</span>
-              <span className="text-[11px] text-muted">Video clips</span>
+              <span className="text-[11px] text-muted">Video clips (fully customizable, YT Ads may appear)</span>
             </button>
             <button
               type="button"
@@ -464,6 +473,16 @@ export const HomePage: React.FC = () => {
 
         {sortedDecks.map(renderDeckCard)}
       </div>
+
+      {deckNamePrompt && (
+        <PromptModal
+          title="Name this deck"
+          defaultValue={deckNamePrompt.defaultName}
+          confirmLabel="Create deck"
+          onCancel={() => setDeckNamePrompt(null)}
+          onConfirm={createNamedDeck}
+        />
+      )}
 
       {deckToCollaborate && (
         <CollaborateModal deck={deckToCollaborate} onClose={() => setDeckToCollaborate(null)} />
