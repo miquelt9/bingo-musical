@@ -12,6 +12,7 @@ import { DisplayPage } from "./pages/DisplayPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { SharedDeckPage } from "./pages/SharedDeckPage";
+import { CollaborativePlaylistPage } from "./pages/CollaborativePlaylistPage";
 import { AppUpdateWatcher } from "./components/version/AppUpdateWatcher";
 import { useRouteUsage } from "./hooks/useRouteUsage";
 
@@ -26,6 +27,7 @@ function AppRoutes() {
       <Route path="/deck/:id/play" element={<HostPage />} />
       <Route path="/import" element={<ImportPage />} />
       <Route path="/share/:shareId" element={<SharedDeckPage />} />
+      <Route path="/collab/:collaborationId" element={<CollaborativePlaylistPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

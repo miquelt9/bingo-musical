@@ -1,6 +1,6 @@
 # Share API (Cloudflare Worker + KV)
 
-Stores shared Musical Bingo decks as read-only snapshots and serves them via short ids.
+Stores shared Musical Bingo decks as read-only snapshots and serves them via short ids. It also provides append-only collaborative playlists persisted in the same KV namespace.
 
 ## One-time Cloudflare setup
 
@@ -64,6 +64,9 @@ Rebuild/redeploy the frontend after setting the secret.
 |--------|------|-------------|
 | `POST` | `/api/decks` | Store deck export JSON if not already present. Returns `{ "shareId": "..." }` with `201` on first write or `200` when content already exists (no KV write). |
 | `GET` | `/api/decks/:shareId` | Fetch stored deck export JSON |
+| `POST` | `/api/collaborations` | Create a collaborative playlist from a deck-like export; returns `{ collaborationId, revision, playlist }` |
+| `GET` | `/api/collaborations/:id` | Read the authoritative collaborative playlist |
+| `POST` | `/api/collaborations/:id/tracks` | Append tracks with `{ operationId, baseRevision, tracks }`; duplicate tracks are ignored |
 | `POST` | `/api/events` | Record anonymous usage event (returns `204`) |
 | `GET` | `/api/health` | Health check |
 | `GET` | `/api/deezer/search?q=...&limit=8` | Normalized Deezer catalog search metadata |
@@ -78,7 +81,26 @@ Share ids are the first 10 characters of a SHA-256 hash (base64url) of a canonic
 
 Deezer and YouTube metadata endpoints return catalog/search metadata only. The Worker does not proxy or download media. YouTube search races a small curated list of public Piped/Invidious instances server-side so browsers do not fan out. Requests are rate limited and metadata responses are cached briefly at Cloudflare’s edge.
 
-Shared decks expire after 1 year (KV TTL).
+Shared decks expire after 1 year (KV TTL). Collaborative snapshots use `collab:` keys and intentionally have no expiration TTL.
+
+### Collaborative playlists
+
+Collaborative IDs are generated from 128 random bits and encoded as base64url. Create accepts a deck-like payload with `name`, `provider` (`youtube` or `deezer`), and either `tracks` or `songs`; each track must have a title, artist, and provider media id (from `media.id`, `providerId`, or `id`). The stored schema is:
+
+```json
+{
+  "format": "bingo-musical-collaboration",
+  "schemaVersion": 1,
+  "id": "...",
+  "name": "Friday Bingo",
+  "provider": "youtube",
+  "revision": 0,
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "tracks": []
+}
+```
+
+Track appends use optimistic revision checks: `baseRevision` must equal the current revision read from KV; stale writes receive `409`. The app is append-only, and a successful mutation returns `changed`, `revision`, `playlist`, `addedTrackIds`, and `duplicateTrackIds`. Duplicate detection uses provider media id or normalized artist/title. Payloads are limited to 150 tracks and 256 KiB. This is sufficient for normal low-concurrency usage, but simultaneous writes can still result in a rare last-writer race; this is not strict atomic serialization.
 
 ## Usage analytics (Workers Analytics Engine)
 

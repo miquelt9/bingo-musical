@@ -1,8 +1,17 @@
+/// <reference types="@cloudflare/workers-types" />
+
 import {
   canonicalizeSharePayload,
   canonicalPayloadsEqual,
   computeShareId,
 } from "../../src/lib/share/deckCanonical";
+import {
+  collaborationBodyTooLarge,
+  handleAppendTracks,
+  handleCreateCollaboration,
+  handleGetCollaboration,
+  isValidCollaborationId,
+} from "./collaboration";
 
 export interface Env {
   SHARED_DECKS: KVNamespace;
@@ -25,6 +34,7 @@ const RATE_LIMITS = {
   youtube: 40,
   share: 10,
   events: 20,
+  collaboration: 60,
 } as const;
 type RateLimitBucket = keyof typeof RATE_LIMITS;
 const SHARE_ID_RETRIES = 5;
@@ -125,6 +135,12 @@ function emptyResponse(request: Request, env: Env, status = 204): Response {
     status,
     headers: corsHeaders(request, env),
   });
+}
+
+function withCors(response: Response, request: Request, env: Env): Response {
+  const headers = corsHeaders(request, env);
+  response.headers.forEach((value, key) => headers.set(key, value));
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function errorResponse(
@@ -1133,6 +1149,26 @@ async function allocateContentAddressedShareId(
   return { shareId, created: true };
 }
 
+async function handleCreateCollaborationRoute(request: Request, env: Env): Promise<Response> {
+  if (!checkRateLimit(request, "collaboration")) {
+    return rateLimitResponse(request, env, "Too many collaboration requests. Please try again later.");
+  }
+  return withCors(await handleCreateCollaboration(request, env), request, env);
+}
+
+async function handleCollaborationRoute(request: Request, env: Env, id: string): Promise<Response> {
+  if (!checkRateLimit(request, "collaboration")) {
+    return rateLimitResponse(request, env, "Too many collaboration requests. Please try again later.");
+  }
+  if (request.method === "POST" && collaborationBodyTooLarge(request)) {
+    return errorResponse(request, env, "Collaboration payload is too large.", 413);
+  }
+  const response = request.method === "GET"
+    ? await handleGetCollaboration(env, id)
+    : await handleAppendTracks(request, env, id);
+  return withCors(response, request, env);
+}
+
 async function handleCreateDeck(request: Request, env: Env): Promise<Response> {
   if (!checkRateLimit(request, "share")) {
     return rateLimitResponse(request, env, "Too many share requests. Please try again later.");
@@ -1256,6 +1292,24 @@ export default {
         status: 204,
         headers: corsHeaders(request, env),
       });
+    }
+
+    if (url.pathname === "/api/collaborations" && request.method === "POST") {
+      return handleCreateCollaborationRoute(request, env);
+    }
+
+    const collaborationTracksMatch = url.pathname.match(/^\/api\/collaborations\/([^/]+)\/tracks$/);
+    if (collaborationTracksMatch && request.method === "POST") {
+      const id = decodeURIComponent(collaborationTracksMatch[1]);
+      if (!isValidCollaborationId(id)) return errorResponse(request, env, "Invalid collaboration id.", 400);
+      return handleCollaborationRoute(request, env, id);
+    }
+
+    const collaborationMatch = url.pathname.match(/^\/api\/collaborations\/([^/]+)$/);
+    if (collaborationMatch && request.method === "GET") {
+      const id = decodeURIComponent(collaborationMatch[1]);
+      if (!isValidCollaborationId(id)) return errorResponse(request, env, "Invalid collaboration id.", 400);
+      return handleCollaborationRoute(request, env, id);
     }
 
     if (url.pathname === "/api/decks" && request.method === "POST") {

@@ -16,6 +16,7 @@ import { saveStoredDecks } from "../lib/storage/decks";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { CollaborateModal } from "../components/decks/CollaborateModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
@@ -26,6 +27,7 @@ import {
   Copy,
   Trash2,
   Share2,
+  Users,
   X,
   Sparkles,
   Music2,
@@ -69,6 +71,7 @@ export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
+  const [deckToCollaborate, setDeckToCollaborate] = useState<Deck | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
@@ -176,6 +179,13 @@ export const HomePage: React.FC = () => {
         icon: <Share2 className="w-4 h-4" />,
         label: "Share",
         onClick: () => shareDeck(deck),
+        disabled: emptyDeck,
+        title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
+      },
+      {
+        icon: <Users className="w-4 h-4" />,
+        label: "Collaborate",
+        onClick: () => setDeckToCollaborate(deck),
         disabled: emptyDeck,
         title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
       },
@@ -307,6 +317,15 @@ export const HomePage: React.FC = () => {
               title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Share deck"}
             >
               <Share2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              className="pc-button"
+              onClick={() => setDeckToCollaborate(deck)}
+              disabled={emptyDeck}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Create collaborative link"}
+            >
+              <Users className="w-4 h-4" />
             </button>
             <button
               type="button"
@@ -445,6 +464,10 @@ export const HomePage: React.FC = () => {
 
         {sortedDecks.map(renderDeckCard)}
       </div>
+
+      {deckToCollaborate && (
+        <CollaborateModal deck={deckToCollaborate} onClose={() => setDeckToCollaborate(null)} />
+      )}
 
       {deckToDelete && (
         <Modal

@@ -33,7 +33,8 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Save full decks in browser `localStorage`.
   - Export decks as portable `.json` files.
   - Import JSON decks with instant schema validation and pre-matched YouTube IDs.
-  - **Share decks** via a short link (`#/share/abc123`) or the native share sheet; JSON file export remains as a fallback.
+  - **Share decks** via an immutable short link (`#/share/abc123`) or the native share sheet; JSON file export remains a fallback.
+  - **Collaborate on playlists** through a separate permanent link (`#/collab/<random-id>`); anyone with the link can add songs, check for updates, and safely merge new tracks.
   - Shared decks retain their provider and can be converted into a new YouTube or Deezer copy with review for ambiguous matches.
   - Dedicated **Import** page (`#/import`) for `.json` files and **Shared deck** page (`#/share/:id`) for links.
   - Built-in Deezer starter deck for testing without an external account; previews are matched automatically when the Worker is configured.
@@ -114,13 +115,23 @@ The beacon loads only in production builds and does not use cookies.
 
 ---
 
-## 📤 Sharing a deck
+## 📤 Sharing and collaboration
+
+### Immutable share link
 
 1. Open a deck (or use the share button on the home page deck list).
 2. Click **Share** — the app resolves a short link like `…/bingo-musical/#/share/xYz12Ab3Cd` from the deck content. Identical decks (same name and songs/clips) always get the same id.
 3. The app checks whether that deck is already on the server (read-only) before uploading. Only the first share of a given deck writes to KV; later shares reuse the existing snapshot.
 4. Send the link on WhatsApp, Telegram, or email (no JSON file required).
 5. Recipients open the link, preview the songs, and click **Add to my decks** to copy it locally.
+
+### Collaborative link
+
+1. Open a non-empty deck and choose **Collaborate**.
+2. The app creates a separate random link like `…/bingo-musical/#/collab/7Rk9xV2mQpL4sN8dTzY3`.
+3. Anyone with the link can add songs; no account or roles are required.
+4. Users can click **Check for updates** to fetch the latest revision. Before every add, the app also fetches the latest revision and safely merges append-only additions. If a sync cannot be completed, the page keeps the current view and offers retry/reload actions.
+5. Collaborative snapshots are stored under `collab:` KV keys without an expiration TTL.
 
 Older random share links (`#/share/…`) keep working until they expire.
 
