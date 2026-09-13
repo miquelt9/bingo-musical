@@ -16,6 +16,8 @@ import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
 import { trackNeedsDeezerPreviewRefresh } from "../lib/deezer/previewUrl";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
+import { useToast } from "./ToastContext";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
 
 interface ShareDeckTarget {
   deck: Deck;
@@ -59,6 +61,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
   const [backgroundTasks, setBackgroundTasks] = useState<Record<string, BackgroundTaskStatus>>({});
+  const { showToast, dismissToast } = useToast();
 
   const setBackgroundTask = useCallback((id: string, status: BackgroundTaskStatus | null) => {
     setBackgroundTasks((current) => {
@@ -241,7 +244,22 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const exportDeck = (deck: Deck) => {
-    exportDeckToJson(deck);
+    try {
+      exportDeckToJson(deck);
+      showToast({
+        title: "Deck exported",
+        icon: <Check className="w-3.5 h-3.5" />,
+        message: `"${deck.name}" was downloaded as a JSON file.`,
+        duration: 5000,
+      });
+    } catch (err) {
+      showToast({
+        title: "JSON export failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: err instanceof Error ? err.message : "Could not download the deck as JSON.",
+        duration: 10000,
+      });
+    }
   };
 
   const shareDeck = async (deck: Deck) => {
@@ -249,18 +267,47 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isShareApiConfigured()) {
       setShareTarget({ deck });
+      showToast({
+        title: "Share link unavailable",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: "Download the JSON file from the share dialog to share this deck manually.",
+        duration: 7000,
+      });
       return;
     }
+
+    const loadingToastId = showToast({
+      title: "Creating share link",
+      icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
+      message: "Preparing your deck for sharing…",
+      duration: undefined,
+    });
 
     try {
       const { shareId } = await publishSharedDeck(deck);
       const shareUrl = buildSharedDeckUrl(shareId);
       const shared = await shareDeckNative(deck, shareUrl);
+      dismissToast(loadingToastId);
+      showToast({
+        title: "Share link ready",
+        icon: <Check className="w-3.5 h-3.5" />,
+        message: shared
+          ? "The native share sheet is ready."
+          : "Choose a sharing method or copy the link from the share dialog.",
+        duration: 6000,
+      });
       if (!shared) {
         setShareTarget({ deck, shareId, shareUrl });
       }
-    } catch {
+    } catch (err) {
+      dismissToast(loadingToastId);
       setShareTarget({ deck });
+      showToast({
+        title: "Sharing failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: err instanceof Error ? err.message : "Could not create a share link. Use the JSON fallback instead.",
+        duration: 10000,
+      });
     }
   };
 

@@ -26,6 +26,7 @@ import { MasterSongList } from "../components/bingo/MasterSongList";
 import { BingoCard } from "../types/deck";
 import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
 import { AlertModal } from "../components/ui/AppDialog";
+import { useToast } from "../state/ToastContext";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -48,6 +49,8 @@ import {
   Loader2,
   Edit3,
   ListOrdered,
+  Check,
+  AlertCircle,
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
@@ -78,6 +81,7 @@ function readCardSettings(deckId: string): Partial<CardSettings> | null {
 export const CardsPage: React.FC = () => {
   const { deck, isLoading, notFound } = useDeckRoute();
   const { updateDeck, backgroundTasks } = useDeck();
+  const { showToast, dismissToast } = useToast();
   const isMobile = useIsMobile();
 
   const [customTitle, setCustomTitle] = useState("");
@@ -280,6 +284,11 @@ export const CardsPage: React.FC = () => {
     if (!deck || !cardOptions || cards.length === 0 || isExportingPdf) return;
     setIsExportingPdf(true);
     setPdfProgress({ current: 0, total: cards.length });
+    const loadingToastId = showToast({
+      title: "Generating PDF",
+      message: `Preparing ${cards.length} bingo cards…`,
+      duration: undefined,
+    });
 
     try {
       const { downloadBingoPdf } = await import("../lib/bingo/pdf");
@@ -297,9 +306,24 @@ export const CardsPage: React.FC = () => {
         }
       );
       trackEvent("cards_printed", "cards", { output: "pdf" });
+      dismissToast(loadingToastId);
+      showToast({
+        title: "PDF downloaded",
+        icon: <Check className="w-3.5 h-3.5" />,
+        message: `${cards.length} bingo cards are ready to print or share.`,
+        duration: 5000,
+      });
     } catch (err) {
       console.error("PDF generation failed:", err);
-      setPdfError("Failed to generate PDF: " + (err as Error).message);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setPdfError("Failed to generate PDF: " + message);
+      dismissToast(loadingToastId);
+      showToast({
+        title: "PDF export failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: "The PDF could not be generated. See the error details for more information.",
+        duration: 10000,
+      });
     } finally {
       setIsExportingPdf(false);
       setPdfProgress(null);

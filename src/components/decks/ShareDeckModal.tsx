@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { Copy, Download, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
+import { AlertCircle, Check, Copy, Download, ExternalLink, Loader2, Mail, MessageCircle, Send } from "lucide-react";
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
@@ -104,12 +104,22 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   };
 
   const downloadJson = () => {
-    exportDeckToJson(deck);
-    showToast({
-      title: "Deck exported",
-      message: "Send the JSON file so they can import it from Home.",
-      duration: 4000,
-    });
+    try {
+      exportDeckToJson(deck);
+      showToast({
+        title: "Deck exported",
+        icon: <Check className="w-3.5 h-3.5" />,
+        message: "Send the JSON file so they can import it from Home.",
+        duration: 4000,
+      });
+    } catch (err) {
+      showToast({
+        title: "JSON export failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: err instanceof Error ? err.message : "Could not download the deck as JSON.",
+        duration: 10000,
+      });
+    }
   };
 
   return (
