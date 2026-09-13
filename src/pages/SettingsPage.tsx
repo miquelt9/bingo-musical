@@ -6,7 +6,7 @@ import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
 import { useToast } from "../state/ToastContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { SAMPLE_DEEZER_DECK, SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
+import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
 import {
@@ -72,13 +72,13 @@ export const SettingsPage: React.FC = () => {
   }, [isMobile]);
 
   const handleResetSampleDeck = () => {
-    saveStoredDecks([SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK]);
+    saveStoredDecks([SAMPLE_DEEZER_DECK]);
     refreshDecks();
     setShowResetModal(false);
     showToast({
       title: "Data reset",
       icon: <Check className="w-3.5 h-3.5" />,
-      message: "All decks were replaced with the default YouTube and Deezer sample decks.",
+      message: "All decks were replaced with the default Deezer starter deck.",
       duration: 8000,
     });
   };
@@ -217,15 +217,15 @@ export const SettingsPage: React.FC = () => {
             legend={
               <span className="inline-flex items-center gap-2">
                 <RotateCcw className="w-4 h-4" />
-                Local Storage & Sample Decks
+                Local Storage & Starter Deck
               </span>
             }
           >
             <div className="flex flex-col gap-4 pc-bevel-inset p-3">
               <div>
-                <h4 className="text-sm font-semibold">Reset all data to sample deck</h4>
+                <h4 className="text-sm font-semibold">Reset all data to starter deck</h4>
                 <p className="text-xs mt-0.5">
-                  Deletes every deck in local storage and restores only the 30-track Sample Pop Hits
+                  Deletes every deck in local storage and restores only the 30-track Deezer starter
                   deck. This cannot be undone.
                 </p>
               </div>
@@ -376,7 +376,7 @@ export const SettingsPage: React.FC = () => {
         <Modal
           open
           variant="danger"
-          title="Reset all data to sample deck?"
+          title="Reset all data to starter deck?"
           confirmLabel="Reset all data"
           cancelLabel="Cancel"
           onConfirm={handleResetSampleDeck}
@@ -384,7 +384,7 @@ export const SettingsPage: React.FC = () => {
         >
           <p className="text-sm">
             This will permanently delete <strong>all of your decks</strong> and replace them with the
-            default Sample Pop Hits deck. Custom decks, matched songs, and game progress stored in this
+            default Deezer starter deck. Custom decks, matched songs, and game progress stored in this
             browser will be lost.
           </p>
         </Modal>

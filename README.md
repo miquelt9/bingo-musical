@@ -36,7 +36,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - **Share decks** via a short link (`#/share/abc123`) or the native share sheet; JSON file export remains as a fallback.
   - Shared decks retain their provider and can be converted into a new YouTube or Deezer copy with review for ambiguous matches.
   - Dedicated **Import** page (`#/import`) for `.json` files and **Shared deck** page (`#/share/:id`) for links.
-  - Built-in YouTube sample deck and Deezer starter deck for testing without any external account; the Deezer starter is matched automatically when the Worker is configured.
+  - Built-in Deezer starter deck for testing without an external account; previews are matched automatically when the Worker is configured.
   - Empty decks created by mistake are discarded automatically when you navigate away.
 - 🖨️ **Printable Bingo Cards & High-Resolution Vector PDF:**
   - Configurable **3×3 to 6×6** grids with adjustable **bingo percent** (how much of the deck appears on each card).
@@ -73,7 +73,7 @@ npm install
 
 1. Search a song or artist (autocomplete from iTunes/Deezer), pick the title, then choose the YouTube clip, or
 2. Paste a bulk song list (`Artist - Title`, one per line), or
-3. Import a previously exported JSON deck / use the sample deck.
+3. Import a previously exported JSON deck / use the starter deck.
 
 Then open **Deck**, trim clips if needed, resolve any blocked songs, print cards, and host the game.
 
@@ -124,7 +124,7 @@ The beacon loads only in production builds and does not use cookies.
 
 Older random share links (`#/share/…`) keep working until they expire.
 
-Run `npm run compute:sample-share-id` to print the stable share id for the built-in sample deck.
+Run `npm run compute:sample-share-id` to print the stable share id for the built-in starter deck.
 
 If link sharing is not configured, the share dialog falls back to downloading a `.json` file and the `#/import` flow.
 

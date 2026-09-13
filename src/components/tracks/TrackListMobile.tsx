@@ -149,34 +149,38 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
         return (
           <li
             key={track.id}
-            className={`flex items-center gap-3 p-3 pc-bevel-inset ${
-              isMobile ? "min-h-[72px]" : "min-h-[88px]"
+            className={`flex p-3 pc-bevel-inset ${
+              isMobile
+                ? "flex-col items-stretch gap-3 min-h-[136px]"
+                : "items-center gap-3 min-h-[88px]"
             } ${isBlocked ? "bg-pc-warning" : ""}`}
           >
-            {thumb ? (
-              <img
-                src={thumb}
-                alt=""
-                className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} object-cover shrink-0 pc-bevel-inset`}
-              />
-            ) : (
-              <div
-                className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} pc-bevel-inset shrink-0 flex items-center justify-center`}
-              >
-                <Music2 className={isMobile ? "w-7 h-7" : "w-9 h-9"} />
-              </div>
-            )}
+            <div className={`flex items-center gap-3 min-w-0 ${isMobile ? "w-full" : "flex-1"}`}>
+              {thumb ? (
+                <img
+                  src={thumb}
+                  alt=""
+                  className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} object-cover shrink-0 pc-bevel-inset`}
+                />
+              ) : (
+                <div
+                  className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} pc-bevel-inset shrink-0 flex items-center justify-center`}
+                >
+                  <Music2 className={isMobile ? "w-7 h-7" : "w-9 h-9"} />
+                </div>
+              )}
 
-            <div className="flex-1 min-w-0">
-              <p className={`font-semibold truncate ${isMobile ? "text-base" : "text-lg"}`}>
-                {track.title}
-              </p>
-              <p className={`truncate text-muted ${isMobile ? "text-sm" : "text-base"}`}>
-                {track.artist}
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className={`font-semibold ${isMobile ? "text-base line-clamp-2" : "text-lg truncate"}`}>
+                  {track.title}
+                </p>
+                <p className={`text-muted ${isMobile ? "text-sm line-clamp-2" : "text-base truncate"}`}>
+                  {track.artist}
+                </p>
+              </div>
             </div>
 
-            <div className={`flex items-center shrink-0 ${isMobile ? "gap-1" : "gap-1.5"}`}>
+            <div className={`flex items-center flex-wrap shrink-0 ${isMobile ? "w-full gap-1" : "gap-1.5"}`}>
               {isReady ? (
                 <button
                   type="button"

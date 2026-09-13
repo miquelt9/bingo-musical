@@ -1,12 +1,12 @@
 import { Deck, DeckSource, MatchStatus, MusicProvider, Track, TrackMedia } from "../../types/deck";
-import { SAMPLE_DEEZER_DECK, SAMPLE_POP_HITS_DECK } from "./mockDeck";
+import { SAMPLE_DEEZER_DECK } from "./mockDeck";
 import { buildCanonicalSharePayload } from "../share/deckCanonical";
 import { parseYoutubeVideoId } from "../youtube/parseUrl";
 import { createTrack, defaultDeezerClipWindow, defaultClipWindow } from "../tracks";
 import { downloadTextFile, slugifyFilename } from "./download";
 
 const DECKS_STORAGE_KEY = "bingo-musical:decks";
-const DEFAULT_DEEZER_SAMPLE_SEEDED_KEY = "bingo-musical:default-deezer-sample-seeded";
+const LEGACY_YOUTUBE_SAMPLE_ID = "deck-sample-pop-classics";
 
 export class StorageQuotaError extends Error {
   constructor(message = "Browser storage is full. Try exporting or deleting old decks.") {
@@ -134,10 +134,11 @@ function normalizeDeck(raw: unknown): Deck | null {
 
 function ensureDefaultDeezerSample(decks: Deck[]): Deck[] {
   try {
-    if (!decks.some((deck) => deck.id === SAMPLE_POP_HITS_DECK.id)) return decks;
-
-    const existingIndex = decks.findIndex((deck) => deck.id === SAMPLE_DEEZER_DECK.id);
-    const existing = existingIndex >= 0 ? decks[existingIndex] : null;
+    // Remove the retired YouTube sample from existing browser storage while preserving custom decks.
+    const hadLegacySample = decks.some((deck) => deck.id === LEGACY_YOUTUBE_SAMPLE_ID);
+    const withoutLegacySample = decks.filter((deck) => deck.id !== LEGACY_YOUTUBE_SAMPLE_ID);
+    const existingIndex = withoutLegacySample.findIndex((deck) => deck.id === SAMPLE_DEEZER_DECK.id);
+    const existing = existingIndex >= 0 ? withoutLegacySample[existingIndex] : null;
     const needsSampleUpgrade = existing?.source?.type === "sample"
       && existing.tracks.length === SAMPLE_DEEZER_DECK.tracks.length
       && existing.tracks.every((track) => track.id.startsWith("deezer-sample-") && !track.media);
@@ -145,17 +146,14 @@ function ensureDefaultDeezerSample(decks: Deck[]): Deck[] {
     if (needsSampleUpgrade) {
       const upgraded = normalizeDeck(SAMPLE_DEEZER_DECK);
       if (upgraded) {
-        const next = [...decks];
+        const next = [...withoutLegacySample];
         next[existingIndex] = upgraded;
-        localStorage.setItem(DEFAULT_DEEZER_SAMPLE_SEEDED_KEY, "1");
         return next;
       }
     }
 
-    if (existing) return decks;
-    const seeded = [...decks, normalizeDeck(SAMPLE_DEEZER_DECK)].filter((deck): deck is Deck => deck !== null);
-    localStorage.setItem(DEFAULT_DEEZER_SAMPLE_SEEDED_KEY, "1");
-    return seeded;
+    if (existing || !hadLegacySample) return withoutLegacySample;
+    return [...withoutLegacySample, normalizeDeck(SAMPLE_DEEZER_DECK)].filter((deck): deck is Deck => deck !== null);
   } catch {
     return decks;
   }
@@ -165,7 +163,7 @@ export function getStoredDecks(): Deck[] {
   try {
     const raw = localStorage.getItem(DECKS_STORAGE_KEY);
     if (!raw) {
-      const initial = [SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK]
+      const initial = [SAMPLE_DEEZER_DECK]
         .map(normalizeDeck)
         .filter((deck): deck is Deck => deck !== null);
       saveStoredDecks(initial);
@@ -180,14 +178,14 @@ export function getStoredDecks(): Deck[] {
         return decks;
       }
     }
-    const fallback = ensureDefaultDeezerSample([SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK]
+    const fallback = ensureDefaultDeezerSample([SAMPLE_DEEZER_DECK]
       .map(normalizeDeck)
       .filter((deck): deck is Deck => deck !== null));
     saveStoredDecks(fallback);
     return fallback;
   } catch (err) {
     console.error("Failed to parse stored decks from localStorage:", err);
-    return ensureDefaultDeezerSample([SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK]
+    return ensureDefaultDeezerSample([SAMPLE_DEEZER_DECK]
       .map(normalizeDeck)
       .filter((deck): deck is Deck => deck !== null));
   }

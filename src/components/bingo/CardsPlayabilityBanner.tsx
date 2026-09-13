@@ -15,6 +15,8 @@ interface CardsPlayabilityBannerProps {
   progress: BatchValidationProgress | null;
   invalidTracks: InvalidTrackEntry[];
   readiness?: DeckReadiness;
+  isLoadingDeezerPreviews?: boolean;
+  deezerPreviewProgress?: { completed: number; total: number };
 }
 
 export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
@@ -23,9 +25,11 @@ export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
   progress,
   invalidTracks,
   readiness,
+  isLoadingDeezerPreviews = false,
+  deezerPreviewProgress,
 }) => {
-  const showChecking = isChecking && invalidTracks.length === 0;
-  const showWarning = invalidTracks.length > 0;
+  const showChecking = (isChecking || isLoadingDeezerPreviews) && invalidTracks.length === 0;
+  const showWarning = invalidTracks.length > 0 && !isLoadingDeezerPreviews;
 
   if (!showChecking && !showWarning) return null;
 
@@ -35,8 +39,12 @@ export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
         <div className="flex items-center gap-2 p-2 pc-bevel-inset text-xs text-muted">
           <Loader2 className="w-4 h-4 animate-spin shrink-0" />
           <span>
-            Checking song compatibility
-            {progress ? ` (${progress.completed} / ${progress.total})` : "..."}
+            {isLoadingDeezerPreviews ? "Loading Deezer previews" : "Checking song compatibility"}
+            {isLoadingDeezerPreviews
+              ? ` (${deezerPreviewProgress?.completed ?? 0} / ${deezerPreviewProgress?.total ?? "…"})`
+              : progress
+                ? ` (${progress.completed} / ${progress.total})`
+                : "..."}
           </span>
         </div>
       )}

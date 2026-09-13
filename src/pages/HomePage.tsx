@@ -11,7 +11,7 @@ import {
   getNextDeckName,
   MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
-import { SAMPLE_DEEZER_DECK, SAMPLE_POP_HITS_DECK } from "../lib/storage/mockDeck";
+import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 const ONBOARDING_KEY = "mb_onboarding_dismissed";
-const SAMPLE_DECK_ID = SAMPLE_POP_HITS_DECK.id;
+const SAMPLE_DECK_ID = SAMPLE_DEEZER_DECK.id;
 
 function healthBadgeLabel(health: ReturnType<typeof getDeckReadiness>["health"], blocked: number, empty: boolean): string {
   if (empty) return "In progress";
@@ -65,7 +65,7 @@ function healthBadgeClass(health: ReturnType<typeof getDeckReadiness>["health"])
 }
 
 export const HomePage: React.FC = () => {
-  const { decks, createDeck, deleteDeck, duplicateDeck, shareDeck } = useDeck();
+  const { decks, createDeck, deleteDeck, duplicateDeck, shareDeck, backgroundTasks } = useDeck();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
@@ -135,14 +135,18 @@ export const HomePage: React.FC = () => {
   };
 
   const handleRestoreSample = () => {
-    const others = decks.filter((d) => d.id !== SAMPLE_DECK_ID && d.id !== SAMPLE_DEEZER_DECK.id);
-    saveStoredDecks([SAMPLE_POP_HITS_DECK, SAMPLE_DEEZER_DECK, ...others]);
+    const others = decks.filter(
+      (d) => d.id !== SAMPLE_DECK_ID && d.id !== "deck-sample-pop-classics"
+    );
+    saveStoredDecks([SAMPLE_DEEZER_DECK, ...others]);
     window.location.reload();
   };
 
   const renderDeckCard = (deck: Deck) => {
     const readiness = getDeckReadiness(deck.tracks);
     const emptyDeck = isEmptyDeck(deck);
+    const deezerHydration = backgroundTasks[`deezer-hydration:${deck.id}`];
+    const isLoadingDeezerPreviews = Boolean(deezerHydration);
     const hostReady = readiness.canHost;
     const fixHref = `/deck/${deck.id}?filter=blocked`;
     const secondary = formatReadinessSecondary(readiness);
@@ -152,16 +156,18 @@ export const HomePage: React.FC = () => {
       <p className="home-deck-card-stats text-xs">
         {emptyDeck
           ? "0 songs — add tracks in the editor"
-          : formatReadinessPrimary(readiness)}
-        {!emptyDeck && secondary ? (
+          : isLoadingDeezerPreviews
+            ? `Loading Deezer previews… (${deezerHydration.completed}/${deezerHydration.total})`
+            : formatReadinessPrimary(readiness)}
+        {!emptyDeck && !isLoadingDeezerPreviews && secondary ? (
           <span className="text-pc-warning font-semibold"> · {secondary}</span>
         ) : null}
       </p>
     );
 
     const healthBadge = (
-      <span className={healthBadgeClass(emptyDeck ? "empty" : readiness.health)}>
-        {healthBadgeLabel(readiness.health, readiness.blockedCount, emptyDeck)}
+      <span className={healthBadgeClass(emptyDeck || isLoadingDeezerPreviews ? "empty" : readiness.health)}>
+        {isLoadingDeezerPreviews ? "Loading…" : healthBadgeLabel(readiness.health, readiness.blockedCount, emptyDeck)}
       </span>
     );
 
@@ -206,28 +212,24 @@ export const HomePage: React.FC = () => {
         <Radio className={isMobile ? "w-4 h-4" : "w-3.5 h-3.5"} />
         Host
       </Link>
-    ) : readiness.blockedCount > 0 ? (
-      <Link
-        to={fixHref}
-        className={`pc-button text-pc-warning ${isMobile ? "home-deck-card-primary" : "home-deck-card-action-play"}`}
-        title="All songs must be playable before hosting"
-      >
-        {readiness.blockedCount} can&apos;t play — Fix now
-      </Link>
     ) : (
-      <span
-        className={`pc-button opacity-60 pointer-events-none ${isMobile ? "home-deck-card-primary" : "home-deck-card-action-play"}`}
+      <button
+        type="button"
+        disabled
+        className={`pc-button opacity-60 ${isMobile ? "home-deck-card-primary" : "home-deck-card-action-play"}`}
         title={
           emptyDeck
             ? EMPTY_DECK_ACTION_TITLE
-            : readiness.tooFewForHost
-              ? `Need at least ${readiness.minHostTracks} playable songs to host`
-              : "Some songs need attention before hosting"
+            : readiness.blockedCount > 0
+              ? "Fix songs in Edit before hosting"
+              : readiness.tooFewForHost
+                ? `Add at least ${readiness.minHostTracks} playable songs before hosting`
+                : "Some songs need attention before hosting"
         }
       >
         <Radio className={isMobile ? "w-4 h-4" : "w-3.5 h-3.5"} />
         Host
-      </span>
+      </button>
     );
 
     if (isMobile) {
@@ -256,9 +258,9 @@ export const HomePage: React.FC = () => {
               </div>
               {healthBadge}
               {statsLine}
-              {!hostReady && readiness.blockedCount > 0 && (
+              {!isLoadingDeezerPreviews && !hostReady && readiness.blockedCount > 0 && (
                 <Link to={fixHref} className="pc-link text-xs mt-1 inline-block">
-                  {readiness.blockedCount} song{readiness.blockedCount === 1 ? "" : "s"} can&apos;t play — Fix now
+                  Open editor to fix songs
                 </Link>
               )}
             </div>

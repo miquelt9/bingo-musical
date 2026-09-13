@@ -76,7 +76,7 @@ function readCardSettings(deckId: string): Partial<CardSettings> | null {
 
 export const CardsPage: React.FC = () => {
   const { deck, isLoading, notFound } = useDeckRoute();
-  const { updateDeck } = useDeck();
+  const { updateDeck, backgroundTasks } = useDeck();
   const isMobile = useIsMobile();
 
   const [customTitle, setCustomTitle] = useState("");
@@ -345,6 +345,7 @@ export const CardsPage: React.FC = () => {
   if (isLoading || !deck) return null;
 
   const readiness = getDeckReadiness(deck.tracks, gridSize);
+  const deezerHydration = backgroundTasks[`deezer-hydration:${deck.id}`];
   const currentCard = cards[activePreviewIndex] || cards[0];
   const cardsForPrint = printCards ?? cards;
   const canGenerate = poolCount > 0 && isGridSizeValidForDeck(poolCount, gridSize);
@@ -392,6 +393,8 @@ export const CardsPage: React.FC = () => {
         progress={gateProgress}
         invalidTracks={invalidTracks}
         readiness={readiness}
+        isLoadingDeezerPreviews={Boolean(deezerHydration)}
+        deezerPreviewProgress={deezerHydration}
       />
 
       {isMobile ? (

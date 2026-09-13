@@ -56,7 +56,7 @@ export const EditorPage: React.FC = () => {
   const { id, deck: routeDeck, notFound } = useDeckRoute();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeDeck, updateDeck, createDeck, shareDeck, setBackgroundTask } = useDeck();
+  const { activeDeck, updateDeck, createDeck, shareDeck, setBackgroundTask, backgroundTasks } = useDeck();
   const statusFilterParam = searchParams.get("filter");
   const autostartMatch = searchParams.get("autostart") === "match";
   const initialStatusFilter =
@@ -346,6 +346,8 @@ export const EditorPage: React.FC = () => {
   };
 
   const readiness = getDeckReadiness(deck.tracks);
+  const deezerHydration = backgroundTasks[`deezer-hydration:${deck.id}`];
+  const isLoadingDeezerPreviews = Boolean(deezerHydration);
   const isTrackBusy = isMatching || isAutoFixing;
   const emptyDeck = isEmptyDeck(deck);
   const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
@@ -558,8 +560,12 @@ export const EditorPage: React.FC = () => {
               )
             )}
             <p className="mt-2 text-xs flex flex-wrap items-center gap-2">
-              <span>{formatReadinessPrimary(readiness)}</span>
-              {formatReadinessSecondary(readiness) ? (
+              <span>
+                {isLoadingDeezerPreviews
+                  ? `Loading Deezer previews… (${deezerHydration.completed}/${deezerHydration.total})`
+                  : formatReadinessPrimary(readiness)}
+              </span>
+              {!isLoadingDeezerPreviews && formatReadinessSecondary(readiness) ? (
                 <>
                   <span>·</span>
                   <span className="text-pc-warning font-semibold">{formatReadinessSecondary(readiness)}</span>

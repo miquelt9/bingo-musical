@@ -1,19 +1,8 @@
 import { Deck } from "../../types/deck";
 import { GITHUB_REPO_URL } from "../app/meta";
 
-// Kept in the old field shape intentionally so the first-load migration is exercised.
-export const SAMPLE_POP_HITS_DECK = {
-  schemaVersion: 2,
-  id: "deck-sample-pop-classics",
-  name: "All-Time Pop & Rock Classics (Sample Deck)",
-  createdAt: "2025-01-01T00:00:00.000Z",
-  updatedAt: "2025-01-01T00:00:00.000Z",
-  provider: "youtube",
-  source: {
-    type: "sample",
-    name: "Sample 80s, 90s & 2000s Hits",
-    url: GITHUB_REPO_URL,
-  },
+// Shared song metadata used to build the Deezer starter without shipping a second deck.
+const SAMPLE_TRACK_METADATA = {
   tracks: [
     {
       id: "sample-1",
@@ -406,12 +395,11 @@ export const SAMPLE_POP_HITS_DECK = {
       matchStatus: "matched",
     },
   ],
-} as unknown as Deck;
+};
 
 /**
- * Deezer starter deck with the same song metadata as the YouTube sample.
- * Deezer IDs are preselected; preview URLs are resolved through the configured
- * Worker when the app loads the starter deck.
+ * The built-in starter deck. Deezer IDs are preselected; preview URLs are resolved through
+ * the configured Worker when the starter deck loads.
  */
 export const SAMPLE_DEEZER_DECK: Deck = {
   schemaVersion: 2,
@@ -426,7 +414,7 @@ export const SAMPLE_DEEZER_DECK: Deck = {
     url: GITHUB_REPO_URL,
     provider: "deezer",
   },
-  tracks: SAMPLE_POP_HITS_DECK.tracks.map((track, index) => ({
+  tracks: SAMPLE_TRACK_METADATA.tracks.map((track, index) => ({
     id: `deezer-sample-${index + 1}`,
     title: track.title,
     artist: track.artist,
