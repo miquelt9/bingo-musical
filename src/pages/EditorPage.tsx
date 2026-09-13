@@ -1061,6 +1061,10 @@ export const EditorPage: React.FC = () => {
         onCreate={(converted) => {
           const saved = createDeck(converted);
           navigate(`/deck/${saved.id}`);
+          return saved;
+        }}
+        onUpdateCreated={(updated) => {
+          updateDeck(updated);
         }}
       />
     </div>

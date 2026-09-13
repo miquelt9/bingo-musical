@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { AlertCircle, Check, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, Check, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { Deck, MusicProvider, Track } from "../../types/deck";
 import { createTrack } from "../../lib/tracks";
 import { deezerHitToTrack, DeezerTrackHit, searchDeezerTracksBatch } from "../../lib/deezer/api";
@@ -25,7 +25,8 @@ interface ConvertDeckModalProps {
   deck: Deck;
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (deck: Deck) => void;
+  onCreate: (deck: Deck) => Deck;
+  onUpdateCreated?: (deck: Deck) => void;
 }
 
 const YOUTUBE_TRACK_DELAY_MS = 350;
@@ -82,76 +83,18 @@ async function findYoutubeCandidates(track: Track): Promise<Candidate[]> {
   return candidates;
 }
 
-export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen, onClose, onCreate }) => {
+export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen, onClose, onCreate, onUpdateCreated }) => {
   const targetProvider: MusicProvider = deck.provider === "youtube" ? "deezer" : "youtube";
   const [rows, setRows] = useState<ConversionRow[]>([]);
   const [isMatching, setIsMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressLabel, setProgressLabel] = useState("Searching…");
+  const cancelRequestedRef = useRef(false);
+  const createdDeckRef = useRef<Deck | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const taskId = `convert:${deck.id}:${targetProvider}`;
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setRows(deck.tracks.map((source) => ({ source, candidates: [], selected: null, status: "loading" })));
-    setError(null);
-    setIsMatching(true);
-    setProgressLabel(targetProvider === "deezer" ? "Batching Deezer search…" : "Searching…");
-    let cancelled = false;
-
-    const run = async () => {
-      if (targetProvider === "deezer") {
-        try {
-          const batchHits = await searchDeezerTracksBatch(deck.tracks);
-          if (cancelled) return;
-          setRows(deck.tracks.map((source, index) =>
-            rowFromCandidates(source, deezerCandidatesForTrack(source, batchHits[index] ?? []))
-          ));
-        } catch (err) {
-          if (!cancelled) {
-            setRows(deck.tracks.map((source) => ({
-              source,
-              candidates: [],
-              selected: null,
-              status: "unmatched" as const,
-            })));
-            setError((err as Error).message || "Deezer batch search failed.");
-          }
-        }
-        if (!cancelled) setIsMatching(false);
-        return;
-      }
-
-      for (let i = 0; i < deck.tracks.length; i += 1) {
-        if (cancelled) return;
-        setProgressLabel(`Searching ${i + 1} / ${deck.tracks.length}…`);
-        try {
-          const candidates = await findYoutubeCandidates(deck.tracks[i]);
-          if (cancelled) return;
-          setRows((current) => current.map((row, rowIndex) =>
-            rowIndex === i ? rowFromCandidates(deck.tracks[i], candidates) : row
-          ));
-        } catch (err) {
-          if (!cancelled) {
-            setRows((current) => current.map((row, rowIndex) =>
-              rowIndex === i ? { ...row, status: "unmatched" } : row
-            ));
-            setError((err as Error).message || "Some provider searches failed.");
-          }
-        }
-        if (i < deck.tracks.length - 1 && !cancelled) {
-          await sleep(YOUTUBE_TRACK_DELAY_MS);
-        }
-      }
-      if (!cancelled) setIsMatching(false);
-    };
-
-    void run();
-    return () => { cancelled = true; };
-  }, [deck, isOpen, targetProvider]);
-
-  const unresolved = rows.filter((row) => row.selected === null).length;
-  const completed = rows.filter((row) => row.status !== "loading").length;
-
-  const convertedTracks = useMemo(() => rows.map((row) => {
+  const buildConvertedTracks = (sourceRows: ConversionRow[]): Track[] => sourceRows.map((row) => {
     const candidate = row.selected === null ? null : row.candidates[row.selected];
     if (candidate?.provider === "deezer") {
       return { ...deezerHitToTrack(candidate.hit), id: randomId("track") };
@@ -180,11 +123,93 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
       matchStatus: "pending",
     });
     return targetProvider === "deezer" ? { ...base, id: randomId("track"), startTime: 0, endTime: 30 } : { ...base, id: randomId("track") };
-  }), [rows, targetProvider]);
+  });
+
+  const publishRows = (nextRows: ConversionRow[]) => {
+    setRows(nextRows);
+    const created = createdDeckRef.current;
+    if (created) {
+      const updated = { ...created, tracks: buildConvertedTracks(nextRows), updatedAt: new Date().toISOString() };
+      createdDeckRef.current = updated;
+      onUpdateCreated?.(updated);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    cancelRequestedRef.current = false;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    createdDeckRef.current = null;
+    setRows(deck.tracks.map((source) => ({ source, candidates: [], selected: null, status: "loading" })));
+    setError(null);
+    setIsMatching(true);
+    setProgressLabel(targetProvider === "deezer" ? "Batching Deezer search…" : "Searching…");
+    let cancelled = false;
+
+    const run = async () => {
+      if (targetProvider === "deezer") {
+        try {
+          const batchHits = await searchDeezerTracksBatch(deck.tracks, abortControllerRef.current?.signal);
+          if (cancelled || cancelRequestedRef.current) return;
+          publishRows(deck.tracks.map((source, index) =>
+            rowFromCandidates(source, deezerCandidatesForTrack(source, batchHits[index] ?? []))
+          ));
+        } catch (err) {
+          if (!cancelled && !cancelRequestedRef.current && (err as Error).name !== "AbortError") {
+            publishRows(deck.tracks.map((source) => ({ source, candidates: [], selected: null, status: "unmatched" as const })));
+            setError((err as Error).message || "Deezer batch search failed.");
+          }
+        }
+        if (!cancelled && !cancelRequestedRef.current) setIsMatching(false);
+        return;
+      }
+
+      for (let i = 0; i < deck.tracks.length; i += 1) {
+        if (cancelled || cancelRequestedRef.current) return;
+        setProgressLabel(`Searching ${i + 1} / ${deck.tracks.length}…`);
+        try {
+          const candidates = await findYoutubeCandidates(deck.tracks[i]);
+          if (cancelled || cancelRequestedRef.current) return;
+          setRows((current) => {
+            const nextRows = current.map((row, rowIndex) => rowIndex === i ? rowFromCandidates(deck.tracks[i], candidates) : row);
+            const created = createdDeckRef.current;
+            if (created) {
+              const updated = { ...created, tracks: buildConvertedTracks(nextRows), updatedAt: new Date().toISOString() };
+              createdDeckRef.current = updated;
+              onUpdateCreated?.(updated);
+            }
+            return nextRows;
+          });
+        } catch (err) {
+          if (!cancelled && !cancelRequestedRef.current) {
+            setRows((current) => current.map((row, rowIndex) => rowIndex === i ? { ...row, status: "unmatched" } : row));
+            setError((err as Error).message || "Some provider searches failed.");
+          }
+        }
+        if (i < deck.tracks.length - 1 && !cancelled && !cancelRequestedRef.current) await sleep(YOUTUBE_TRACK_DELAY_MS);
+      }
+      if (!cancelled && !cancelRequestedRef.current) setIsMatching(false);
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+      if (!createdDeckRef.current) cancelRequestedRef.current = true;
+      abortControllerRef.current?.abort();
+    };
+  // Matching starts only when the modal opens. It intentionally continues after Create closes the modal.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+
+  const unresolved = rows.filter((row) => row.selected === null).length;
+  const completed = rows.filter((row) => row.status !== "loading").length;
+
+  const convertedTracks = useMemo(() => buildConvertedTracks(rows), [rows, targetProvider]);
 
   const handleCreate = () => {
-    if (rows.some((row) => row.status === "loading")) return;
-    onCreate({
+    const created = onCreate({
       ...deck,
       id: randomId("deck"),
       name: `${deck.name} (${getProviderLabel(targetProvider)})`,
@@ -195,12 +220,19 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
       updatedAt: new Date().toISOString(),
       schemaVersion: 2,
     });
+    createdDeckRef.current = created;
+    onClose();
+  };
+
+  const handleCancel = () => {
+    cancelRequestedRef.current = true;
+    abortControllerRef.current?.abort();
     onClose();
   };
 
   if (!isOpen) return null;
   return (
-    <PcModal title={`Convert deck to ${getProviderLabel(targetProvider)}`} onClose={isMatching ? () => {} : onClose} className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <PcModal title={`Convert deck to ${getProviderLabel(targetProvider)}`} onClose={handleCancel} className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <div className="space-y-3 text-xs">
         <p>Conversion creates a new copy. The original deck and its host session are not changed.</p>
         <p className="font-semibold">
@@ -229,13 +261,27 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
                   {row.status === "matched" && <Check className="w-4 h-4 text-pc-success" />}
                 </div>
                 {selectedCandidate && label && (
-                  <div className="mt-2 p-1.5 pc-bevel-outset truncate">{label}</div>
+                  <div className="mt-2 p-1.5 pc-bevel-outset flex items-center gap-2">
+                    <span className="truncate flex-1">{label}</span>
+                    <a
+                      href={selectedCandidate.provider === "deezer"
+                        ? selectedCandidate.hit.providerUrl
+                        : `https://www.youtube.com/watch?v=${selectedCandidate.hit.videoId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0"
+                      aria-label={`Open official ${selectedCandidate.provider} link for ${label}`}
+                      title="Open official link in a new tab"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
                 )}
               </div>
             );
           })}
         </div>
-        <div className="flex items-center justify-between gap-2 pt-2"><span className="text-[11px]">Unmatched songs are copied with no source so you can resolve them later.</span><div className="flex gap-2"><Button type="button" onClick={onClose} disabled={isMatching}>Cancel</Button><Button type="button" variant="primary" onClick={handleCreate} disabled={isMatching || rows.length === 0}><RefreshCw className="w-4 h-4" />Create converted copy</Button></div></div>
+        <div className="flex items-center justify-end gap-2 pt-2"><Button type="button" onClick={handleCancel}>Cancel</Button><Button type="button" variant="primary" onClick={handleCreate} disabled={rows.length === 0}><RefreshCw className="w-4 h-4" />Create converted copy</Button></div>
       </div>
     </PcModal>
   );
