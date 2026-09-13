@@ -14,7 +14,7 @@ import { ClipPreviewButton } from "./ClipPreviewButton";
 
 interface DeezerSongSearchProps {
   existingIds?: Array<string | null | undefined>;
-  onAddTrack: (track: Track) => void;
+  onAddTrack: (track: Track) => void | Promise<boolean | void>;
   onAfterAdd?: () => void;
 }
 
@@ -56,7 +56,11 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
     setAddingId(hit.id);
     setError(null);
     try {
-      onAddTrack(deezerHitToTrack(hit));
+      const added = await onAddTrack(deezerHitToTrack(hit));
+      if (added === false) {
+        setError("Could not add this song. You can try again.");
+        return;
+      }
       setHits((current) => current.filter((item) => item.id !== hit.id));
       onAfterAdd?.();
     } finally {

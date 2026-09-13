@@ -46,7 +46,7 @@ export const CollaborativePlaylistPage: React.FC = () => {
   const revisionRef = useRef(-1);
   const playlistRef = useRef<CollaborativePlaylist | null>(null);
   const pendingRef = useRef<Track[]>([]);
-  const queueRef = useRef(Promise.resolve());
+  const queueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const hasLoadedRef = useRef(false);
 
   const displayedTracks = useMemo(() => mergeTracks(playlist?.tracks ?? [], pending), [playlist, pending]);
@@ -99,19 +99,19 @@ export const CollaborativePlaylistPage: React.FC = () => {
     };
   }, []);
 
-  const enqueueTrack = (track: Track, force = false) => {
+  const enqueueTrack = (track: Track, force = false): Promise<boolean> => {
     const current = mergeTracks(playlistRef.current?.tracks ?? [], pendingRef.current);
     const alreadyPending = pendingRef.current.some((item) => trackKey(item) === trackKey(track));
     if (!force && current.some((item) => trackKey(item) === trackKey(track))) {
       showToast({ title: "Already in playlist", message: "That song is already present.", duration: 3000 });
-      return;
+      return Promise.resolve(true);
     }
     if (!alreadyPending) {
       const nextPending = [...pendingRef.current, track];
       pendingRef.current = nextPending;
       setPending(nextPending);
     }
-    queueRef.current = queueRef.current.then(async () => {
+    const operation = queueRef.current.then(async () => {
       let base = playlistRef.current?.revision ?? revisionRef.current;
       try {
         const fresh = await fetchLatest(false);
@@ -132,10 +132,14 @@ export const CollaborativePlaylistPage: React.FC = () => {
         setPending(pendingRef.current);
         setError(null);
         if (response.duplicateTrackIds?.length) showToast({ title: "Already in playlist", message: "That song was added by someone else.", duration: 3000 });
+        return true;
       } catch (err) {
         setError((err as Error).message || "Could not add this song. Your pending song is still here; retry when online.");
+        return false;
       }
     });
+    queueRef.current = operation.then(() => true, () => false);
+    return operation;
   };
 
   const saveDeck = () => {
@@ -166,7 +170,10 @@ export const CollaborativePlaylistPage: React.FC = () => {
           <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm">{getProviderLabel(playlist.provider)} · {displayedTracks.length} song{displayedTracks.length === 1 ? "" : "s"}</p><p className="text-xs opacity-70">Updates are checked manually · revision {playlist.revision}{!isOnline ? " · offline" : ""}</p></div><div className="flex flex-wrap gap-2"><Button type="button" onClick={() => void fetchLatest(true)} disabled={isRefreshing || !isOnline}><RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />{isRefreshing ? "Checking…" : "Check for updates"}</Button><Button type="button" onClick={saveDeck} disabled={isSaving}><Download className="w-4 h-4" />{isSaving ? "Saving…" : "Add to my decks"}</Button></div></div>
           {error && <div className="pc-bevel-inset p-3 text-xs flex flex-wrap items-center gap-2"><WifiOff className="w-4 h-4 shrink-0" /><span className="flex-1">{error}</span><Button type="button" onClick={retryPending}><RefreshCw className="w-3.5 h-3.5" />Retry</Button><Button type="button" onClick={() => void fetchLatest()}><RefreshCw className="w-3.5 h-3.5" />Reload playlist</Button></div>}
           {pending.length > 0 && <div className="pc-bevel-inset p-2 text-xs">{pending.length} song{pending.length === 1 ? "" : "s"} waiting to sync. They will not be lost if the network is unavailable.</div>}
-          <div><h2 className="font-bold mb-2">Add songs</h2><p className="text-xs mb-3">Anyone with the link can add tracks. Check for updates to see songs added by collaborators. The app also checks the latest revision before each add.</p><SongSearch provider={playlist.provider} existingVideoIds={displayedTracks.map((track) => track.media?.id)} onAddTrack={enqueueTrack} onAddTracks={(tracks) => tracks.forEach((track) => enqueueTrack(track))} /></div>
+          <div><h2 className="font-bold mb-2">Add songs</h2><p className="text-xs mb-3">Anyone with the link can add tracks. Check for updates to see songs added by collaborators. The app also checks the latest revision before each add.</p><SongSearch provider={playlist.provider} existingVideoIds={displayedTracks.map((track) => track.media?.id)} onAddTrack={enqueueTrack} onAddTracks={async (tracks) => {
+                      const results = await Promise.all(tracks.map((track) => enqueueTrack(track)));
+                      return results.every(Boolean);
+                    }} /></div>
           <div><h2 className="font-bold mb-2">Songs in this playlist</h2><div className="pc-bevel-inset p-2 max-h-80 overflow-y-auto"><ul className="space-y-1 text-sm">{displayedTracks.map((track) => <li key={`${trackKey(track)}-${track.id}`} className="flex items-center gap-2 p-1.5"><span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>{pending.some((item) => trackKey(item) === trackKey(track)) ? <span className="text-xs opacity-70">Syncing…</span> : track.media ? <ClipPreviewButton track={track} size="sm" /> : <Check className="w-3.5 h-3.5 text-pc-warning" />}</li>)}</ul></div></div>
         </div> : null}
       </Window>

@@ -25,9 +25,9 @@ import { DeezerSongSearch } from "./DeezerSongSearch";
 interface SongSearchProps {
   provider?: MusicProvider;
   existingVideoIds?: Array<string | null | undefined>;
-  onAddTrack: (track: Track) => void;
+  onAddTrack: (track: Track) => void | Promise<boolean | void>;
   /** Retained for compatibility with collaborative/editor callers; direct search is single-selection only. */
-  onAddTracks?: (tracks: Track[]) => void;
+  onAddTracks?: (tracks: Track[]) => void | Promise<boolean | void>;
   onAfterAdd?: () => void;
 }
 
@@ -458,7 +458,11 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
         return;
       }
 
-      onAddTrack(hitToTrack(hit, selectedCatalog ?? undefined));
+      const added = await onAddTrack(hitToTrack(hit, selectedCatalog ?? undefined));
+      if (added === false) {
+        setError("Could not add this song. You can try again.");
+        return;
+      }
       setAddedIds((prev) => new Set(prev).add(hit.videoId));
       setHits([]);
       setKind(null);

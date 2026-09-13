@@ -23,8 +23,8 @@ interface SuggestSongsModalProps {
   existingTracks?: Array<Pick<Track, "title" | "artist">>;
   title?: string;
   onClose: () => void;
-  onAddTrack: (track: Track) => void;
-  onAddTracks?: (tracks: Track[]) => void;
+  onAddTrack: (track: Track) => void | Promise<boolean | void>;
+  onAddTracks?: (tracks: Track[]) => void | Promise<boolean | void>;
 }
 
 function hitToPreviewTrack(item: SuggestHit): Track {
@@ -191,12 +191,16 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
     }
   };
 
-  const addHit = (item: SuggestHit) => {
+  const addHit = async (item: SuggestHit) => {
     const id = suggestHitId(item);
     if (alreadyInDeck.has(id) || !suggestHitPlayable(item)) return;
     setAddingId(id);
     try {
-      onAddTrack(suggestHitToTrack(item));
+      const added = await onAddTrack(suggestHitToTrack(item));
+      if (added === false) {
+        setError("Could not add this song. You can try again.");
+        return;
+      }
       setAddedIds((current) => new Set(current).add(id));
       setHits((current) => current.filter((entry) => suggestHitId(entry) !== id));
     } finally {
@@ -204,7 +208,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
     }
   };
 
-  const addAllPlayable = () => {
+  const addAllPlayable = async () => {
     const playable = hits.filter(
       (item) => suggestHitPlayable(item) && !alreadyInDeck.has(suggestHitId(item))
     );
@@ -218,8 +222,13 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
       return true;
     });
     const tracks = unique.map(suggestHitToTrack);
-    if (onAddTracks) onAddTracks(tracks);
-    else tracks.forEach(onAddTrack);
+    const added = onAddTracks
+      ? await onAddTracks(tracks)
+      : (await Promise.all(tracks.map(onAddTrack))).every((result) => result !== false);
+    if (added === false) {
+      setError("Could not add all songs. The results remain available to retry.");
+      return;
+    }
     setHits([]);
     setHasMoreResults(false);
     setAddedIds((current) => {
