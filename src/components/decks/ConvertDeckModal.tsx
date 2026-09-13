@@ -9,6 +9,7 @@ import { YoutubeSearchHit, guessTitleArtist, searchYoutubeVideos } from "../../l
 import { checkVideoEmbeddable, getCachedEmbedStatus } from "../../lib/youtube/validator";
 import { getProviderLabel } from "../../lib/music/providers";
 import { PcModal } from "../ui/PcModal";
+import { useDeck } from "../../state/DeckContext";
 
 type Candidate =
   | { provider: "deezer"; hit: DeezerTrackHit; playable: boolean; confidence: "high" | "ambiguous" | "none" }
@@ -85,6 +86,7 @@ async function findYoutubeCandidates(track: Track): Promise<Candidate[]> {
 
 export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen, onClose, onCreate, onUpdateCreated }) => {
   const targetProvider: MusicProvider = deck.provider === "youtube" ? "deezer" : "youtube";
+  const { setBackgroundTask } = useDeck();
   const [rows, setRows] = useState<ConversionRow[]>([]);
   const [isMatching, setIsMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
     setError(null);
     setIsMatching(true);
     setProgressLabel(targetProvider === "deezer" ? "Batching Deezer search…" : "Searching…");
+    setBackgroundTask(taskId, { label: `Matching ${getProviderLabel(targetProvider)} tracks`, completed: 0, total: deck.tracks.length });
     let cancelled = false;
 
     const run = async () => {
@@ -161,13 +164,17 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
             setError((err as Error).message || "Deezer batch search failed.");
           }
         }
-        if (!cancelled && !cancelRequestedRef.current) setIsMatching(false);
+        if (!cancelled && !cancelRequestedRef.current) {
+          setIsMatching(false);
+          setBackgroundTask(taskId, null);
+        }
         return;
       }
 
       for (let i = 0; i < deck.tracks.length; i += 1) {
         if (cancelled || cancelRequestedRef.current) return;
         setProgressLabel(`Searching ${i + 1} / ${deck.tracks.length}…`);
+        setBackgroundTask(taskId, { label: `Matching ${getProviderLabel(targetProvider)} tracks`, completed: i, total: deck.tracks.length });
         try {
           const candidates = await findYoutubeCandidates(deck.tracks[i]);
           if (cancelled || cancelRequestedRef.current) return;
@@ -189,7 +196,10 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
         }
         if (i < deck.tracks.length - 1 && !cancelled && !cancelRequestedRef.current) await sleep(YOUTUBE_TRACK_DELAY_MS);
       }
-      if (!cancelled && !cancelRequestedRef.current) setIsMatching(false);
+      if (!cancelled && !cancelRequestedRef.current) {
+        setIsMatching(false);
+        setBackgroundTask(taskId, null);
+      }
     };
 
     void run();
@@ -197,10 +207,11 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
       cancelled = true;
       if (!createdDeckRef.current) cancelRequestedRef.current = true;
       abortControllerRef.current?.abort();
+      if (!createdDeckRef.current || cancelRequestedRef.current) setBackgroundTask(taskId, null);
     };
   // Matching starts only when the modal opens. It intentionally continues after Create closes the modal.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, setBackgroundTask, taskId]);
 
 
   const unresolved = rows.filter((row) => row.selected === null).length;

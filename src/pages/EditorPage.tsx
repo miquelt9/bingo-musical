@@ -75,14 +75,19 @@ function mergeCollaborativeTracks(localTracks: Track[], remoteTracks: Track[]): 
   addedCount: number;
 } {
   const addedTracks: Track[] = [];
-  const seen = new Set(localTracks.map(collaborativeTrackKey));
+  const localKeys = new Set(localTracks.map(collaborativeTrackKey));
   for (const track of remoteTracks) {
-    const key = collaborativeTrackKey(track);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    addedTracks.push(track);
+    if (!localKeys.has(collaborativeTrackKey(track))) addedTracks.push(track);
   }
-  return { tracks: [...addedTracks, ...localTracks], addedTracks, addedCount: addedTracks.length };
+  // The collaborative playlist is authoritative: this also removes tracks
+  // deleted by another collaborator instead of retaining stale local tracks.
+  return { tracks: remoteTracks, addedTracks, addedCount: addedTracks.length };
+}
+
+function haveSameCollaborativeTracks(first: Track[], second: Track[]): boolean {
+  if (first.length !== second.length) return false;
+  const secondKeys = new Set(second.map(collaborativeTrackKey));
+  return first.every((track) => secondKeys.has(collaborativeTrackKey(track)));
 }
 
 export const EditorPage: React.FC = () => {
@@ -176,7 +181,7 @@ export const EditorPage: React.FC = () => {
           if (!current || current.id !== deckId || current.collaboration?.id !== collaborationId) return current;
           const merged = mergeCollaborativeTracks(current.tracks, remote.tracks);
           const revisionChanged = current.collaboration.revision !== remote.revision;
-          if (!revisionChanged && merged.addedCount === 0 && current.name === remote.name && current.provider === remote.provider) {
+          if (!revisionChanged && merged.addedCount === 0 && haveSameCollaborativeTracks(current.tracks, remote.tracks) && current.name === remote.name && current.provider === remote.provider) {
             return current;
           }
           if (merged.addedTracks.length > 0) {
@@ -427,7 +432,7 @@ export const EditorPage: React.FC = () => {
     const merged = mergeCollaborativeTracks(currentDeck.tracks, remote.tracks);
     const revisionChanged = currentDeck.collaboration?.id !== remote.id
       || (currentDeck.collaboration?.revision ?? -1) !== remote.revision;
-    if (!revisionChanged && merged.addedCount === 0) {
+    if (!revisionChanged && merged.addedCount === 0 && haveSameCollaborativeTracks(currentDeck.tracks, remote.tracks)) {
       return { deck: currentDeck, addedCount: 0 };
     }
     if (merged.addedTracks.length > 0) {
@@ -482,6 +487,14 @@ export const EditorPage: React.FC = () => {
             provider: next.provider,
             tracks: next.tracks,
           });
+        }
+
+        const latestTrackKeys = new Set(latest.tracks.map(collaborativeTrackKey));
+        const addedByMutation = response.playlist.tracks
+          .filter((track) => !latestTrackKeys.has(collaborativeTrackKey(track)))
+          .map(collaborativeTrackKey);
+        if (addedByMutation.length > 0) {
+          setRecentCollaborativeTrackKeys((current) => new Set([...current, ...addedByMutation]));
         }
 
         const saved = updateDeck({
