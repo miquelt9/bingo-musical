@@ -27,6 +27,7 @@ interface TrackTableProps {
   matchProgress?: { total: number; completed: number; matched: number; failed: number } | null;
   initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
   onCancelMatching?: () => void;
+  isLoadingDeezerPreviews?: boolean;
 }
 
 function AutoMatchButton({
@@ -81,6 +82,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   matchProgress = null,
   initialStatusFilter = "all",
   onCancelMatching,
+  isLoadingDeezerPreviews = false,
 }) => {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,17 +128,25 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     }
   };
 
+  const isLoadingDeezerTrack = (track: Track): boolean =>
+    isLoadingDeezerPreviews &&
+    track.media?.provider === "deezer" &&
+    Boolean(track.media.id) &&
+    !track.media.previewUrl &&
+    track.matchStatus !== "failed";
+
   const isTrackBlocked = (track: Track): boolean => {
     if (track.matchStatus === "failed") return true;
+    if (isLoadingDeezerTrack(track)) return false;
     return isVideoEmbedBlocked(track.media?.provider === "youtube" ? track.media.id : null) ||
       (track.media?.provider === "deezer" && !track.media.previewUrl);
   };
 
   const isTrackReady = (track: Track) =>
+    !isLoadingDeezerTrack(track) &&
     Boolean(track.media) && (track.matchStatus === "matched" || track.matchStatus === "manual") && !isTrackBlocked(track);
 
-  const matchedCount = tracks.filter((t) => isTrackReady(t)).length;
-  const needsAttentionCount = tracks.length - matchedCount;
+  const needsAttentionCount = tracks.filter((track) => !isLoadingDeezerTrack(track) && !isTrackReady(track)).length;
   const needsAttention = needsAttentionCount > 0;
   const showAutoMatchRainbow = needsAttention && !autoMatchRainbowDismissed;
 
@@ -249,6 +259,13 @@ export const TrackTable: React.FC<TrackTableProps> = ({
           </div>
         ))}
       </div>
+
+      {isLoadingDeezerPreviews && (
+        <div className="mb-4 flex items-center gap-2 p-3 pc-bevel-inset text-xs" role="status">
+          <Sparkles className="w-3.5 h-3.5 animate-spin" />
+          <span>Loading Deezer previews…</span>
+        </div>
+      )}
 
       {isMatching && matchProgress && (
         <div className="mb-4 p-3 pc-bevel-inset text-xs">

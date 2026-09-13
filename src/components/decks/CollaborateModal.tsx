@@ -9,6 +9,32 @@ import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../..
 
 interface CollaborateModalProps { deck: Deck; onClose: () => void; }
 
+const COLLABORATION_LINKS_KEY = "bingo-musical:collaboration-links";
+
+type StoredCollaborationLinks = Record<string, string>;
+
+function readStoredCollaborationLinks(): StoredCollaborationLinks {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COLLABORATION_LINKS_KEY) || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
+    );
+  } catch {
+    return {};
+  }
+}
+
+function rememberCollaborationLink(deckId: string, collaborationId: string): void {
+  try {
+    const links = readStoredCollaborationLinks();
+    links[deckId] = collaborationId;
+    localStorage.setItem(COLLABORATION_LINKS_KEY, JSON.stringify(links));
+  } catch {
+    // Link creation still succeeds if local storage is unavailable.
+  }
+}
+
 export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClose }) => {
   const { showToast } = useToast();
   const [url, setUrl] = useState<string>();
@@ -22,8 +48,18 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
       setCreating(false);
       return () => { cancelled = true; };
     }
+    const storedCollaborationId = readStoredCollaborationLinks()[deck.id];
+    if (storedCollaborationId) {
+      setUrl(buildCollaborativeUrl(storedCollaborationId));
+      setCreating(false);
+      return () => { cancelled = true; };
+    }
+
     void createCollaborativePlaylist({ name: deck.name, provider: deck.provider, tracks: deck.tracks })
-      .then(({ collaborationId }) => { if (!cancelled) setUrl(buildCollaborativeUrl(collaborationId)); })
+      .then(({ collaborationId }) => {
+        rememberCollaborationLink(deck.id, collaborationId);
+        if (!cancelled) setUrl(buildCollaborativeUrl(collaborationId));
+      })
       .catch((err: Error) => { if (!cancelled) setError(err.message || "Could not create a collaborative link."); })
       .finally(() => { if (!cancelled) setCreating(false); });
     return () => { cancelled = true; };

@@ -5,6 +5,7 @@ import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
 import { ConvertDeckModal } from "../components/decks/ConvertDeckModal";
+import { CollaborateModal } from "../components/decks/CollaborateModal";
 import { SongSearch } from "../components/tracks/SongSearch";
 import { SuggestSongsModal } from "../components/tracks/SuggestSongsModal";
 import { pickSuggestSeeds } from "../lib/music/suggest";
@@ -44,6 +45,7 @@ import {
   Printer,
   Radio,
   Share2,
+  Users,
   Plus,
   Check,
   AlertTriangle,
@@ -75,6 +77,7 @@ export const EditorPage: React.FC = () => {
   const isMobile = useIsMobile();
 
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
+  const [showCollaborateModal, setShowCollaborateModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [suggestSeeds, setSuggestSeeds] = useState<Track[] | null>(null);
   const [addSongRainbowDismissed, setAddSongRainbowDismissed] = useState(false);
@@ -116,6 +119,9 @@ export const EditorPage: React.FC = () => {
   useEffect(() => {
     if (!deck || blockedToastShownRef.current) return;
 
+    const isLoadingDeezerPreviews = Boolean(backgroundTasks[`deezer-hydration:${deck.id}`]);
+    if (isLoadingDeezerPreviews) return;
+
     const count = getUnplayableTracks(deck.tracks).length;
     if (count === 0) return;
 
@@ -137,7 +143,7 @@ export const EditorPage: React.FC = () => {
         },
       ],
     });
-  }, [deck, showToast, handleAutoFixBlocked]);
+  }, [deck, backgroundTasks, showToast, handleAutoFixBlocked]);
 
   useEffect(() => {
     if (!deck || statusFilterParam !== "blocked") return;
@@ -433,6 +439,15 @@ export const EditorPage: React.FC = () => {
               >
                 <Share2 className="w-4 h-4" />
               </Button>
+              <Button
+                type="button"
+                onClick={() => setShowCollaborateModal(true)}
+                disabled={emptyDeck}
+                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Collaborate"}
+                aria-label="Collaborate"
+              >
+                <Users className="w-4 h-4" />
+              </Button>
               {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
                 <span
                   title={
@@ -486,6 +501,15 @@ export const EditorPage: React.FC = () => {
             >
               <Share2 className="w-3.5 h-3.5" />
               Share
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setShowCollaborateModal(true)}
+              disabled={emptyDeck}
+              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Collaborate
             </Button>
             {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
               <span
@@ -610,6 +634,7 @@ export const EditorPage: React.FC = () => {
         isMatching={isTrackBusy}
         matchProgress={matchProgress}
         initialStatusFilter={initialStatusFilter}
+        isLoadingDeezerPreviews={isLoadingDeezerPreviews}
         onCancelMatching={() => {
           cancelMatchingRef.current = true;
         }}
@@ -706,6 +731,13 @@ export const EditorPage: React.FC = () => {
           onClose={() => setSuggestSeeds(null)}
           onAddTrack={handleAddTrack}
           onAddTracks={handleAddTracks}
+        />
+      )}
+
+      {showCollaborateModal && (
+        <CollaborateModal
+          deck={deck}
+          onClose={() => setShowCollaborateModal(false)}
         />
       )}
 
