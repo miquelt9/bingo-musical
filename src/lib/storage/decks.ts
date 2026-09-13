@@ -181,7 +181,7 @@ export function getStoredDecks(): Deck[] {
       return initial;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       const normalized = parsed.map(normalizeDeck);
       if (normalized.every(Boolean)) {
         const decks = ensureDefaultDeezerSample(normalized as Deck[]);

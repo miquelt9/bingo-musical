@@ -46,6 +46,30 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     }
   }, [deck.collaboration?.id, onLinked, storedCollaborationId]);
 
+  useEffect(() => {
+    if (shareUrl || !isShareApiConfigured()) return;
+    let cancelled = false;
+    setIsPublishing(true);
+    setPublishError(null);
+
+    void publishSharedDeck(deck)
+      .then((published) => {
+        if (cancelled) return;
+        setShareId(published.shareId);
+        setShareUrl(buildSharedDeckUrl(published.shareId));
+      })
+      .catch((err) => {
+        if (!cancelled) setPublishError(err instanceof Error ? err.message : "Could not create a share link.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsPublishing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck, shareUrl]);
+
   const shareNatively = async (url: string) => {
     const shared = await shareDeckNative(deck, url);
     if (!shared) {
@@ -145,87 +169,74 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
 
   return (
     <PcModal title={`Share "${deck.name}"`} onClose={onClose}>
-      <div className="space-y-4">
-        {isPublishing ? (
-          <p className="text-sm inline-flex items-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Creating share link…
-          </p>
-        ) : shareUrl ? (
-          <>
+      <div className="space-y-5">
+        <section className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold">Share this deck</p>
             <p className="text-sm">Anyone with this link can open the deck and add a copy to their browser.</p>
-            <div className="pc-bevel-inset p-3 break-all text-xs">{shareUrl}</div>
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
-              <Button type="button" variant="primary" onClick={() => void shareDeck()}>
-                <Share2 className="w-4 h-4" />
-                Share
-              </Button>
-              <Button type="button" onClick={() => void copyLink()}>
-                <Copy className="w-4 h-4" />
-                Copy link
-              </Button>
-            </div>
-
-            <div className="border-t border-zinc-200 pt-4 space-y-3">
-              <div className="flex flex-col items-end gap-3 md:ml-auto md:w-5/6">
-                {collaborationUrl ? (
-                  <>
-                    <p className="text-sm w-full text-right">Anyone with this link can edit the playlist.</p>
-                    <div className="pc-bevel-inset p-3 break-all text-xs w-full text-right">{collaborationUrl}</div>
-                    <Button type="button" variant="primary" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
-                      <Copy className="w-4 h-4" />
-                      Copy link
-                    </Button>
-                  </>
-                ) : (
-                  <Button type="button" onClick={() => void generateCollaborationLink()} disabled={isCreatingCollaboration}>
-                    {isCreatingCollaboration ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                    {isCreatingCollaboration ? "Creating collaboration link…" : "Generate collaboration link"}
-                  </Button>
-                )}
-                {collaborationError ? <p className="text-xs pc-bevel-inset p-3 w-full text-right">{collaborationError}</p> : null}
+          </div>
+          {isPublishing ? (
+            <p className="text-sm inline-flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Creating share link…
+            </p>
+          ) : shareUrl ? (
+            <>
+              <div className="pc-bevel-inset p-3 break-all text-xs">{shareUrl}</div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="primary" onClick={() => void shareDeck()}>
+                  <Share2 className="w-4 h-4" />
+                  Share
+                </Button>
+                <Button type="button" onClick={() => void copyLink()}>
+                  <Copy className="w-4 h-4" />
+                  Copy link
+                </Button>
               </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="text-sm">Choose how you want to share this deck.</p>
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
-              <Button type="button" variant="primary" onClick={() => void shareDeck()} disabled={isPublishing}>
-                {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-                {isPublishing ? "Creating share link…" : "Share"}
-              </Button>
+            </>
+          ) : (
+            <>
+              {publishError ? <p className="text-xs pc-bevel-inset p-3">{publishError}</p> : null}
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => void shareDeck()} disabled={isPublishing}>
+                  <Share2 className="w-4 h-4" />
+                  Retry share link
+                </Button>
+              </div>
+              {publishError ? <Button type="button" onClick={downloadJson}><Download className="w-4 h-4" />Download JSON</Button> : null}
+            </>
+          )}
+        </section>
+
+        <section className="space-y-3 border-t border-zinc-200 pt-5">
+          <div>
+            <p className="text-sm font-semibold">Collaborate on this deck</p>
+            <p className="text-sm">Anyone with this link can edit the playlist.</p>
+          </div>
+          {collaborationUrl ? (
+            <>
+              <div className="pc-bevel-inset p-3 break-all text-xs">{collaborationUrl}</div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="primary" onClick={() => void shareNatively(collaborationUrl)}>
+                  <Share2 className="w-4 h-4" />
+                  Share
+                </Button>
+                <Button type="button" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
+                  <Copy className="w-4 h-4" />
+                  Copy link
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-end">
               <Button type="button" onClick={() => void generateCollaborationLink()} disabled={isCreatingCollaboration}>
                 {isCreatingCollaboration ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                {isCreatingCollaboration ? "Creating collaboration link…" : "Collaborate"}
+                {isCreatingCollaboration ? "Creating collaboration link…" : "Generate collaboration link"}
               </Button>
             </div>
-            {collaborationUrl ? (
-              <div className="space-y-3 border-t border-zinc-200 pt-4">
-                <p className="text-sm">Anyone with this link can edit the playlist.</p>
-                <div className="pc-bevel-inset p-3 break-all text-xs">{collaborationUrl}</div>
-                <div className="flex justify-end">
-                  <Button type="button" variant="primary" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
-                    <Copy className="w-4 h-4" />
-                    Copy link
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            {publishError ? (
-              <>
-                <p className="text-xs pc-bevel-inset p-3">{publishError}</p>
-                <div className="flex justify-end">
-                  <Button type="button" onClick={downloadJson}>
-                    <Download className="w-4 h-4" />
-                    Download JSON
-                  </Button>
-                </div>
-              </>
-            ) : null}
-            {collaborationError ? <p className="text-xs pc-bevel-inset p-3">{collaborationError}</p> : null}
-          </>
-        )}
+          )}
+          {collaborationError ? <p className="text-xs pc-bevel-inset p-3">{collaborationError}</p> : null}
+        </section>
 
         {shareId ? <p className="text-xs opacity-70">Share id: {shareId}</p> : null}
       </div>

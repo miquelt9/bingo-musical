@@ -8,8 +8,10 @@ import {
   exportDeckToJson,
   importDeckFromData,
   parseAndImportDeckFile,
+  validateDeckSchema,
 } from "../lib/storage/decks";
 import { fetchSharedDeckPayload } from "../lib/share/sharedDecksApi";
+import { buildCanonicalSharePayload, canonicalPayloadsEqual } from "../lib/share/deckCanonical";
 import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
 import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
@@ -276,6 +278,21 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const importSharedDeck = async (shareId: string): Promise<Deck> => {
     const payload = await fetchSharedDeckPayload(shareId);
+    const candidate = validateDeckSchema(payload);
+    if (!candidate.isValid || !candidate.deck) {
+      throw new Error(candidate.error || "Invalid shared deck schema.");
+    }
+    const canonicalPayload = buildCanonicalSharePayload(candidate.deck);
+    const existing = getStoredDecks().find((deck) => (
+      canonicalPayloadsEqual(buildCanonicalSharePayload(deck), canonicalPayload)
+    ));
+
+    if (existing) {
+      refreshDecks();
+      setActiveDeck(existing);
+      return existing;
+    }
+
     let imported = importDeckFromData(payload);
     if (imported.provider === "deezer") {
       const missing = imported.tracks.filter((track) => track.media?.provider === "deezer" && !track.media.previewUrl);

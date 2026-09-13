@@ -33,6 +33,7 @@ import {
   Sparkles,
   Music2,
   Disc3,
+  Users,
 } from "lucide-react";
 
 const ONBOARDING_KEY = "mb_onboarding_dismissed";
@@ -163,6 +164,7 @@ export const HomePage: React.FC = () => {
     const fixHref = `/deck/${deck.id}?filter=blocked`;
     const secondary = formatReadinessSecondary(readiness);
     const isSample = deck.id === SAMPLE_DECK_ID;
+    const isCollaborative = Boolean(deck.collaboration?.id);
 
     const statsLine = (
       <p className="home-deck-card-stats text-xs">
@@ -266,6 +268,16 @@ export const HomePage: React.FC = () => {
                 </h3>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
+                  {isCollaborative && (
+                    <span
+                      className="home-deck-recommended text-[10px] shrink-0 inline-flex items-center gap-1"
+                      title="Collaborative deck"
+                      aria-label="Collaborative deck"
+                    >
+                      <Users className="w-3 h-3" aria-hidden />
+                      Collaborative
+                    </span>
+                  )}
                   {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
                 </div>
               </div>
@@ -303,6 +315,16 @@ export const HomePage: React.FC = () => {
               </h3>
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="home-deck-recommended text-[10px] shrink-0">{getProviderLabel(deck.provider)}</span>
+                {isCollaborative && (
+                  <span
+                    className="home-deck-recommended text-[10px] shrink-0 inline-flex items-center gap-1"
+                    title="Collaborative deck"
+                    aria-label="Collaborative deck"
+                  >
+                    <Users className="w-3 h-3" aria-hidden />
+                    Collaborative
+                  </span>
+                )}
                 {isSample && <span className="home-deck-recommended text-[10px] shrink-0">Recommended</span>}
               </div>
             </div>
