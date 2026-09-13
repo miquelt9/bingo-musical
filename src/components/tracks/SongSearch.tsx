@@ -9,7 +9,6 @@ import {
   formatDuration,
   filterSearchHitsForDisplay,
   ResolveKind,
-  dedupeYoutubeHitsBySong,
 } from "../../lib/youtube/search";
 import { CatalogSong, catalogYoutubeQuery, filterCatalogSongs, searchCatalogSongs } from "../../lib/music/catalog";
 import { parseYoutubePlaylistId, parseYoutubeVideoId } from "../../lib/youtube/parseUrl";
@@ -19,15 +18,15 @@ import {
   EmbedValidationResult,
   getCachedEmbedStatus,
 } from "../../lib/youtube/validator";
-import { AlertCircle, Check, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
+import { AlertCircle, Check, ClipboardPaste, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { DeezerSongSearch } from "./DeezerSongSearch";
-import { ConfirmModal } from "../ui/AppDialog";
 
 interface SongSearchProps {
   provider?: MusicProvider;
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void;
+  /** Retained for compatibility with collaborative/editor callers; direct search is single-selection only. */
   onAddTracks?: (tracks: Track[]) => void;
   onAfterAdd?: () => void;
 }
@@ -110,7 +109,6 @@ function withLyricsSuffix(query: string): string {
 const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   existingVideoIds = [],
   onAddTrack,
-  onAddTracks,
   onAfterAdd,
 }) => {
   const [query, setQuery] = useState("");
@@ -128,7 +126,6 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
   const [embedStatuses, setEmbedStatuses] = useState<Map<string, EmbedValidationResult>>(new Map());
   const [isCheckingEmbeds, setIsCheckingEmbeds] = useState(false);
   const [addingVideoId, setAddingVideoId] = useState<string | null>(null);
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [lyricsFallbackUsed, setLyricsFallbackUsed] = useState(false);
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreResults, setHasMoreResults] = useState(false);
@@ -473,70 +470,6 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
     }
   };
 
-  const addAllVisible = async (confirmed = false) => {
-    const fresh = hits.filter(
-      (hit) => !alreadyInDeck.has(hit.videoId) && !addedIds.has(hit.videoId)
-    );
-    if (fresh.length === 0) return;
-
-    if (!selectedCatalog && !confirmed) {
-      setShowBulkConfirm(true);
-      return;
-    }
-
-    setIsCheckingEmbeds(true);
-    setError(null);
-    try {
-      const statuses = await checkHitsEmbeddability(fresh);
-      setEmbedStatuses((prev) => {
-        const next = new Map(prev);
-        statuses.forEach((value, key) => next.set(key, value));
-        return next;
-      });
-
-      const playable = fresh.filter((hit) => statuses.get(hit.videoId)?.embeddable);
-      const blocked = fresh.length - playable.length;
-
-      if (playable.length === 0) {
-        setError("None of the visible results allow embedding. Try searching for official audio versions.");
-        return;
-      }
-
-      const { kept, skipped: duplicateSkipped } = dedupeYoutubeHitsBySong(playable);
-      const tracks = kept.map((hit) => hitToTrack(hit, selectedCatalog ?? undefined));
-      if (onAddTracks) {
-        onAddTracks(tracks);
-      } else {
-        tracks.forEach(onAddTrack);
-      }
-      setAddedIds((prev) => {
-        const next = new Set(prev);
-        kept.forEach((hit) => next.add(hit.videoId));
-        return next;
-      });
-
-      const notes: string[] = [];
-      if (blocked > 0) {
-        notes.push(`Skipped ${blocked} with embedding disabled`);
-      }
-      if (duplicateSkipped > 0) {
-        notes.push(`Skipped ${duplicateSkipped} duplicate song version${duplicateSkipped === 1 ? "" : "s"}`);
-      }
-      if (notes.length > 0) {
-        setError(
-          `Added ${kept.length} playable video${kept.length === 1 ? "" : "s"}. ${notes.join(". ")}.`
-        );
-      } else {
-        setHits([]);
-        setKind(null);
-        setQuery("");
-        setSelectedCatalog(null);
-        onAfterAdd?.();
-      }
-    } finally {
-      setIsCheckingEmbeds(false);
-    }
-  };
 
   const { visible: visibleHits, hiddenBlockedCount } = filterSearchHitsForDisplay(
     hits,
@@ -626,19 +559,7 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
 
   return (
     <div className="space-y-3">
-      {showBulkConfirm && (
-        <ConfirmModal
-          title="Add all results?"
-          confirmLabel="Add playable videos"
-          onCancel={() => setShowBulkConfirm(false)}
-          onConfirm={() => {
-            setShowBulkConfirm(false);
-            void addAllVisible(true);
-          }}
-        >
-          These results may not match your search. Add all playable videos anyway?
-        </ConfirmModal>
-      )}
+
       <form
         onSubmit={handleSearch}
         className={`flex gap-2 ${suggestionsOpen ? "flex-col" : "flex-col sm:flex-row"}`}
@@ -690,6 +611,26 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
           {suggestionPanel && createPortal(suggestionPanel, document.body)}
         </div>
         <button
+          type="button"
+          onClick={async () => {
+            try {
+              const pasted = (await navigator.clipboard.readText()).trim();
+              if (!pasted) return;
+              setQuery(pasted);
+              setSelectedCatalog(null);
+              setError(null);
+              setShowSuggestions(false);
+            } catch {
+              setError("Could not read the clipboard. Please paste into the search field instead.");
+            }
+          }}
+          className="pc-button shrink-0 inline-flex items-center justify-center"
+          aria-label="Paste from clipboard"
+          title="Paste from clipboard"
+        >
+          <ClipboardPaste className="w-4 h-4" />
+        </button>
+        <button
           type="submit"
           disabled={isSearching || !query.trim()}
           className="pc-button pc-button--primary shrink-0"
@@ -730,16 +671,6 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
                 ? ` · ${hiddenBlockedCount} blocked hidden`
                 : ""}
             </p>
-            {visibleHits.length > 1 && (
-              <button
-                type="button"
-                onClick={() => void addAllVisible()}
-                disabled={isCheckingEmbeds || addingVideoId !== null}
-                className="pc-link text-xs bg-transparent border-0"
-              >
-                Add all playable
-              </button>
-            )}
           </div>
 
           {allResultsBlocked && !isSearching && (
@@ -856,7 +787,6 @@ export const SongSearch: React.FC<SongSearchProps> = (props) => {
       <DeezerSongSearch
         existingIds={props.existingVideoIds}
         onAddTrack={props.onAddTrack}
-        onAddTracks={props.onAddTracks}
         onAfterAdd={props.onAfterAdd}
       />
     );

@@ -300,7 +300,10 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
             </form>
 
             {searchError && (
-              <div className="flex items-center gap-2 text-xs pc-bevel-inset p-2 mb-3">
+              <div
+                className={`flex items-center gap-2 text-xs pc-bevel-inset p-2 mb-3 ${/too many|rate limit|429/i.test(searchError) ? "text-pc-error border-pc-error" : ""}`}
+                role="alert"
+              >
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{searchError}</span>
               </div>

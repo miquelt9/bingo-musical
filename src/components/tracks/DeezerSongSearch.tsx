@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@miquelt9/pc-ui";
-import { AlertCircle, Check, Loader2, Plus, Search, Volume2 } from "lucide-react";
+import { AlertCircle, Check, ClipboardPaste, Loader2, Plus, Search, Volume2 } from "lucide-react";
 import { Track } from "../../types/deck";
 import {
   DeezerTrackHit,
@@ -11,12 +11,10 @@ import {
   searchDeezerTracks,
 } from "../../lib/deezer/api";
 import { ClipPreviewButton } from "./ClipPreviewButton";
-import { songIdentityKey } from "../../lib/music/songIdentity";
 
 interface DeezerSongSearchProps {
   existingIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void;
-  onAddTracks?: (tracks: Track[]) => void;
   onAfterAdd?: () => void;
 }
 
@@ -31,7 +29,6 @@ function hitToPreviewTrack(hit: DeezerTrackHit): Track {
 export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
   existingIds = [],
   onAddTrack,
-  onAddTracks,
   onAfterAdd,
 }) => {
   const [query, setQuery] = useState("");
@@ -65,30 +62,6 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
     } finally {
       setAddingId(null);
     }
-  };
-
-  const addAllPlayable = () => {
-    const playable = hits.filter((hit) => hit.previewUrl && !alreadyInDeck.has(hit.id));
-    if (playable.length === 0) return;
-    const seen = new Set<string>();
-    const unique = playable.filter((hit) => {
-      const key = songIdentityKey(hit.artist, hit.title);
-      if (key === "::" || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    const skipped = playable.length - unique.length;
-    const tracks = unique.map(deezerHitToTrack);
-    if (onAddTracks) onAddTracks(tracks);
-    else tracks.forEach(onAddTrack);
-    setHits([]);
-    setHasMoreResults(false);
-    if (skipped > 0) {
-      setError(
-        `Added ${unique.length} track${unique.length === 1 ? "" : "s"}. Skipped ${skipped} duplicate song version${skipped === 1 ? "" : "s"}.`
-      );
-    }
-    onAfterAdd?.();
   };
 
   const runSearch = async (event: React.FormEvent) => {
@@ -175,18 +148,39 @@ export const DeezerSongSearch: React.FC<DeezerSongSearchProps> = ({
             className="pc-input w-full pl-8"
           />
         </div>
+        <Button
+          type="button"
+          onClick={async () => {
+            try {
+              const pasted = (await navigator.clipboard.readText()).trim();
+              if (!pasted) return;
+              setQuery(pasted);
+              setError(null);
+            } catch {
+              setError("Could not read the clipboard. Please paste into the search field instead.");
+            }
+          }}
+          className="shrink-0 inline-flex items-center justify-center"
+          aria-label="Paste from clipboard"
+          title="Paste from clipboard"
+        >
+          <ClipboardPaste className="w-4 h-4" />
+        </Button>
         <Button type="submit" variant="primary" disabled={isSearching || !query.trim()}>
           {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           {isSearching ? "Searching…" : "Search Deezer"}
         </Button>
       </form>
       <p className="text-xs">Search Deezer metadata or paste a numeric track ID / track URL. Only Deezer’s short preview is used.</p>
-      {error && <div className="pc-bevel-inset p-2 text-xs flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
+      {error && (
+        <div className={`pc-bevel-inset p-2 text-xs flex items-center gap-2 ${/too many|rate limit|429/i.test(error) ? "text-pc-error border-pc-error" : ""}`} role="alert">
+          <AlertCircle className="w-4 h-4 shrink-0" />{error}
+        </div>
+      )}
       {hits.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-bold">
             <span>{hits.length} Deezer result{hits.length === 1 ? "" : "s"}</span>
-            {hits.some((hit) => hit.previewUrl) && <button type="button" className="pc-link" onClick={addAllPlayable}>Add all playable</button>}
           </div>
           <div className="space-y-2 pc-bevel-inset p-2">
             {hits.map((hit) => {

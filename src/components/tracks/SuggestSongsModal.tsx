@@ -263,7 +263,13 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
               {hits.length} suggestion{hits.length === 1 ? "" : "s"}
             </span>
             {hits.some((item) => suggestHitPlayable(item)) && (
-              <button type="button" className="pc-link bg-transparent border-0" onClick={addAllPlayable}>
+              <button
+                type="button"
+                className="pc-link bg-transparent border-0"
+                onClick={addAllPlayable}
+                aria-label="Add all playable song recommendations"
+                title="Add all playable song recommendations"
+              >
                 Add all playable
               </button>
             )}
