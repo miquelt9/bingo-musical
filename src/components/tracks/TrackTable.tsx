@@ -209,32 +209,34 @@ export const TrackTable: React.FC<TrackTableProps> = ({
       </div>
       <div className="pc-window-content">
       <div className="flex flex-col gap-3 mb-4">
-        <div className="relative w-full">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={isMobile ? "Search tracks..." : "Filter tracks by title, artist, or album..."}
-            className="pc-input w-full pl-8"
-          />
-        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative w-full sm:flex-1 sm:order-2">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={isMobile ? "Search tracks..." : "Filter tracks by title, artist, or album..."}
+              className="pc-input w-full pl-8"
+            />
+          </div>
 
-        <div className="flex items-center gap-2">
-          <label htmlFor="track-sort-order" className="text-xs font-semibold shrink-0">Order by</label>
-          <select
-            id="track-sort-order"
-            value={sortOrder}
-            onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}
-            className="pc-select min-w-0 flex-1 sm:flex-none"
-            aria-label="Order tracks by"
-          >
-            <option value="deck">Deck order</option>
-            <option value="title-asc">Song name (A–Z)</option>
-            <option value="title-desc">Song name (Z–A)</option>
-            <option value="artist-asc">Author (A–Z)</option>
-            <option value="artist-desc">Author (Z–A)</option>
-          </select>
+          <div className="flex items-center gap-2 sm:order-1">
+            <label htmlFor="track-sort-order" className="text-xs font-semibold shrink-0">Order by</label>
+            <select
+              id="track-sort-order"
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}
+              className="pc-select min-w-0 flex-1 sm:flex-none"
+              aria-label="Order tracks by"
+            >
+              <option value="deck">Deck order</option>
+              <option value="title-asc">Song name (A–Z)</option>
+              <option value="title-desc">Song name (Z–A)</option>
+              <option value="artist-asc">Author (A–Z)</option>
+              <option value="artist-desc">Author (Z–A)</option>
+            </select>
+          </div>
         </div>
 
         {needsAttention && (isMobile ? (
