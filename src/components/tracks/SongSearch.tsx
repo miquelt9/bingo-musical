@@ -18,16 +18,17 @@ import {
   EmbedValidationResult,
   getCachedEmbedStatus,
 } from "../../lib/youtube/validator";
-import { AlertCircle, Check, ClipboardPaste, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
+import { AlertCircle, Check, ClipboardList, ClipboardPaste, Loader2, Plus, Search, AlertTriangle } from "lucide-react";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { DeezerSongSearch } from "./DeezerSongSearch";
+import { BulkSongListModal } from "./BulkSongListModal";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 
 interface SongSearchProps {
   provider?: MusicProvider;
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void | Promise<boolean | void>;
-  /** Retained for compatibility with collaborative/editor callers; direct search is single-selection only. */
+  /** Adds a batch of automatically matched tracks from the bulk song-list flow. */
   onAddTracks?: (tracks: Track[]) => void | Promise<boolean | void>;
   onAfterAdd?: () => void;
 }
@@ -789,14 +790,39 @@ const YoutubeSongSearch: React.FC<SongSearchProps> = ({
 };
 
 export const SongSearch: React.FC<SongSearchProps> = (props) => {
-  if (props.provider === "deezer") {
-    return (
-      <DeezerSongSearch
-        existingIds={props.existingVideoIds}
-        onAddTrack={props.onAddTrack}
-        onAfterAdd={props.onAfterAdd}
-      />
-    );
-  }
-  return <YoutubeSongSearch {...props} />;
+  const [bulkOpen, setBulkOpen] = React.useState(false);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className="pc-button inline-flex items-center gap-1.5 text-xs"
+          onClick={() => setBulkOpen(true)}
+        >
+          <ClipboardList className="w-4 h-4" />
+          Add multiple songs
+        </button>
+      </div>
+      {props.provider === "deezer" ? (
+        <DeezerSongSearch
+          existingIds={props.existingVideoIds}
+          onAddTrack={props.onAddTrack}
+          onAfterAdd={props.onAfterAdd}
+        />
+      ) : (
+        <YoutubeSongSearch {...props} />
+      )}
+      {createPortal(
+        <BulkSongListModal
+          provider={props.provider ?? "youtube"}
+          isOpen={bulkOpen}
+          onClose={() => setBulkOpen(false)}
+          onAddTrack={props.onAddTrack}
+          onAddTracks={props.onAddTracks}
+        />,
+        document.body,
+      )}
+    </div>
+  );
 };
