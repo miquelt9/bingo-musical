@@ -131,11 +131,9 @@ function drawMasterListPages(
       cursorY += 5;
 
       const pageTracks = pages[pageIndex];
-      const startNumber = pageIndex * rowsPerPage + 1;
 
-      for (let i = 0; i < pageTracks.length; i++) {
-        const track = pageTracks[i];
-        const number = startNumber + i;
+      for (const track of pageTracks) {
+        const number = getTrackSongNumber(tracks, track.id);
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);

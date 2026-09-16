@@ -1,5 +1,6 @@
 import React from "react";
 import { Track } from "../../types/deck";
+import { getTrackSongNumber } from "../../lib/bingo/songNumbers";
 
 interface MasterSongListProps {
   eventTitle: string;
@@ -34,10 +35,10 @@ export const MasterSongList: React.FC<MasterSongListProps> = ({
           </tr>
         </thead>
         <tbody>
-          {tracks.map((track, index) => (
+          {tracks.map((track) => (
             <tr key={track.id} className="border-b border-zinc-200">
               <td className="py-2 pr-3 align-top font-black tabular-nums text-base text-zinc-950">
-                {index + 1}
+                {getTrackSongNumber(tracks, track.id)}
               </td>
               <td className="py-2 pr-3 align-top text-sm font-semibold text-zinc-900">
                 {track.title}

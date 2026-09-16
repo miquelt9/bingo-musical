@@ -9,6 +9,7 @@ import { TrackListMobile } from "./TrackListMobile";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { isVideoEmbedBlocked } from "../../lib/youtube/validator";
 import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../../lib/deezer/previewUrl";
+import { buildTrackSongNumberMap } from "../../lib/bingo/songNumbers";
 import {
   Search,
   Sparkles,
@@ -88,6 +89,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
 }) => {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState<"deck" | "title-asc" | "title-desc" | "artist-asc" | "artist-desc">("deck");
   const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched" | "blocked">(
     initialStatusFilter
   );
@@ -158,23 +160,42 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     }
   }, [needsAttention, statusFilter]);
 
-  // Filtered list
-  const filteredTracks = tracks.filter((track) => {
-    const matchesSearch =
-      track.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      track.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (track.album && track.album.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filtered/sorted list. The source array is intentionally left untouched because its
+  // order is the canonical source for bingo song numbers and sharing.
+  const normalizedSearch = searchTerm.toLocaleLowerCase();
+  const filteredTracks = tracks
+    .map((track, index) => ({ track, index }))
+    .filter(({ track }) => {
+      const matchesSearch =
+        track.title.toLocaleLowerCase().includes(normalizedSearch) ||
+        track.artist.toLocaleLowerCase().includes(normalizedSearch) ||
+        Boolean(track.album && track.album.toLocaleLowerCase().includes(normalizedSearch));
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    if (statusFilter === "blocked") {
-      return !isTrackReady(track);
-    }
-    if (statusFilter === "matched" || statusFilter === "unmatched") {
-      return !isTrackReady(track);
-    }
-    return true;
-  });
+      if (statusFilter === "blocked") {
+        return !isTrackReady(track);
+      }
+      if (statusFilter === "matched" || statusFilter === "unmatched") {
+        return !isTrackReady(track);
+      }
+      return true;
+    })
+    .sort(({ track: first, index: firstIndex }, { track: second, index: secondIndex }) => {
+      if (sortOrder === "deck") return firstIndex - secondIndex;
+
+      const direction = sortOrder.endsWith("desc") ? -1 : 1;
+      const field = sortOrder.startsWith("artist") ? "artist" : "title";
+      const primary = first[field].localeCompare(second[field], undefined, { sensitivity: "base" });
+      if (primary !== 0) return primary * direction;
+
+      const secondaryField = field === "artist" ? "title" : "artist";
+      const secondary = first[secondaryField].localeCompare(second[secondaryField], undefined, { sensitivity: "base" });
+      return secondary !== 0 ? secondary * direction : firstIndex - secondIndex;
+    })
+    .map(({ track }) => track);
+
+  const songNumberById = buildTrackSongNumberMap(tracks);
 
   const handleAutoMatchClick = () => {
     setAutoMatchRainbowDismissed(true);
@@ -197,6 +218,23 @@ export const TrackTable: React.FC<TrackTableProps> = ({
             placeholder={isMobile ? "Search tracks..." : "Filter tracks by title, artist, or album..."}
             className="pc-input w-full pl-8"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="track-sort-order" className="text-xs font-semibold shrink-0">Order by</label>
+          <select
+            id="track-sort-order"
+            value={sortOrder}
+            onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}
+            className="pc-select min-w-0 flex-1 sm:flex-none"
+            aria-label="Order tracks by"
+          >
+            <option value="deck">Deck order</option>
+            <option value="title-asc">Song name (A–Z)</option>
+            <option value="title-desc">Song name (Z–A)</option>
+            <option value="artist-asc">Author (A–Z)</option>
+            <option value="artist-desc">Author (Z–A)</option>
+          </select>
         </div>
 
         {needsAttention && (isMobile ? (
@@ -308,6 +346,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
       ) : (
         <TrackListMobile
           tracks={filteredTracks}
+          songNumberById={songNumberById}
           onEditVideo={setEditingTrack}
           onEditClip={(track) => void handleEditClip(track)}
           onDeleteTrack={onDeleteTrack ? setTrackPendingDelete : undefined}

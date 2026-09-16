@@ -2,6 +2,7 @@ import { BingoCard, BingoCardOptions } from "../../types/deck";
 import { DEFAULT_CELL_CONTENT } from "./cellContent";
 import { isBlankCell, normalizeGridSize } from "./generateCards";
 import { downloadJson, slugifyFilename } from "../storage/download";
+import { getTrackSongNumber } from "./songNumbers";
 
 export interface ReadableCardCell {
   blank?: true;
@@ -15,7 +16,7 @@ export function cardsToReadableJson(
   options: BingoCardOptions,
   tracks: { id: string }[] = []
 ) {
-  const numberById = new Map(tracks.map((t, i) => [t.id, i + 1]));
+  const numberById = new Map(tracks.map((track) => [track.id, getTrackSongNumber(tracks, track.id)]));
   return {
     format: "bingo-musical-cards",
     schemaVersion: 1,
@@ -38,7 +39,7 @@ export function cardsToReadableJson(
           } else {
             const trackId = cell.track?.id;
             cells.push({
-              songNumber: trackId ? numberById.get(trackId) : undefined,
+              songNumber: trackId ? numberById.get(trackId) ?? undefined : undefined,
               title: cell.track?.title ?? "",
               artist: cell.track?.artist ?? "",
             });

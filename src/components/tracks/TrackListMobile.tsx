@@ -19,6 +19,7 @@ import {
 
 interface TrackListMobileProps {
   tracks: Track[];
+  songNumberById?: Map<string, number>;
   onEditVideo: (track: Track) => void;
   onEditClip: (track: Track) => void;
   onDeleteTrack?: (track: Track) => void;
@@ -57,6 +58,7 @@ function getErrorStatus(
 
 export const TrackListMobile: React.FC<TrackListMobileProps> = ({
   tracks,
+  songNumberById,
   onEditVideo,
   onEditClip,
   onDeleteTrack,
@@ -157,7 +159,15 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 : "items-center gap-3 min-h-[88px]"
             } ${isBlocked ? "bg-pc-warning" : ""}`}
           >
-            <div className={`flex items-center gap-3 min-w-0 ${isMobile ? "w-full" : "flex-1"}`}>
+            <div className={`flex items-center gap-2 min-w-0 ${isMobile ? "w-full" : "flex-1"}`}>
+              {songNumberById?.has(track.id) && (
+                <span
+                  className="w-8 shrink-0 text-center font-black tabular-nums text-sm text-muted"
+                  aria-label={`Song number ${songNumberById.get(track.id)}`}
+                >
+                  {songNumberById.get(track.id)}
+                </span>
+              )}
               {thumb ? (
                 <img
                   src={thumb}
