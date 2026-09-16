@@ -1044,6 +1044,7 @@ export const EditorPage: React.FC = () => {
             existingVideoIds={deck.tracks.map((t) => getTrackSourceId(t))}
             onAddTrack={handleAddTrack}
             onAddTracks={handleAddTracks}
+            onAfterBulkAdd={handleCloseAddTrack}
           />
         </PcModal>
       )}

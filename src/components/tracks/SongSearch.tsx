@@ -28,9 +28,10 @@ interface SongSearchProps {
   provider?: MusicProvider;
   existingVideoIds?: Array<string | null | undefined>;
   onAddTrack: (track: Track) => void | Promise<boolean | void>;
-  /** Adds a batch of automatically matched tracks from the bulk song-list flow. */
+  /** Adds a batch of pending tracks from the bulk song-list flow. */
   onAddTracks?: (tracks: Track[]) => void | Promise<boolean | void>;
   onAfterAdd?: () => void;
+  onAfterBulkAdd?: () => void;
 }
 
 /** Stable-id track so preview play/stop state survives re-renders. */
@@ -815,9 +816,9 @@ export const SongSearch: React.FC<SongSearchProps> = (props) => {
       )}
       {createPortal(
         <BulkSongListModal
-          provider={props.provider ?? "youtube"}
           isOpen={bulkOpen}
           onClose={() => setBulkOpen(false)}
+          onAdded={props.onAfterBulkAdd}
           onAddTrack={props.onAddTrack}
           onAddTracks={props.onAddTracks}
         />,
