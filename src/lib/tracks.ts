@@ -148,5 +148,7 @@ function splitTitleArtist(a: string, b: string): { title: string; artist: string
   const left = a.trim();
   const right = b.trim();
   if (!left || !right) return { title: left || right, artist: right ? "Unknown Artist" : left };
-  return { artist: left, title: right };
+  // Tab-separated input is documented as Title<TAB>Artist, unlike the
+  // Artist - Title form used for dash-separated lines.
+  return { title: left, artist: right };
 }

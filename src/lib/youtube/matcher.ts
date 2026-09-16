@@ -1,18 +1,46 @@
 import { Track } from "../../types/deck";
-import { searchYoutubeVideos, YoutubeSearchHit } from "./search";
+import { guessTitleArtist, searchYoutubeVideos, YoutubeSearchHit } from "./search";
 import { checkHitsEmbeddability, isTrackUnplayable } from "./validator";
 
 export interface MatchResult {
   videoId: string | null;
   videoTitle?: string;
+  videoAuthor?: string;
   sourceInstance?: string;
   error?: string;
 }
 
-async function findFirstPlayableHit(hits: YoutubeSearchHit[]): Promise<YoutubeSearchHit | null> {
-  if (hits.length === 0) return null;
-  const statuses = await checkHitsEmbeddability(hits);
-  return hits.find((hit) => statuses.get(hit.videoId)?.embeddable) ?? null;
+function compactMusicText(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function isUnknownArtist(artist: string): boolean {
+  return /^unknown artist$/i.test(artist.trim());
+}
+
+/** Prevent auto-match from attaching a playable but unrelated search result. */
+function hitMatchesTrack(track: Pick<Track, "title" | "artist">, hit: YoutubeSearchHit): boolean {
+  const title = compactMusicText(track.title);
+  const resultText = compactMusicText(`${hit.title} ${hit.author}`);
+  if (!title || !resultText.includes(title)) return false;
+
+  if (isUnknownArtist(track.artist)) return true;
+  const artist = compactMusicText(track.artist.split(/[,/&]/)[0].trim());
+  return Boolean(artist && resultText.includes(artist));
+}
+
+async function findFirstPlayableHit(
+  track: Pick<Track, "title" | "artist">,
+  hits: YoutubeSearchHit[],
+): Promise<YoutubeSearchHit | null> {
+  const matchingHits = hits.filter((hit) => hitMatchesTrack(track, hit));
+  if (matchingHits.length === 0) return null;
+  const statuses = await checkHitsEmbeddability(matchingHits);
+  return matchingHits.find((hit) => statuses.get(hit.videoId)?.embeddable) ?? null;
 }
 
 export function cleanSearchQuery(track: Pick<Track, "title" | "artist" | "searchQuery">): string {
@@ -38,7 +66,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
   let embeddableHit: YoutubeSearchHit | null = null;
 
   if (hits.length > 0) {
-    embeddableHit = await findFirstPlayableHit(hits);
+    embeddableHit = await findFirstPlayableHit(track, hits);
   }
 
   // 2. If no embeddable hit found from standard query, try searching specifically for audio/topic version
@@ -46,7 +74,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
     const audioQuery = `${baseQuery} official audio`;
     const audioHits = await searchYoutubeVideos(audioQuery, 6);
     if (audioHits.length > 0) {
-      embeddableHit = await findFirstPlayableHit(audioHits);
+      embeddableHit = await findFirstPlayableHit(track, audioHits);
     }
   }
 
@@ -55,7 +83,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
     const lyricQuery = `${baseQuery} lyrics`;
     const lyricHits = await searchYoutubeVideos(lyricQuery, 6);
     if (lyricHits.length > 0) {
-      embeddableHit = await findFirstPlayableHit(lyricHits);
+      embeddableHit = await findFirstPlayableHit(track, lyricHits);
     }
   }
 
@@ -64,6 +92,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
     return {
       videoId: embeddableHit.videoId,
       videoTitle: embeddableHit.title,
+      videoAuthor: embeddableHit.author,
     };
   }
 
@@ -126,6 +155,10 @@ export async function batchMatchTracks(
       if (match.videoId) {
         results[current.idx] = {
           ...track,
+          artist:
+            isUnknownArtist(track.artist) && match.videoTitle
+              ? guessTitleArtist(match.videoTitle, match.videoAuthor ?? "").artist
+              : track.artist,
           media: match.videoId
             ? { provider: "youtube", id: match.videoId, providerTitle: match.videoTitle }
             : null,

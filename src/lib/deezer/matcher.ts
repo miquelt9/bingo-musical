@@ -24,32 +24,50 @@ export function deezerMatchConfidence(track: Track, candidate: DeezerTrackHit): 
   return "none";
 }
 
+function isUnknownArtist(artist: string): boolean {
+  return /^unknown artist$/i.test(artist.trim());
+}
+
 export function chooseDeezerMatch(
   track: Track,
   candidates: DeezerTrackHit[],
-  allowBestPlayable = false,
 ): DeezerTrackHit | null {
-  const exact = candidates.filter((candidate) => deezerMatchConfidence(track, candidate) === "high" && candidate.previewUrl);
-  if (exact.length === 0) {
-    return allowBestPlayable ? candidates.find((candidate) => Boolean(candidate.previewUrl)) ?? null : null;
+  const playable = candidates.filter((candidate) => Boolean(candidate.previewUrl));
+  const exact = playable.filter((candidate) => deezerMatchConfidence(track, candidate) === "high");
+  if (exact.length > 0) {
+    // Deezer often returns several album editions of the same mainstream song.
+    // Prefer the edition closest to the source duration instead of treating that
+    // normal catalog duplication as an unresolved ambiguity.
+    return [...exact].sort((a, b) =>
+      Math.abs(a.durationMs - track.durationMs) - Math.abs(b.durationMs - track.durationMs)
+    )[0];
   }
 
-  // Deezer often returns several album editions of the same mainstream song.
-  // Prefer the edition closest to the source duration instead of treating that
-  // normal catalog duplication as an unresolved ambiguity.
-  return [...exact].sort((a, b) =>
-    Math.abs(a.durationMs - track.durationMs) - Math.abs(b.durationMs - track.durationMs)
-  )[0];
+  // A title-only bulk line has no artist to verify. It is still safe to match
+  // an exact title, but never fall back to an arbitrary playable result.
+  if (isUnknownArtist(track.artist)) {
+    const titleOnly = playable.filter(
+      (candidate) => normalizeMusicText(track.title) === normalizeMusicText(candidate.title),
+    );
+    if (titleOnly.length > 0) {
+      return [...titleOnly].sort((a, b) =>
+        Math.abs(a.durationMs - track.durationMs) - Math.abs(b.durationMs - track.durationMs)
+      )[0];
+    }
+  }
+
+  return null;
 }
 
 export async function matchTrackToDeezer(track: Track, signal?: AbortSignal): Promise<Track> {
   const query = track.searchQuery?.trim() || `${track.artist} ${track.title}`;
   const candidates = await searchDeezerTracks(query, 8, signal);
-  const match = chooseDeezerMatch(track, candidates, Boolean(track.searchQuery));
+  const match = chooseDeezerMatch(track, candidates);
   if (!match) return { ...track, media: null, matchStatus: "pending" };
   const resolved = deezerHitToTrack(match);
   return {
     ...track,
+    artist: isUnknownArtist(track.artist) ? resolved.artist : track.artist,
     album: resolved.album,
     albumArtUrl: resolved.albumArtUrl,
     durationMs: resolved.durationMs,
@@ -129,7 +147,7 @@ export async function batchMatchDeezerTracks(
                 ? batchCandidates[targetIndex]
                 : await searchDeezerTracks(query, 8))
             : await searchDeezerTracks(query, 8);
-        const match = chooseDeezerMatch(track, candidates, Boolean(track.searchQuery));
+        const match = chooseDeezerMatch(track, candidates);
         const updated = match
           ? (() => {
               const resolved = deezerHitToTrack(match);
@@ -137,6 +155,7 @@ export async function batchMatchDeezerTracks(
                 track.media?.provider === "deezer" && track.media.id === match.id;
               return {
                 ...track,
+                artist: isUnknownArtist(track.artist) ? resolved.artist : track.artist,
                 album: resolved.album,
                 albumArtUrl: resolved.albumArtUrl,
                 durationMs: resolved.durationMs,
