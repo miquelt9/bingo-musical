@@ -45,8 +45,14 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   const songSize = gridSize >= 5 ? 0.6875 : 0.75;
   const authorSize = gridSize >= 5 ? 0.625 : 0.6875;
   const authorOnlySize = gridSize >= 5 ? 0.75 : 0.8125;
-  const contentGap = (firstSize: number, secondSize: number) =>
-    `${Math.max(1, Math.min(5, ((firstSize + secondSize) / 2) / 25))}px`;
+  const enabledSizes = [
+    showNumbers ? sizes.numbers : null,
+    showSongs ? sizes.songs : null,
+    showAuthors ? sizes.authors : null,
+  ].filter((size): size is number => size !== null);
+  const contentGap = enabledSizes.length > 1
+    ? `${Math.max(1, Math.min(4, enabledSizes.reduce((sum, size) => sum + size, 0) / enabledSizes.length / 25))}px`
+    : undefined;
 
   const [markedIndices, setMarkedIndices] = useState<Set<number>>(new Set());
 
@@ -87,8 +93,8 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
       : "font-bold text-[10px] sm:text-[11px] leading-tight line-clamp-2 text-zinc-900";
   const artistClass =
     gridSize >= 5
-      ? "font-medium text-[8px] sm:text-[10px] text-zinc-500 line-clamp-1 mt-0.5"
-      : "font-medium text-[9px] sm:text-[10px] text-zinc-500 line-clamp-1 mt-0.5";
+      ? "font-medium text-[8px] sm:text-[10px] text-zinc-500 line-clamp-1"
+      : "font-medium text-[9px] sm:text-[10px] text-zinc-500 line-clamp-1";
   const authorOnlyClass =
     gridSize >= 5
       ? "font-bold text-[10px] sm:text-[12px] leading-tight line-clamp-3 text-zinc-900"
@@ -149,12 +155,19 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                   isMarked
                     ? "bg-emerald-500/10 border-emerald-500 text-zinc-950 ring-2 ring-emerald-500/30"
                     : "bg-zinc-50/80 hover:bg-zinc-100/90 border-zinc-200 text-zinc-800"
-                }`}
+                }}`}
+                style={{ rowGap: contentGap }}
               >
                 {track ? (
                   <>
                     {showNumbers && cellNumber != null && (
-                      <p className={numberClass} style={{ fontSize: `${numberSize * sizes.numbers / 100}rem` }}>
+                      <p
+                        className={numberClass}
+                        style={{
+                          fontSize: `${numberSize * sizes.numbers / 100}rem`,
+                          lineHeight: 1,
+                        }}
+                      >
                         {cellNumber}
                       </p>
                     )}
@@ -163,7 +176,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                         className={titleClass}
                         style={{
                           fontSize: `${songSize * sizes.songs / 100}rem`,
-                          marginTop: showNumbers ? contentGap(sizes.numbers, sizes.songs) : undefined,
+                          lineHeight: 1.1,
                         }}
                       >
                         {track.title}
@@ -174,15 +187,11 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                         className={
                           showSongs
                             ? artistClass
-                            : `${authorOnlyClass} ${showNumbers ? "mt-0.5" : ""}`
+                            : authorOnlyClass
                         }
                         style={{
                           fontSize: `${(showSongs ? authorSize : authorOnlySize) * sizes.authors / 100}rem`,
-                          marginTop: showSongs
-                            ? contentGap(sizes.songs, sizes.authors)
-                            : showNumbers
-                              ? contentGap(sizes.numbers, sizes.authors)
-                              : undefined,
+                          lineHeight: 1.1,
                         }}
                       >
                         {track.artist}
