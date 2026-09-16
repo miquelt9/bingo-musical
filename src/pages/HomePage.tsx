@@ -516,7 +516,7 @@ export const HomePage: React.FC = () => {
                 />
                 <span className="flex items-start gap-2 text-sm">
                   <Disc3 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
-                  <span><strong>Deezer</strong><span className="block text-xs text-muted">30-second previews, ad-free.</span></span>
+                  <span><strong>Deezer</strong><span className="block text-xs text-muted">Predefined 30-second previews, ad-free.</span></span>
                 </span>
               </label>
             </fieldset>
