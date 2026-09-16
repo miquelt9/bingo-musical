@@ -103,14 +103,22 @@ export function parseSongList(raw: string): ParsedSongList {
       continue;
     }
     seen.add(key);
-    tracks.push(createTrack(parsed));
+    const track = createTrack(parsed);
+    // Keep the original line for matching. This makes bulk matching use the same
+    // query the user would enter in the interactive search field.
+    track.searchQuery = cleanedSongQuery(line);
+    tracks.push(track);
   }
 
   return { tracks, skipped };
 }
 
+function cleanedSongQuery(line: string): string {
+  return line.replace(/^[\d]+[.)]\s+/, "").trim();
+}
+
 function parseSongLine(line: string): { title: string; artist: string } | null {
-  const cleaned = line.replace(/^[\d]+[.)]\s+/, "").trim();
+  const cleaned = cleanedSongQuery(line);
   if (!cleaned) return null;
 
   const tabParts = cleaned.split(/\t+/);

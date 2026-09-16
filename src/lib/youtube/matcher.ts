@@ -1,6 +1,6 @@
 import { Track } from "../../types/deck";
 import { searchYoutubeVideos, YoutubeSearchHit } from "./search";
-import { findFirstEmbeddableHit, isTrackUnplayable } from "./validator";
+import { checkHitsEmbeddability, isTrackUnplayable } from "./validator";
 
 export interface MatchResult {
   videoId: string | null;
@@ -9,7 +9,16 @@ export interface MatchResult {
   error?: string;
 }
 
-export function cleanSearchQuery(track: Pick<Track, "title" | "artist">): string {
+async function findFirstPlayableHit(hits: YoutubeSearchHit[]): Promise<YoutubeSearchHit | null> {
+  if (hits.length === 0) return null;
+  const statuses = await checkHitsEmbeddability(hits);
+  return hits.find((hit) => statuses.get(hit.videoId)?.embeddable) ?? null;
+}
+
+export function cleanSearchQuery(track: Pick<Track, "title" | "artist" | "searchQuery">): string {
+  const explicitQuery = track.searchQuery?.trim();
+  if (explicitQuery) return explicitQuery;
+
   const cleanTitle = track.title
     .replace(/\s*[\(\[](?:feat|ft|with|prod)[\.\s][^\)\]]+[\)\]]/gi, "")
     .replace(/\s*[\(\[](?:remastered|remaster|radio edit|original mix|bonus track|deluxe|version)[^\)\]]*[\)\]]/gi, "")
@@ -17,10 +26,11 @@ export function cleanSearchQuery(track: Pick<Track, "title" | "artist">): string
     .trim();
 
   const firstArtist = track.artist.split(/[,/&]/)[0].trim();
-  return `${firstArtist} ${cleanTitle}`;
+  const artistQuery = /^unknown artist$/i.test(firstArtist) ? "" : firstArtist;
+  return [artistQuery, cleanTitle].filter(Boolean).join(" ");
 }
 
-export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist">): Promise<MatchResult> {
+export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist" | "searchQuery">): Promise<MatchResult> {
   const baseQuery = cleanSearchQuery(track);
   
   // 1. Try standard query
@@ -28,7 +38,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
   let embeddableHit: YoutubeSearchHit | null = null;
 
   if (hits.length > 0) {
-    embeddableHit = await findFirstEmbeddableHit(hits);
+    embeddableHit = await findFirstPlayableHit(hits);
   }
 
   // 2. If no embeddable hit found from standard query, try searching specifically for audio/topic version
@@ -36,7 +46,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
     const audioQuery = `${baseQuery} official audio`;
     const audioHits = await searchYoutubeVideos(audioQuery, 6);
     if (audioHits.length > 0) {
-      embeddableHit = await findFirstEmbeddableHit(audioHits);
+      embeddableHit = await findFirstPlayableHit(audioHits);
     }
   }
 
@@ -45,7 +55,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
     const lyricQuery = `${baseQuery} lyrics`;
     const lyricHits = await searchYoutubeVideos(lyricQuery, 6);
     if (lyricHits.length > 0) {
-      embeddableHit = await findFirstEmbeddableHit(lyricHits);
+      embeddableHit = await findFirstPlayableHit(lyricHits);
     }
   }
 

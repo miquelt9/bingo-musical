@@ -452,7 +452,10 @@ export const HomePage: React.FC = () => {
       )}
 
       <div className="home-decks-grid">
-        <div className="home-deck-add home-deck-add--providers">
+        <div
+          className="home-deck-add home-deck-add--providers"
+          onClick={() => handleCreateEmptyDeck("deezer")}
+        >
           <Plus className="w-5 h-5 shrink-0 opacity-80" aria-hidden />
           <span className="font-semibold text-sm">Empty deck</span>
           <span className="text-xs text-muted">Choose a music provider</span>
@@ -460,7 +463,10 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               className="home-deck-add-option"
-              onClick={() => handleCreateEmptyDeck("youtube")}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleCreateEmptyDeck("youtube");
+              }}
             >
               <Music2 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">YouTube</span>
@@ -468,7 +474,10 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               className="home-deck-add-option"
-              onClick={() => handleCreateEmptyDeck("deezer")}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleCreateEmptyDeck("deezer");
+              }}
             >
               <Disc3 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">Deezer</span>

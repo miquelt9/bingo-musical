@@ -24,9 +24,15 @@ export function deezerMatchConfidence(track: Track, candidate: DeezerTrackHit): 
   return "none";
 }
 
-export function chooseDeezerMatch(track: Track, candidates: DeezerTrackHit[]): DeezerTrackHit | null {
+export function chooseDeezerMatch(
+  track: Track,
+  candidates: DeezerTrackHit[],
+  allowBestPlayable = false,
+): DeezerTrackHit | null {
   const exact = candidates.filter((candidate) => deezerMatchConfidence(track, candidate) === "high" && candidate.previewUrl);
-  if (exact.length === 0) return null;
+  if (exact.length === 0) {
+    return allowBestPlayable ? candidates.find((candidate) => Boolean(candidate.previewUrl)) ?? null : null;
+  }
 
   // Deezer often returns several album editions of the same mainstream song.
   // Prefer the edition closest to the source duration instead of treating that
@@ -37,8 +43,9 @@ export function chooseDeezerMatch(track: Track, candidates: DeezerTrackHit[]): D
 }
 
 export async function matchTrackToDeezer(track: Track, signal?: AbortSignal): Promise<Track> {
-  const candidates = await searchDeezerTracks(`${track.artist} ${track.title}`, 8, signal);
-  const match = chooseDeezerMatch(track, candidates);
+  const query = track.searchQuery?.trim() || `${track.artist} ${track.title}`;
+  const candidates = await searchDeezerTracks(query, 8, signal);
+  const match = chooseDeezerMatch(track, candidates, Boolean(track.searchQuery));
   if (!match) return { ...track, media: null, matchStatus: "pending" };
   const resolved = deezerHitToTrack(match);
   return {
@@ -112,12 +119,17 @@ export async function batchMatchDeezerTracks(
           }
         }
 
-        const candidates = batchCandidates
-          ? (batchCandidates[targetIndex]?.length
-              ? batchCandidates[targetIndex]
-              : await searchDeezerTracks(`${track.artist} ${track.title}`, 8))
-          : await searchDeezerTracks(`${track.artist} ${track.title}`, 8);
-        const match = chooseDeezerMatch(track, candidates);
+        const query = track.searchQuery?.trim() || `${track.artist} ${track.title}`;
+        // Bulk-imported tracks keep the exact query entered by the user so they
+        // follow the same catalog search path as the interactive search field.
+        const candidates = track.searchQuery
+          ? await searchDeezerTracks(query, 8)
+          : batchCandidates
+            ? (batchCandidates[targetIndex]?.length
+                ? batchCandidates[targetIndex]
+                : await searchDeezerTracks(query, 8))
+            : await searchDeezerTracks(query, 8);
+        const match = chooseDeezerMatch(track, candidates, Boolean(track.searchQuery));
         const updated = match
           ? (() => {
               const resolved = deezerHitToTrack(match);

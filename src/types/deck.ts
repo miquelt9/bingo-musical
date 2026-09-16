@@ -20,6 +20,8 @@ export interface Track {
   id: string;
   title: string;
   artist: string;
+  /** Original user-entered query used when automatically matching a pending track. */
+  searchQuery?: string;
   album?: string;
   albumArtUrl: string;
   durationMs: number;

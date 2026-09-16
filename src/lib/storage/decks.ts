@@ -109,6 +109,9 @@ function normalizeTrack(raw: unknown, index: number, provider: MusicProvider): T
     id: typeof value.id === "string" && value.id.trim() ? value.id.trim() : `track-${index}-${Math.random().toString(36).slice(2, 8)}`,
     title: value.title.trim(),
     artist: value.artist.trim(),
+    ...(typeof value.searchQuery === "string" && value.searchQuery.trim()
+      ? { searchQuery: value.searchQuery.trim() }
+      : {}),
     album: typeof value.album === "string" ? value.album.trim() : "",
     albumArtUrl: typeof value.albumArtUrl === "string" ? value.albumArtUrl.trim() : "",
     durationMs,
