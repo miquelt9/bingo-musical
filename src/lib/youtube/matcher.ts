@@ -35,8 +35,6 @@ function musicTokens(value: string): string[] {
     .filter((token) => token.length >= 2);
 }
 
-const MIN_AUTO_MATCH_DURATION_SECONDS = 15;
-
 /** Prevent auto-match from attaching a playable but unrelated search result. */
 function hitMatchesTrack(track: Pick<Track, "title" | "artist" | "searchQuery">, hit: YoutubeSearchHit): boolean {
   const query = isUnknownArtist(track.artist) ? track.searchQuery?.trim() || track.title : track.title;
@@ -53,9 +51,11 @@ async function findFirstPlayableHit(
   track: Pick<Track, "title" | "artist" | "searchQuery">,
   hits: YoutubeSearchHit[],
 ): Promise<YoutubeSearchHit | null> {
-  const matchingHits = hits
-    .filter((hit) => hitMatchesTrack(track, hit))
-    .filter((hit) => hit.lengthSeconds <= 0 || hit.lengthSeconds >= MIN_AUTO_MATCH_DURATION_SECONDS);
+  // Bulk rows carry the exact query entered by the user. Keep the provider's
+  // ranking unchanged so bulk uses the same first result as normal search.
+  const matchingHits = track.searchQuery?.trim()
+    ? hits
+    : hits.filter((hit) => hitMatchesTrack(track, hit));
   if (matchingHits.length === 0) return null;
   const statuses = await checkHitsEmbeddability(matchingHits);
   return matchingHits.find((hit) => statuses.get(hit.videoId)?.embeddable) ?? null;
@@ -87,25 +87,15 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
     embeddableHit = await findFirstPlayableHit(track, hits);
   }
 
-  // 2. If no embeddable hit found from standard query, try searching specifically for audio/topic version
-  if (!embeddableHit) {
-    const audioQuery = `${baseQuery} official audio`;
-    const audioHits = await searchYoutubeVideos(audioQuery, 6);
-    if (audioHits.length > 0) {
-      embeddableHit = await findFirstPlayableHit(track, audioHits);
-    }
-  }
-
-  // 3. If still not found, try lyric video
-  if (!embeddableHit) {
-    const lyricQuery = `${baseQuery} lyrics`;
-    const lyricHits = await searchYoutubeVideos(lyricQuery, 6);
+  // If every initial result is blocked, mirror normal search's lyric fallback.
+  if (!embeddableHit && hits.length > 0) {
+    const lyricHits = await searchYoutubeVideos(`${baseQuery} lyrics`, 6);
     if (lyricHits.length > 0) {
       embeddableHit = await findFirstPlayableHit(track, lyricHits);
     }
   }
 
-  // 4. If we found a playable candidate, return it
+  // If we found a playable candidate, return it
   if (embeddableHit) {
     return {
       videoId: embeddableHit.videoId,

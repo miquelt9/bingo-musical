@@ -39,6 +39,10 @@ export function chooseDeezerMatch(
   candidates: DeezerTrackHit[],
 ): DeezerTrackHit | null {
   const playable = candidates.filter((candidate) => Boolean(candidate.previewUrl));
+  // Bulk rows retain the exact query entered by the user. Use the first
+  // playable catalog result in that same order, just like the search UI.
+  if (track.searchQuery?.trim()) return playable[0] ?? null;
+
   const exact = playable.filter((candidate) => deezerMatchConfidence(track, candidate) === "high");
   if (exact.length > 0) {
     // Deezer often returns several album editions of the same mainstream song.
