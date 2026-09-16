@@ -2,9 +2,11 @@ import { jsPDF } from "jspdf";
 import { BingoCard, BingoCardOptions, Track } from "../../types/deck";
 import {
   BingoCellContentSelection,
+  BingoCellContentSizes,
   DEFAULT_CELL_CONTENT,
   getTrackAuthorNumber,
   normalizeCellContent,
+  normalizeCellContentSizes,
   usesAuthorPool,
 } from "./cellContent";
 import { isBlankCell, normalizeGridSize } from "./generateCards";
@@ -18,6 +20,7 @@ export interface PdfExportOptions extends BingoCardOptions {
   includeMasterList?: boolean;
   tracks?: Track[];
   cellContent?: BingoCellContentSelection;
+  cellContentSizes?: BingoCellContentSizes;
   shareUrl?: string;
 }
 
@@ -176,6 +179,7 @@ export async function generateBingoPdf(
   const gridWidth = pageWidth - marginX * 2;
   const eventTitle = options.customTitle?.trim() || options.deckName || "Musical Bingo";
   const cellContent = normalizeCellContent(options.cellContent ?? DEFAULT_CELL_CONTENT);
+  const sizes = normalizeCellContentSizes(options.cellContentSizes);
   const showNumbers = cellContent.numbers;
   const showSongs = cellContent.songs;
   const showAuthors = cellContent.authors;
@@ -203,10 +207,10 @@ export async function generateBingoPdf(
     const gridSize = normalizeGridSize(card.gridSize || options.gridSize || 5);
     const cellSize = gridWidth / gridSize;
     const scale = cellSize / 36;
-    const titleFont = Math.max(6, 8.5 * scale);
-    const artistFont = Math.max(5.5, 7.5 * scale);
-    const authorOnlyFont = Math.max(7, 10 * scale);
-    const numberFont = numberOnly ? Math.max(18, 28 * scale) : Math.max(10, 16 * scale);
+    const titleFont = Math.max(6, 8.5 * scale) * sizes.songs / 100;
+    const artistFont = Math.max(5.5, 7.5 * scale) * sizes.authors / 100;
+    const authorOnlyFont = Math.max(7, 10 * scale) * sizes.authors / 100;
+    const numberFont = (numberOnly ? Math.max(18, 28 * scale) : Math.max(10, 16 * scale)) * sizes.numbers / 100;
     let cursorY = 18;
 
     doc.setFont("helvetica", "bold");
@@ -247,7 +251,8 @@ export async function generateBingoPdf(
           doc.setLineWidth(0.5);
           doc.roundedRect(cellX, cellY, cellSize, cellHeight, 1.2, 1.2, "S");
         } else {
-          doc.setFillColor(255, 255, 255);
+          // Match the preview tile surface instead of relying on printer background settings.
+          doc.setFillColor(244, 244, 245);
           doc.setDrawColor(228, 228, 231);
           doc.setLineWidth(0.4);
           doc.roundedRect(cellX, cellY, cellSize, cellHeight, 1.5, 1.5, "FD");

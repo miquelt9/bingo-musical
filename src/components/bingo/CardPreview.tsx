@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { BingoCard, Track } from "../../types/deck";
 import {
   BingoCellContentSelection,
+  BingoCellContentSizes,
   DEFAULT_CELL_CONTENT,
+  DEFAULT_CELL_CONTENT_SIZES,
+  normalizeCellContentSizes,
   getTrackAuthorNumber,
   normalizeCellContent,
   usesAuthorPool,
@@ -17,6 +20,7 @@ interface CardPreviewProps {
   /** Full deck track list in order — used to resolve song / author numbers. */
   tracks: Track[];
   cellContent?: BingoCellContentSelection;
+  cellContentSizes?: BingoCellContentSizes;
   qrDataUrl?: string | null;
   interactiveMarks?: boolean;
 }
@@ -26,6 +30,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   eventTitle,
   tracks,
   cellContent = DEFAULT_CELL_CONTENT,
+  cellContentSizes = DEFAULT_CELL_CONTENT_SIZES,
   qrDataUrl = null,
   interactiveMarks = true,
 }) => {
@@ -35,6 +40,11 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   const showSongs = selection.songs;
   const showAuthors = selection.authors;
   const authorPool = usesAuthorPool(selection);
+  const sizes = normalizeCellContentSizes(cellContentSizes);
+  const numberSize = gridSize >= 6 ? 2.5 : gridSize >= 5 ? 2 : 2.25;
+  const songSize = gridSize >= 5 ? 0.6875 : 0.75;
+  const authorSize = gridSize >= 5 ? 0.625 : 0.6875;
+  const authorOnlySize = gridSize >= 5 ? 0.75 : 0.8125;
 
   const [markedIndices, setMarkedIndices] = useState<Set<number>>(new Set());
 
@@ -142,10 +152,17 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                 {track ? (
                   <>
                     {showNumbers && cellNumber != null && (
-                      <p className={numberClass}>{cellNumber}</p>
+                      <p className={numberClass} style={{ fontSize: `${numberSize * sizes.numbers / 100}rem` }}>
+                        {cellNumber}
+                      </p>
                     )}
                     {showSongs && (
-                      <p className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}>{track.title}</p>
+                      <p
+                        className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}
+                        style={{ fontSize: `${songSize * sizes.songs / 100}rem` }}
+                      >
+                        {track.title}
+                      </p>
                     )}
                     {showAuthors && (
                       <p
@@ -154,6 +171,9 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                             ? artistClass
                             : `${authorOnlyClass} ${showNumbers ? "mt-0.5" : ""}`
                         }
+                        style={{
+                          fontSize: `${(showSongs ? authorSize : authorOnlySize) * sizes.authors / 100}rem`,
+                        }}
                       >
                         {track.artist}
                       </p>

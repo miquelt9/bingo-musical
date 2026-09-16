@@ -68,7 +68,7 @@ export interface BingoCard {
 }
 
 export type { BingoCellContentSelection } from "../lib/bingo/cellContent";
-import type { BingoCellContentSelection } from "../lib/bingo/cellContent";
+import type { BingoCellContentSelection, BingoCellContentSizes } from "../lib/bingo/cellContent";
 
 export interface BingoCardOptions {
   deckName: string;
@@ -79,6 +79,8 @@ export interface BingoCardOptions {
   bingoPercent: number;
   /** What each filled cell shows on preview / print / PDF. */
   cellContent?: BingoCellContentSelection;
+  /** Relative font sizes for number, song title, and author text (100 = default). */
+  cellContentSizes?: BingoCellContentSizes;
   /** Share URL printed under a QR code so players can reopen the deck. */
   shareUrl?: string;
 }

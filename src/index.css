@@ -1434,6 +1434,12 @@
     display: none !important;
   }
 
+  .bingo-card-preview-cell:not(.bingo-blank-tile) {
+    background-color: #f4f4f5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   .page-break-after-always {
     page-break-after: always;
     break-after: page;

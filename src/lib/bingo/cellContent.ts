@@ -8,6 +8,34 @@ export interface BingoCellContentSelection {
   authors: boolean;
 }
 
+export interface BingoCellContentSizes {
+  numbers: number;
+  songs: number;
+  authors: number;
+}
+
+export const DEFAULT_CELL_CONTENT_SIZES: BingoCellContentSizes = {
+  numbers: 100,
+  songs: 100,
+  authors: 100,
+};
+
+export function normalizeCellContentSizes(
+  sizes: Partial<BingoCellContentSizes> | null | undefined
+): BingoCellContentSizes {
+  return {
+    numbers: clampCellContentSize(sizes?.numbers),
+    songs: clampCellContentSize(sizes?.songs),
+    authors: clampCellContentSize(sizes?.authors),
+  };
+}
+
+function clampCellContentSize(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(150, Math.max(50, value))
+    : 100;
+}
+
 export const CELL_CONTENT_KINDS: readonly BingoCellContentKind[] = [
   "numbers",
   "songs",

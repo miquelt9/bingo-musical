@@ -8,8 +8,11 @@ import {
   BingoCellContentSelection,
   CELL_CONTENT_KINDS,
   DEFAULT_CELL_CONTENT,
+  DEFAULT_CELL_CONTENT_SIZES,
+  BingoCellContentSizes,
   cellContentKindLabel,
   cellContentPool,
+  normalizeCellContentSizes,
   parseStoredCellContent,
   toggleCellContent,
   usesAuthorPool,
@@ -65,6 +68,7 @@ interface CardSettings {
   cardCount: number;
   gridSize: number;
   cellContent: BingoCellContentSelection;
+  cellContentSizes: BingoCellContentSizes;
   includeMasterList: boolean;
 }
 
@@ -89,6 +93,7 @@ export const CardsPage: React.FC = () => {
   const [cardCount, setCardCount] = useState<number>(10);
   const [gridSize, setGridSize] = useState<number>(5);
   const [cellContent, setCellContent] = useState<BingoCellContentSelection>(DEFAULT_CELL_CONTENT);
+  const [cellContentSizes, setCellContentSizes] = useState<BingoCellContentSizes>(DEFAULT_CELL_CONTENT_SIZES);
   const [includeMasterList, setIncludeMasterList] = useState(true);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
@@ -151,8 +156,9 @@ export const CardsPage: React.FC = () => {
       bingoPercent: BINGO_PERCENT,
       cellContent,
       shareUrl: shareUrl ?? undefined,
+      cellContentSizes,
     };
-  }, [deck, customTitle, cardCount, gridSize, cellContent, shareUrl]);
+  }, [deck, customTitle, cardCount, gridSize, cellContent, cellContentSizes, shareUrl]);
 
   const layoutKeyRef = useRef("");
 
@@ -165,6 +171,7 @@ export const CardsPage: React.FC = () => {
       if (typeof stored.cardCount === "number") setCardCount(stored.cardCount);
       const parsedContent = parseStoredCellContent(stored.cellContent) ?? DEFAULT_CELL_CONTENT;
       setCellContent(parsedContent);
+      setCellContentSizes(normalizeCellContentSizes(stored.cellContentSizes));
       const poolSize = cellContentPool(deck.tracks, parsedContent).length;
       const sizeCandidate =
         typeof stored.gridSize === "number" ? stored.gridSize : getLargestValidGridSize(poolSize);
@@ -185,12 +192,12 @@ export const CardsPage: React.FC = () => {
     try {
       sessionStorage.setItem(
         `${CARD_SETTINGS_KEY}.${deck.id}`,
-        JSON.stringify({ cardCount, gridSize, cellContent, includeMasterList } satisfies CardSettings)
+        JSON.stringify({ cardCount, gridSize, cellContent, cellContentSizes, includeMasterList } satisfies CardSettings)
       );
     } catch {
       // ignore
     }
-  }, [deck?.id, cardCount, gridSize, cellContent, includeMasterList]);
+  }, [deck?.id, cardCount, gridSize, cellContent, cellContentSizes, includeMasterList]);
 
   useEffect(() => {
     setActivePreviewIndex((prev) => (cards.length === 0 ? 0 : Math.min(prev, cards.length - 1)));
@@ -304,6 +311,7 @@ export const CardsPage: React.FC = () => {
           ...cardOptions,
           tracks: deck.tracks,
           cellContent,
+          cellContentSizes,
           shareUrl: shareUrl ?? undefined,
           includeMasterList,
         },
@@ -505,17 +513,32 @@ export const CardsPage: React.FC = () => {
                 <p className="text-xs font-bold mb-1.5">Cell content</p>
                 <div className="flex flex-col gap-2">
                   {CELL_CONTENT_KINDS.map((kind) => (
-                    <label
-                      key={kind}
-                      className="flex items-center gap-2 text-xs font-bold cursor-pointer"
-                    >
+                    <div key={kind} className="flex items-center gap-2 text-xs font-bold">
+                      <label className="flex items-center gap-2 cursor-pointer min-w-[76px]">
+                        <input
+                          type="checkbox"
+                          checked={cellContent[kind]}
+                          onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
+                        />
+                        <span>{cellContentKindLabel(kind)}</span>
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={cellContent[kind]}
-                        onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
+                        type="range"
+                        min={50}
+                        max={150}
+                        step={5}
+                        value={cellContentSizes[kind]}
+                        disabled={!cellContent[kind]}
+                        onChange={(e) =>
+                          setCellContentSizes((prev) => ({ ...prev, [kind]: Number(e.target.value) }))
+                        }
+                        aria-label={`${cellContentKindLabel(kind)} size`}
+                        className="flex-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                       />
-                      <span>{cellContentKindLabel(kind)}</span>
-                    </label>
+                      <span className="w-10 text-right text-[10px] font-normal text-muted">
+                        {cellContentSizes[kind]}%
+                      </span>
+                    </div>
                   ))}
                 </div>
                 <p className="text-[11px] text-muted mt-1.5">
@@ -714,6 +737,7 @@ export const CardsPage: React.FC = () => {
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
                 cellContent={cellContent}
+                cellContentSizes={cellContentSizes}
                 qrDataUrl={qrDataUrl}
                 interactiveMarks={false}
               />
@@ -744,6 +768,7 @@ export const CardsPage: React.FC = () => {
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
                 cellContent={cellContent}
+                cellContentSizes={cellContentSizes}
                 qrDataUrl={qrDataUrl}
                 interactiveMarks={false}
               />
