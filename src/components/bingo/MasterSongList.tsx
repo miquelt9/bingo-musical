@@ -18,7 +18,7 @@ export const MasterSongList: React.FC<MasterSongListProps> = ({
   return (
     <div className="bg-white text-zinc-900 p-6 sm:p-8 border border-zinc-200 max-w-3xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full">
       <div className="text-center mb-5 print:mb-4">
-        <h2 className="text-2xl font-black tracking-tight text-zinc-950 uppercase print:text-xl">
+        <h2 className="text-2xl font-black tracking-tight text-zinc-950 uppercase whitespace-pre-line print:text-xl">
           {eventTitle}
         </h2>
         <p className="text-sm text-zinc-500 font-medium mt-1">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Button, Input, Window } from "@miquelt9/pc-ui";
+import { Button, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track } from "../types/deck";
 import { generateBingoCards, GRID_SIZES, cellCount } from "../lib/bingo/generateCards";
@@ -39,6 +39,13 @@ import { buildSharedDeckUrl } from "../lib/share/deckShare";
 import { generateQrDataUrl } from "../lib/bingo/qr";
 import { estimateBingoTimes, formatEstimateDraws, formatEstimateDuration } from "../lib/bingo/estimator";
 import {
+  DEFAULT_PDF_APPEARANCE,
+  PdfAppearanceOptions,
+  PdfFontFamily,
+  PdfThemePreset,
+  PdfTileStyle,
+} from "../lib/bingo/pdfAppearance";
+import {
   isShareApiConfigured,
   publishSharedDeck,
 } from "../lib/share/sharedDecksApi";
@@ -55,26 +62,68 @@ import {
   ListOrdered,
   Check,
   AlertCircle,
+  Palette,
+  ImagePlus,
+  Trash2,
 } from "lucide-react";
 
 const CARD_SETTINGS_KEY = "bingo.cards.settings";
 
 const BINGO_PERCENT = 100;
-const EVENT_TITLE_MAX = 80;
+const EVENT_TITLE_MAX = 160;
+const MAX_BACKGROUND_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_BACKGROUND_EDGE = 2048;
 
 type PrintJob = "cards" | "master" | "all";
 
 interface CardSettings {
+  version?: 2;
   cardCount: number;
   gridSize: number;
   cellContent: BingoCellContentSelection;
   cellContentSizes: BingoCellContentSizes;
   includeMasterList: boolean;
+  appearance?: PdfAppearanceOptions;
+}
+
+const DEFAULT_APPEARANCE: PdfAppearanceOptions = {
+  ...DEFAULT_PDF_APPEARANCE,
+};
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read the image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function downsampleBackground(file: File): Promise<string> {
+  const original = await readFileAsDataUrl(file);
+  const image = new Image();
+  image.src = original;
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Could not decode the selected image."));
+  });
+
+  const scale = Math.min(1, MAX_BACKGROUND_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return original;
+  context.drawImage(image, 0, 0, width, height);
+  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  return canvas.toDataURL(outputType, outputType === "image/jpeg" ? 0.84 : undefined);
 }
 
 function readCardSettings(deckId: string): Partial<CardSettings> | null {
   try {
-    const raw = sessionStorage.getItem(`${CARD_SETTINGS_KEY}.${deckId}`);
+    const raw = localStorage.getItem(`${CARD_SETTINGS_KEY}.${deckId}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CardSettings>;
     return parsed;
@@ -95,6 +144,7 @@ export const CardsPage: React.FC = () => {
   const [cellContent, setCellContent] = useState<BingoCellContentSelection>(DEFAULT_CELL_CONTENT);
   const [cellContentSizes, setCellContentSizes] = useState<BingoCellContentSizes>(DEFAULT_CELL_CONTENT_SIZES);
   const [includeMasterList, setIncludeMasterList] = useState(true);
+  const [appearance, setAppearance] = useState<PdfAppearanceOptions>(DEFAULT_APPEARANCE);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
@@ -102,6 +152,7 @@ export const CardsPage: React.FC = () => {
   const [printJob, setPrintJob] = useState<PrintJob>("all");
   const [pendingPrint, setPendingPrint] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
 
   const [pdfError, setPdfError] = useState<string | null>(null);
 
@@ -157,8 +208,9 @@ export const CardsPage: React.FC = () => {
       cellContent,
       shareUrl: shareUrl ?? undefined,
       cellContentSizes,
+      appearance,
     };
-  }, [deck, customTitle, cardCount, gridSize, cellContent, cellContentSizes, shareUrl]);
+  }, [deck, customTitle, cardCount, gridSize, cellContent, cellContentSizes, shareUrl, appearance]);
 
   const layoutKeyRef = useRef("");
 
@@ -182,6 +234,11 @@ export const CardsPage: React.FC = () => {
       if (typeof stored.includeMasterList === "boolean") {
         setIncludeMasterList(stored.includeMasterList);
       }
+      if (stored.appearance && typeof stored.appearance === "object") {
+        setAppearance({ ...DEFAULT_APPEARANCE, ...stored.appearance });
+      } else {
+        setAppearance(DEFAULT_APPEARANCE);
+      }
     } else if (trackCount > 0) {
       setGridSize(getLargestValidGridSize(trackCount));
     }
@@ -190,14 +247,22 @@ export const CardsPage: React.FC = () => {
   useEffect(() => {
     if (!deck) return;
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         `${CARD_SETTINGS_KEY}.${deck.id}`,
-        JSON.stringify({ cardCount, gridSize, cellContent, cellContentSizes, includeMasterList } satisfies CardSettings)
+        JSON.stringify({
+          version: 2,
+          cardCount,
+          gridSize,
+          cellContent,
+          cellContentSizes,
+          includeMasterList,
+          appearance,
+        } satisfies CardSettings)
       );
     } catch {
       // ignore
     }
-  }, [deck?.id, cardCount, gridSize, cellContent, cellContentSizes, includeMasterList]);
+  }, [deck?.id, cardCount, gridSize, cellContent, cellContentSizes, includeMasterList, appearance]);
 
   useEffect(() => {
     setActivePreviewIndex((prev) => (cards.length === 0 ? 0 : Math.min(prev, cards.length - 1)));
@@ -293,9 +358,42 @@ export const CardsPage: React.FC = () => {
     setActivePreviewIndex(0);
   };
 
+  const handleBackgroundUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast({ title: "Unsupported image", message: "Choose a PNG, JPEG, or WebP image.", duration: 5000 });
+      return;
+    }
+    if (file.size > MAX_BACKGROUND_FILE_BYTES) {
+      showToast({ title: "Image is too large", message: "Choose an image smaller than 5 MB.", duration: 5000 });
+      return;
+    }
+    try {
+      const source = await downsampleBackground(file);
+      setAppearance((prev) => ({
+        ...prev,
+        background: {
+          source,
+          mode: prev.background?.mode ?? "cardWatermark",
+          fit: prev.background?.fit ?? "cover",
+          opacity: prev.background?.opacity ?? 0.14,
+        },
+      }));
+    } catch (error) {
+      showToast({
+        title: "Background upload failed",
+        message: error instanceof Error ? error.message : "The image could not be prepared.",
+        duration: 7000,
+      });
+    }
+  };
+
+  const resetAppearance = () => setAppearance(DEFAULT_APPEARANCE);
+
   const handleDownloadPdf = async () => {
     if (!deck || !cardOptions || cards.length === 0 || isExportingPdf) return;
     setIsExportingPdf(true);
+    setPdfProgress({ current: 0, total: cards.length });
 
     const loadingToastId = showToast({
       title: "Generating PDF",
@@ -315,7 +413,7 @@ export const CardsPage: React.FC = () => {
           shareUrl: shareUrl ?? undefined,
           includeMasterList,
         },
-        () => {}
+        (current, total) => setPdfProgress({ current, total })
       );
       trackEvent("cards_printed", "cards", { output: "pdf" });
       dismissToast(loadingToastId);
@@ -338,7 +436,7 @@ export const CardsPage: React.FC = () => {
       });
     } finally {
       setIsExportingPdf(false);
-
+      setPdfProgress(null);
     }
   };
 
@@ -391,7 +489,9 @@ export const CardsPage: React.FC = () => {
   const showCardsInPrint = printJob === "cards" || printJob === "all";
   const eventTitle = customTitle || deck.name;
 
-  const pdfButtonLabel = "Download PDF cards";
+  const pdfButtonLabel = pdfProgress
+    ? `Generating ${pdfProgress.current}/${pdfProgress.total}`
+    : "Download PDF cards";
 
   const previewEmptyState = (
     <Window title="Preview">
@@ -427,6 +527,21 @@ export const CardsPage: React.FC = () => {
         isLoadingDeezerPreviews={Boolean(deezerHydration)}
         deezerPreviewProgress={deezerHydration}
       />
+
+      {pdfProgress && (
+        <div className="pc-bevel-inset p-3 space-y-1" aria-live="polite">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span>Preparing PDF</span>
+            <span className="text-muted">{pdfProgress.current} / {pdfProgress.total} cards</span>
+          </div>
+          <div className="h-2 bg-zinc-200 overflow-hidden rounded-full">
+            <div
+              className="h-full bg-[var(--pc-titlebar-bg)] transition-[width] duration-150"
+              style={{ width: `${pdfProgress.total > 0 ? Math.round((pdfProgress.current / pdfProgress.total) * 100) : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {isMobile ? (
         <PageHeader
@@ -495,19 +610,223 @@ export const CardsPage: React.FC = () => {
             <div className="space-y-4">
               <label className="block text-xs font-bold">
                 Game / Event Title
-                <Input
-                  type="text"
-                  className="w-full mt-1"
+                <textarea
+                  className="w-full mt-1 pc-input min-h-[68px] resize-y"
                   value={customTitle}
                   maxLength={EVENT_TITLE_MAX}
+                  rows={2}
                   onChange={(e) => setCustomTitle(e.target.value)}
                   onBlur={() => setCustomTitle((current) => current.trim())}
                   placeholder="e.g. Friday Night 80s Bingo"
                 />
                 <span className="block mt-1 text-[11px] font-normal text-muted text-right">
-                  {customTitle.length}/{EVENT_TITLE_MAX}
+                  {customTitle.length}/{EVENT_TITLE_MAX} · line breaks supported
                 </span>
               </label>
+
+              <div className="border-t border-[var(--pc-border)] pt-3 space-y-3">
+                <p className="text-xs font-bold inline-flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Appearance
+                </p>
+
+                <label className="block text-xs font-bold">
+                  Theme
+                  <select
+                    className="pc-select w-full mt-1"
+                    value={appearance.themePreset ?? "default"}
+                    onChange={(e) =>
+                      setAppearance((prev) => ({
+                        ...prev,
+                        themePreset: e.target.value as PdfThemePreset,
+                        headerStyle: e.target.value === "christmas" ? "festive" : prev.headerStyle,
+                      }))
+                    }
+                  >
+                    <option value="default">Default</option>
+                    <option value="christmas">Christmas / Holiday</option>
+                    <option value="colorful">Colorful / Dynamic</option>
+                  </select>
+                </label>
+
+                <label className="block text-xs font-bold">
+                  Header style
+                  <select
+                    className="pc-select w-full mt-1"
+                    value={appearance.headerStyle ?? (appearance.themePreset === "christmas" ? "festive" : "plain")}
+                    onChange={(e) =>
+                      setAppearance((prev) => ({
+                        ...prev,
+                        headerStyle: e.target.value as "plain" | "festive",
+                      }))
+                    }
+                  >
+                    <option value="plain">Plain</option>
+                    <option value="festive">Festive decorations</option>
+                  </select>
+                </label>
+
+                <label className="block text-xs font-bold">
+                  Tile style
+                  <select
+                    className="pc-select w-full mt-1"
+                    value={appearance.tileStyle ?? "rounded"}
+                    onChange={(e) =>
+                      setAppearance((prev) => ({
+                        ...prev,
+                        tileStyle: e.target.value as PdfTileStyle,
+                        tileGapMm: e.target.value === "compactSquare" ? 0 : prev.tileGapMm ?? 2,
+                      }))
+                    }
+                  >
+                    <option value="square">Square</option>
+                    <option value="rounded">Rounded square</option>
+                    <option value="circle">Circle</option>
+                    <option value="compactSquare">Compact square (no gap)</option>
+                  </select>
+                </label>
+
+                <div>
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <label htmlFor="tile-opacity">Tile fill opacity</label>
+                    <span className="font-normal text-muted">{Math.round((appearance.tileOpacity ?? 1) * 100)}%</span>
+                  </div>
+                  <input
+                    id="tile-opacity"
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={appearance.tileOpacity ?? 1}
+                    onChange={(e) => setAppearance((prev) => ({ ...prev, tileOpacity: Number(e.target.value) }))}
+                    className="w-full cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <label htmlFor="tile-gap">Tile gap</label>
+                    <span className="font-normal text-muted">
+                      {appearance.tileStyle === "compactSquare" ? "0 mm" : `${appearance.tileGapMm ?? 2} mm`}
+                    </span>
+                  </div>
+                  <input
+                    id="tile-gap"
+                    type="range"
+                    min={0}
+                    max={6}
+                    step={0.5}
+                    disabled={appearance.tileStyle === "compactSquare"}
+                    value={appearance.tileStyle === "compactSquare" ? 0 : appearance.tileGapMm ?? 2}
+                    onChange={(e) => setAppearance((prev) => ({ ...prev, tileGapMm: Number(e.target.value) }))}
+                    className="w-full cursor-pointer disabled:opacity-40"
+                  />
+                </div>
+
+                <label className="block text-xs font-bold">
+                  Title font
+                  <select
+                    className="pc-select w-full mt-1"
+                    value={appearance.titleFontFamily ?? "helvetica"}
+                    onChange={(e) => setAppearance((prev) => ({ ...prev, titleFontFamily: e.target.value as PdfFontFamily }))}
+                  >
+                    <option value="helvetica">Helvetica / clean</option>
+                    <option value="times">Times / classic</option>
+                    <option value="courier">Courier / retro</option>
+                  </select>
+                </label>
+
+                <label className="block text-xs font-bold">
+                  Cell font
+                  <select
+                    className="pc-select w-full mt-1"
+                    value={appearance.cellFontFamily ?? "helvetica"}
+                    onChange={(e) => setAppearance((prev) => ({ ...prev, cellFontFamily: e.target.value as PdfFontFamily }))}
+                  >
+                    <option value="helvetica">Helvetica / legible</option>
+                    <option value="times">Times / classic</option>
+                    <option value="courier">Courier / mono</option>
+                  </select>
+                </label>
+
+                <div>
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <label htmlFor="title-size">Title size</label>
+                    <span className="font-normal text-muted">{appearance.titleSizePt ?? 22} pt</span>
+                  </div>
+                  <input
+                    id="title-size"
+                    type="range"
+                    min={12}
+                    max={36}
+                    step={1}
+                    value={appearance.titleSizePt ?? 22}
+                    onChange={(e) => setAppearance((prev) => ({ ...prev, titleSizePt: Number(e.target.value) }))}
+                    className="w-full cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-bold inline-flex items-center gap-2">
+                    <ImagePlus className="w-4 h-4" />
+                    Card background
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="block w-full text-xs"
+                    onChange={(e) => void handleBackgroundUpload(e.target.files?.[0])}
+                  />
+                  {appearance.background && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="pc-select flex-1"
+                          value={appearance.background.mode}
+                          onChange={(e) =>
+                            setAppearance((prev) => ({
+                              ...prev,
+                              background: prev.background
+                                ? { ...prev.background, mode: e.target.value as "fullPage" | "cardWatermark" }
+                                : prev.background,
+                            }))
+                          }
+                        >
+                          <option value="cardWatermark">Card watermark</option>
+                          <option value="fullPage">Full card page</option>
+                        </select>
+                        <Button type="button" onClick={() => setAppearance((prev) => ({ ...prev, background: undefined }))} title="Remove background">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <label className="block text-xs font-bold">
+                        Background opacity · {Math.round((appearance.background.opacity ?? 0.14) * 100)}%
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={appearance.background.opacity ?? 0.14}
+                          onChange={(e) =>
+                            setAppearance((prev) => ({
+                              ...prev,
+                              background: prev.background
+                                ? { ...prev.background, opacity: Number(e.target.value) }
+                                : prev.background,
+                            }))
+                          }
+                          className="w-full cursor-pointer"
+                        />
+                      </label>
+                    </>
+                  )}
+                  <p className="text-[11px] text-muted">Backgrounds apply to card pages only and stay local to this browser.</p>
+                </div>
+
+                <Button type="button" className="w-full" onClick={resetAppearance}>
+                  Reset appearance
+                </Button>
+              </div>
 
               <div>
                 <p className="text-xs font-bold mb-1.5">Cell content</p>
@@ -740,6 +1059,8 @@ export const CardsPage: React.FC = () => {
                 cellContentSizes={cellContentSizes}
                 qrDataUrl={qrDataUrl}
                 interactiveMarks={false}
+                appearance={appearance}
+                cardIndex={activePreviewIndex}
               />
             </Window>
           ) : (
@@ -755,8 +1076,8 @@ export const CardsPage: React.FC = () => {
               <MasterSongList
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
-                shareUrl={null}
-                qrDataUrl={null}
+                shareUrl={shareUrl}
+                qrDataUrl={qrDataUrl}
               />
             </div>
           )}
@@ -771,6 +1092,8 @@ export const CardsPage: React.FC = () => {
                 cellContentSizes={cellContentSizes}
                 qrDataUrl={qrDataUrl}
                 interactiveMarks={false}
+                appearance={appearance}
+                cardIndex={cards.indexOf(c)}
               />
             </div>
           ))}

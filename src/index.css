@@ -61,6 +61,11 @@
   }
 }
 
+.bingo-card-preview-print-surface {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 .pc-workspace-scroll {
   flex: 1 1 0;
   min-height: 0;
