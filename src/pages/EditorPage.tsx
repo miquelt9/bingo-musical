@@ -325,14 +325,14 @@ export const EditorPage: React.FC = () => {
     };
   }, [deck?.id, deck?.tracks.length, isMatching, isAutoFixing, updateDeck, setBackgroundTask]);
 
-  const handleAutoMatchAll = useCallback(async () => {
-    if (!deck) return;
+  const runAutoMatch = useCallback(async (tracksToMatch: Track[]) => {
+    if (!deck || tracksToMatch.length === 0) return;
 
     setIsMatching(true);
     cancelMatchingRef.current = false;
     const taskId = `auto-match:${deck.id}`;
     const taskLabel = `Matching ${deck.provider === "deezer" ? "Deezer" : "YouTube"} songs`;
-    setBackgroundTask(taskId, { label: taskLabel, completed: 0, total: deck.tracks.length });
+    setBackgroundTask(taskId, { label: taskLabel, completed: 0, total: tracksToMatch.length });
 
     try {
       const onProgress = (progress: BatchMatchProgress, updatedTrack: Track) => {
@@ -344,24 +344,27 @@ export const EditorPage: React.FC = () => {
         });
         setDeck((current) => {
           if (!current) return null;
-          const nextTracks = current.tracks.map((t) => (t.id === updatedTrack.id ? updatedTrack : t));
+          const nextTracks = current.tracks.map((track) => track.id === updatedTrack.id ? updatedTrack : track);
           const nextDeck = { ...current, tracks: nextTracks };
           if (!current.collaboration) updateDeck(nextDeck);
           return nextDeck;
         });
       };
       const updatedTracks = deck.provider === "deezer"
-        ? await batchMatchDeezerTracks(deck.tracks, 2, onProgress, () => cancelMatchingRef.current)
-        : await batchMatchTracks(deck.tracks, 2, onProgress, () => cancelMatchingRef.current);
+        ? await batchMatchDeezerTracks(tracksToMatch, 2, onProgress, () => cancelMatchingRef.current)
+        : await batchMatchTracks(tracksToMatch, 2, onProgress, () => cancelMatchingRef.current);
+      const updatedById = new Map(updatedTracks.map((track) => [track.id, track]));
 
       setDeck((current) => {
         if (!current) return null;
-        const finalDeck = { ...current, tracks: updatedTracks };
+        const finalDeck = {
+          ...current,
+          tracks: current.tracks.map((track) => updatedById.get(track.id) ?? track),
+        };
         if (current.collaboration) {
-          const desiredTracks = new Map(updatedTracks.map((track) => [collaborativeTrackKey(track), track]));
           collaborativeMutationRef.current((latest) => ({
             ...latest,
-            tracks: latest.tracks.map((track) => desiredTracks.get(collaborativeTrackKey(track)) ?? track),
+            tracks: latest.tracks.map((track) => updatedById.get(track.id) ?? track),
           }), "Matched songs were synced to the collaborative playlist.");
         } else {
           updateDeck(finalDeck);
@@ -376,6 +379,11 @@ export const EditorPage: React.FC = () => {
       setBackgroundTask(taskId, null);
     }
   }, [deck, updateDeck, setBackgroundTask]);
+
+  const handleAutoMatchAll = useCallback(() => {
+    if (!deck) return;
+    void runAutoMatch(deck.tracks);
+  }, [deck, runAutoMatch]);
 
   useEffect(() => {
     if (!deck || !autostartMatch || autostartMatchRef.current) return;
@@ -741,6 +749,11 @@ export const EditorPage: React.FC = () => {
     setShowAddTrackModal(false);
   };
 
+  const handleAfterBulkAdd = (tracks: Track[]) => {
+    handleCloseAddTrack();
+    void runAutoMatch(tracks);
+  };
+
   return (
     <div className="space-y-4">
       {isMobile ? (
@@ -1044,7 +1057,7 @@ export const EditorPage: React.FC = () => {
             existingVideoIds={deck.tracks.map((t) => getTrackSourceId(t))}
             onAddTrack={handleAddTrack}
             onAddTracks={handleAddTracks}
-            onAfterBulkAdd={handleCloseAddTrack}
+            onAfterBulkAdd={handleAfterBulkAdd}
           />
         </PcModal>
       )}

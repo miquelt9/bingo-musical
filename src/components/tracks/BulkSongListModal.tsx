@@ -8,7 +8,7 @@ import { PcModal } from "../ui/PcModal";
 interface BulkSongListModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdded?: () => void;
+  onAdded?: (tracks: Track[]) => void;
   onAddTrack: (track: Track) => void | Promise<boolean | void>;
   onAddTracks?: (tracks: Track[]) => void | Promise<boolean | void>;
 }
@@ -70,7 +70,7 @@ export const BulkSongListModal: React.FC<BulkSongListModalProps> = ({
         }
       }
       onClose();
-      onAdded?.();
+      onAdded?.(songsToAdd);
     } catch (err) {
       setError((err as Error).message || "Could not add the songs.");
     } finally {
@@ -88,8 +88,8 @@ export const BulkSongListModal: React.FC<BulkSongListModalProps> = ({
     >
       <div className="space-y-3 text-xs">
         <p>
-          Paste one song per line in <strong>Artist - Title</strong> format. The songs will be added as pending
-          tracks, then you can use <strong>Match all songs</strong> in the editor to find playable clips.
+          Paste one song per line in <strong>Artist - Title</strong> format. The songs will be added first,
+          then matched automatically in the background. You can keep editing while matches load.
         </p>
         <textarea
           value={songList}

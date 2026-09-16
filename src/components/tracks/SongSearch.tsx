@@ -31,7 +31,7 @@ interface SongSearchProps {
   /** Adds a batch of pending tracks from the bulk song-list flow. */
   onAddTracks?: (tracks: Track[]) => void | Promise<boolean | void>;
   onAfterAdd?: () => void;
-  onAfterBulkAdd?: () => void;
+  onAfterBulkAdd?: (tracks: Track[]) => void;
 }
 
 /** Stable-id track so preview play/stop state survives re-renders. */
