@@ -88,8 +88,8 @@ export const BulkSongListModal: React.FC<BulkSongListModalProps> = ({
     >
       <div className="space-y-3 text-xs">
         <p>
-          Paste one song per line in <strong>Artist - Title</strong> format. The songs will be added first,
-          then matched automatically in the background. You can keep editing while matches load.
+          Paste one song or search query per line. <strong>Artist - Title</strong> is supported, but plain
+          queries like <strong>amics tyets</strong> also work. Songs are added first, then matched in the background.
         </p>
         <textarea
           value={songList}

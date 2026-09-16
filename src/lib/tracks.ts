@@ -79,6 +79,7 @@ export interface ParsedSongList {
  *   Title by Artist
  *   Title, Artist
  *   Title<TAB>Artist
+ *   Any plain search query (artist and title in any order)
  */
 export function parseSongList(raw: string): ParsedSongList {
   const lines = raw

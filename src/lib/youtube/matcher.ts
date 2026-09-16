@@ -1,4 +1,5 @@
 import { Track } from "../../types/deck";
+import { defaultClipWindow } from "../tracks";
 import { guessTitleArtist, searchYoutubeVideos, YoutubeSearchHit } from "./search";
 import { checkHitsEmbeddability, isTrackUnplayable } from "./validator";
 
@@ -6,6 +7,7 @@ export interface MatchResult {
   videoId: string | null;
   videoTitle?: string;
   videoAuthor?: string;
+  videoLengthSeconds?: number;
   sourceInstance?: string;
   error?: string;
 }
@@ -22,22 +24,38 @@ function isUnknownArtist(artist: string): boolean {
   return /^unknown artist$/i.test(artist.trim());
 }
 
+function musicTokens(value: string): string[] {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length >= 2);
+}
+
+const MIN_AUTO_MATCH_DURATION_SECONDS = 15;
+
 /** Prevent auto-match from attaching a playable but unrelated search result. */
-function hitMatchesTrack(track: Pick<Track, "title" | "artist">, hit: YoutubeSearchHit): boolean {
-  const title = compactMusicText(track.title);
-  const resultText = compactMusicText(`${hit.title} ${hit.author}`);
-  if (!title || !resultText.includes(title)) return false;
+function hitMatchesTrack(track: Pick<Track, "title" | "artist" | "searchQuery">, hit: YoutubeSearchHit): boolean {
+  const query = isUnknownArtist(track.artist) ? track.searchQuery?.trim() || track.title : track.title;
+  const queryTokens = musicTokens(query);
+  const resultTokens = new Set(musicTokens(`${hit.title} ${hit.author}`));
+  if (queryTokens.length === 0 || !queryTokens.every((token) => resultTokens.has(token))) return false;
 
   if (isUnknownArtist(track.artist)) return true;
   const artist = compactMusicText(track.artist.split(/[,/&]/)[0].trim());
-  return Boolean(artist && resultText.includes(artist));
+  return Boolean(artist && compactMusicText(`${hit.title} ${hit.author}`).includes(artist));
 }
 
 async function findFirstPlayableHit(
-  track: Pick<Track, "title" | "artist">,
+  track: Pick<Track, "title" | "artist" | "searchQuery">,
   hits: YoutubeSearchHit[],
 ): Promise<YoutubeSearchHit | null> {
-  const matchingHits = hits.filter((hit) => hitMatchesTrack(track, hit));
+  const matchingHits = hits
+    .filter((hit) => hitMatchesTrack(track, hit))
+    .filter((hit) => hit.lengthSeconds <= 0 || hit.lengthSeconds >= MIN_AUTO_MATCH_DURATION_SECONDS);
   if (matchingHits.length === 0) return null;
   const statuses = await checkHitsEmbeddability(matchingHits);
   return matchingHits.find((hit) => statuses.get(hit.videoId)?.embeddable) ?? null;
@@ -93,6 +111,7 @@ export async function matchTrackWithYoutube(track: Pick<Track, "title" | "artist
       videoId: embeddableHit.videoId,
       videoTitle: embeddableHit.title,
       videoAuthor: embeddableHit.author,
+      videoLengthSeconds: embeddableHit.lengthSeconds,
     };
   }
 
@@ -153,12 +172,22 @@ export async function batchMatchTracks(
       if (shouldCancel && shouldCancel()) break;
 
       if (match.videoId) {
+        const guessed = match.videoTitle
+          ? guessTitleArtist(match.videoTitle, match.videoAuthor ?? "")
+          : null;
+        const useProviderMetadata = isUnknownArtist(track.artist) && guessed;
+        const matchedDurationMs = match.videoLengthSeconds && match.videoLengthSeconds > 0
+          ? match.videoLengthSeconds * 1000
+          : track.durationMs;
+        const useMatchedClipWindow = !track.media || track.matchStatus === "pending";
+        const matchedWindow = defaultClipWindow(matchedDurationMs);
         results[current.idx] = {
           ...track,
-          artist:
-            isUnknownArtist(track.artist) && match.videoTitle
-              ? guessTitleArtist(match.videoTitle, match.videoAuthor ?? "").artist
-              : track.artist,
+          title: useProviderMetadata ? guessed.title : track.title,
+          artist: useProviderMetadata ? guessed.artist : track.artist,
+          durationMs: useMatchedClipWindow ? matchedDurationMs : track.durationMs,
+          startTime: useMatchedClipWindow ? matchedWindow.startTime : track.startTime,
+          endTime: useMatchedClipWindow ? matchedWindow.endTime : track.endTime,
           media: match.videoId
             ? { provider: "youtube", id: match.videoId, providerTitle: match.videoTitle }
             : null,

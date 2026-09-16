@@ -28,6 +28,12 @@ function isUnknownArtist(artist: string): boolean {
   return /^unknown artist$/i.test(artist.trim());
 }
 
+function musicTokens(value: string): string[] {
+  return normalizeMusicText(value)
+    .split(" ")
+    .filter((token) => token.length >= 2);
+}
+
 export function chooseDeezerMatch(
   track: Track,
   candidates: DeezerTrackHit[],
@@ -43,16 +49,24 @@ export function chooseDeezerMatch(
     )[0];
   }
 
-  // A title-only bulk line has no artist to verify. It is still safe to match
-  // an exact title, but never fall back to an arbitrary playable result.
+  // A plain bulk line is a free-form search query, not necessarily the full
+  // provider title. Require every query token to be present in the candidate's
+  // title or artist, but never fall back to an arbitrary playable result.
   if (isUnknownArtist(track.artist)) {
-    const titleOnly = playable.filter(
-      (candidate) => normalizeMusicText(track.title) === normalizeMusicText(candidate.title),
-    );
-    if (titleOnly.length > 0) {
-      return [...titleOnly].sort((a, b) =>
-        Math.abs(a.durationMs - track.durationMs) - Math.abs(b.durationMs - track.durationMs)
-      )[0];
+    const queryTokens = musicTokens(track.searchQuery?.trim() || track.title);
+    const queryMatches = playable.filter((candidate) => {
+      const candidateTokens = new Set(musicTokens(`${candidate.title} ${candidate.artist}`));
+      return queryTokens.length > 0 && queryTokens.every((token) => candidateTokens.has(token));
+    });
+    if (queryMatches.length > 0) {
+      return [...queryMatches].sort((a, b) => {
+        const aTitleTokens = new Set(musicTokens(a.title));
+        const bTitleTokens = new Set(musicTokens(b.title));
+        const aTitleScore = queryTokens.filter((token) => aTitleTokens.has(token)).length;
+        const bTitleScore = queryTokens.filter((token) => bTitleTokens.has(token)).length;
+        if (aTitleScore !== bTitleScore) return bTitleScore - aTitleScore;
+        return Math.abs(a.durationMs - track.durationMs) - Math.abs(b.durationMs - track.durationMs);
+      })[0];
     }
   }
 
@@ -65,9 +79,11 @@ export async function matchTrackToDeezer(track: Track, signal?: AbortSignal): Pr
   const match = chooseDeezerMatch(track, candidates);
   if (!match) return { ...track, media: null, matchStatus: "pending" };
   const resolved = deezerHitToTrack(match);
+  const useProviderMetadata = isUnknownArtist(track.artist);
   return {
     ...track,
-    artist: isUnknownArtist(track.artist) ? resolved.artist : track.artist,
+    title: useProviderMetadata ? resolved.title : track.title,
+    artist: useProviderMetadata ? resolved.artist : track.artist,
     album: resolved.album,
     albumArtUrl: resolved.albumArtUrl,
     durationMs: resolved.durationMs,
@@ -153,9 +169,11 @@ export async function batchMatchDeezerTracks(
               const resolved = deezerHitToTrack(match);
               const keepClipWindow =
                 track.media?.provider === "deezer" && track.media.id === match.id;
+              const useProviderMetadata = isUnknownArtist(track.artist);
               return {
                 ...track,
-                artist: isUnknownArtist(track.artist) ? resolved.artist : track.artist,
+                title: useProviderMetadata ? resolved.title : track.title,
+                artist: useProviderMetadata ? resolved.artist : track.artist,
                 album: resolved.album,
                 albumArtUrl: resolved.albumArtUrl,
                 durationMs: resolved.durationMs,
