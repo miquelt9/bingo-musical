@@ -75,7 +75,6 @@ export const HomePage: React.FC = () => {
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
 
   const [deckNamePrompt, setDeckNamePrompt] = useState<{ provider: MusicProvider; defaultName: string } | null>(null);
-  const [newDeckProvider, setNewDeckProvider] = useState<MusicProvider>("youtube");
   const [showOnboarding, setShowOnboarding] = useState(
     () => !localStorage.getItem(ONBOARDING_KEY)
   );
@@ -123,7 +122,6 @@ export const HomePage: React.FC = () => {
   };
 
   const handleCreateEmptyDeck = (provider: MusicProvider = "youtube") => {
-    setNewDeckProvider(provider);
     setDeckNamePrompt({
       provider,
       defaultName: getNextDeckName(decks.map((d) => d.name)),
@@ -134,7 +132,7 @@ export const HomePage: React.FC = () => {
     if (!deckNamePrompt) return;
     const { defaultName } = deckNamePrompt;
     const name = entered.trim() || defaultName;
-    const provider = newDeckProvider;
+    const provider = deckNamePrompt.provider;
     const now = new Date().toISOString();
     const saved = createDeck({
       schemaVersion: 2,
@@ -454,25 +452,29 @@ export const HomePage: React.FC = () => {
       )}
 
       <div className="home-decks-grid">
-        <button
-          type="button"
-          className="home-deck-add home-deck-add--providers"
-          onClick={() => handleCreateEmptyDeck()}
-        >
+        <div className="home-deck-add home-deck-add--providers">
           <Plus className="w-5 h-5 shrink-0 opacity-80" aria-hidden />
           <span className="font-semibold text-sm">Empty deck</span>
           <span className="text-xs text-muted">Choose a music provider</span>
-          <div className="home-deck-add-options" aria-hidden="true">
-            <span className="home-deck-add-option">
-              <Music2 className="w-5 h-5 opacity-80" />
+          <div className="home-deck-add-options">
+            <button
+              type="button"
+              className="home-deck-add-option"
+              onClick={() => handleCreateEmptyDeck("youtube")}
+            >
+              <Music2 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">YouTube</span>
-            </span>
-            <span className="home-deck-add-option">
-              <Disc3 className="w-5 h-5 opacity-80" />
+            </button>
+            <button
+              type="button"
+              className="home-deck-add-option"
+              onClick={() => handleCreateEmptyDeck("deezer")}
+            >
+              <Disc3 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">Deezer</span>
-            </span>
+            </button>
           </div>
-        </button>
+        </div>
 
         {sortedDecks.map(renderDeckCard)}
       </div>
@@ -494,8 +496,8 @@ export const HomePage: React.FC = () => {
                   type="radio"
                   name="new-deck-provider"
                   value="youtube"
-                  checked={newDeckProvider === "youtube"}
-                  onChange={() => setNewDeckProvider("youtube")}
+                  checked={deckNamePrompt.provider === "youtube"}
+                  onChange={() => setDeckNamePrompt((current) => current ? { ...current, provider: "youtube" } : current)}
                   className="mt-1"
                 />
                 <span className="flex items-start gap-2 text-sm">
@@ -508,13 +510,13 @@ export const HomePage: React.FC = () => {
                   type="radio"
                   name="new-deck-provider"
                   value="deezer"
-                  checked={newDeckProvider === "deezer"}
-                  onChange={() => setNewDeckProvider("deezer")}
+                  checked={deckNamePrompt.provider === "deezer"}
+                  onChange={() => setDeckNamePrompt((current) => current ? { ...current, provider: "deezer" } : current)}
                   className="mt-1"
                 />
                 <span className="flex items-start gap-2 text-sm">
                   <Disc3 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
-                  <span><strong>Deezer</strong><span className="block text-xs text-muted">30-second previews, ad-free.</span></span>
+                  <span><strong>Deezer</strong><span className="block text-xs text-muted">Predefined 30-second previews, ad-free.</span></span>
                 </span>
               </label>
             </fieldset>
