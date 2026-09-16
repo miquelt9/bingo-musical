@@ -32,7 +32,7 @@ export function normalizeCellContentSizes(
 
 function clampCellContentSize(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(150, Math.max(50, value))
+    ? Math.min(120, Math.max(10, value))
     : 100;
 }
 

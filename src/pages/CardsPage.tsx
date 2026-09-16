@@ -524,8 +524,8 @@ export const CardsPage: React.FC = () => {
                       </label>
                       <input
                         type="range"
-                        min={50}
-                        max={150}
+                        min={10}
+                        max={120}
                         step={5}
                         value={cellContentSizes[kind]}
                         disabled={!cellContent[kind]}

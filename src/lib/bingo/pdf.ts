@@ -266,6 +266,11 @@ export async function generateBingoPdf(
             const artistLineH = artistFont * 0.42;
             const authorOnlyLineH = authorOnlyFont * 0.45;
             const numberLineH = numberFont * 0.4;
+            const numberTextGap = Math.max(
+              0.8,
+              Math.min(2.5, ((sizes.numbers + (showSongs ? sizes.songs : sizes.authors)) / 100) * 1.2)
+            );
+            const songAuthorGap = Math.max(0.5, Math.min(2, ((sizes.songs + sizes.authors) / 100) * 0.5));
 
             let titleLines: string[] = [];
             let artistLines: string[] = [];
@@ -288,8 +293,8 @@ export async function generateBingoPdf(
               totalContentHeight +=
                 artistLines.length * (showSongs ? artistLineH : authorOnlyLineH);
             }
-            if ((showSongs || showAuthors) && showNumbers) totalContentHeight += 1.5;
-            else if (showSongs && showAuthors) totalContentHeight += 0.5;
+            if ((showSongs || showAuthors) && showNumbers) totalContentHeight += numberTextGap;
+            if (showSongs && showAuthors) totalContentHeight += songAuthorGap;
 
             let textStartY = cellY + (cellHeight - totalContentHeight) / 2;
 
@@ -299,7 +304,7 @@ export async function generateBingoPdf(
               doc.setFontSize(numberFont);
               doc.setTextColor(24, 24, 27);
               doc.text(String(cellNumber), cellX + cellSize / 2, textStartY, { align: "center" });
-              textStartY += numberLineH * 0.35 + (showSongs || showAuthors ? 1.2 : 0);
+              textStartY += numberLineH * 0.35 + (showSongs || showAuthors ? numberTextGap : 0);
             }
 
             if (showSongs) {
@@ -317,7 +322,7 @@ export async function generateBingoPdf(
             }
 
             if (showAuthors) {
-              if (showSongs) textStartY += 0.5;
+              if (showSongs) textStartY += songAuthorGap;
               else textStartY += authorOnlyLineH;
               doc.setFont("helvetica", showSongs ? "normal" : "bold");
               doc.setFontSize(showSongs ? artistFont : authorOnlyFont);

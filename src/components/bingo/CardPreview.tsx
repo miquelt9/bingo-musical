@@ -45,6 +45,8 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   const songSize = gridSize >= 5 ? 0.6875 : 0.75;
   const authorSize = gridSize >= 5 ? 0.625 : 0.6875;
   const authorOnlySize = gridSize >= 5 ? 0.75 : 0.8125;
+  const contentGap = (firstSize: number, secondSize: number) =>
+    `${Math.max(1, Math.min(5, ((firstSize + secondSize) / 2) / 25))}px`;
 
   const [markedIndices, setMarkedIndices] = useState<Set<number>>(new Set());
 
@@ -158,8 +160,11 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                     )}
                     {showSongs && (
                       <p
-                        className={`${titleClass} ${showNumbers ? "mt-0.5" : ""}`}
-                        style={{ fontSize: `${songSize * sizes.songs / 100}rem` }}
+                        className={titleClass}
+                        style={{
+                          fontSize: `${songSize * sizes.songs / 100}rem`,
+                          marginTop: showNumbers ? contentGap(sizes.numbers, sizes.songs) : undefined,
+                        }}
                       >
                         {track.title}
                       </p>
@@ -173,6 +178,11 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                         }
                         style={{
                           fontSize: `${(showSongs ? authorSize : authorOnlySize) * sizes.authors / 100}rem`,
+                          marginTop: showSongs
+                            ? contentGap(sizes.songs, sizes.authors)
+                            : showNumbers
+                              ? contentGap(sizes.numbers, sizes.authors)
+                              : undefined,
                         }}
                       >
                         {track.artist}
