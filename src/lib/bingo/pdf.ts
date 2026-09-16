@@ -593,6 +593,16 @@ export async function generateBingoPdf(
 
     drawFestiveCellDecoration(doc, appearance, layout);
 
+    // Cover the watermark in tile gaps according to the tile opacity. At 100%,
+    // the complete grid surface is opaque, not just the individual tiles.
+    const gridBackdrop = appearance.themePreset === "default"
+      ? { r: 244, g: 244, b: 245 }
+      : mixColor(appearance.accentColor, { r: 255, g: 255, b: 255 }, 0.88);
+    doc.setFillColor(gridBackdrop.r, gridBackdrop.g, gridBackdrop.b);
+    withOpacity(doc, appearance.tileOpacity, () => {
+      drawShape(doc, appearance.tileStyle, layout.gridX, layout.gridY, layout.gridWidth, "F");
+    });
+
     for (let row = 0; row < gridSize; row++) {
       for (let col = 0; col < gridSize; col++) {
         const cellIdx = row * gridSize + col;

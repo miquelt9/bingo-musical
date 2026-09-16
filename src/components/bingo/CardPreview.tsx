@@ -136,6 +136,12 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     ? "font-bold text-[10px] sm:text-[12px] leading-tight line-clamp-3"
     : "font-bold text-[11px] sm:text-[12px] leading-tight line-clamp-3";
   const gapPx = resolved.tileStyle === "compactSquare" ? 0 : resolved.tileGapMm * 3.78;
+  const gridBackdrop = rgba(
+    resolved.themePreset === "default"
+      ? { r: 244, g: 244, b: 245 }
+      : { r: resolved.accentColor.r, g: resolved.accentColor.g, b: resolved.accentColor.b },
+    resolved.themePreset === "default" ? resolved.tileOpacity : 0.12 * resolved.tileOpacity
+  );
   const imageUrl = resolved.background ? backgroundUrl(resolved.background.source) : null;
   const rootStyle: React.CSSProperties = {
     fontFamily: cssFontFamily(resolved.cellFontFamily),
@@ -153,7 +159,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
 
   return (
     <div
-      className="bingo-card-preview-print-surface relative bg-white text-zinc-900 p-4 sm:p-8 border border-zinc-200 max-w-xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full overflow-hidden"
+      className="bingo-card-preview-print-surface relative bg-white text-zinc-900 p-4 sm:p-8 border border-zinc-200 max-w-xl mx-auto print:shadow-none print:border-none print:p-8 print:m-0 print:max-w-none print:w-full overflow-hidden"
       style={rootStyle}
     >
       {imageUrl && resolved.background?.mode === "fullPage" && (
@@ -211,6 +217,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
                 gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
                 gap: "var(--bingo-grid-gap)",
                 ["--bingo-grid-size" as string]: String(gridSize),
+                backgroundColor: gridBackdrop,
               }}
             >
               {card.grid.map((cell, index) => {
