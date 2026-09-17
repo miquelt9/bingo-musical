@@ -92,6 +92,7 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
   const [error, setError] = useState<string | null>(null);
   const [progressLabel, setProgressLabel] = useState("Searching…");
   const cancelRequestedRef = useRef(false);
+  const createRequestedRef = useRef(false);
   const createdDeckRef = useRef<Deck | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const taskId = `convert:${deck.id}:${targetProvider}`;
@@ -142,6 +143,7 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
     cancelRequestedRef.current = false;
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
+    createRequestedRef.current = false;
     createdDeckRef.current = null;
     setRows(deck.tracks.map((source) => ({ source, candidates: [], selected: null, status: "loading" })));
     setError(null);
@@ -204,10 +206,17 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
 
     void run();
     return () => {
+      // Creating the copy intentionally detaches this matching job from the modal.
+      // Keep it running so the pending rows in the new deck are filled in after
+      // navigation. Only an explicit cancel (or closing before creating a copy)
+      // should stop the search.
+      const shouldCancel = cancelRequestedRef.current || !createRequestedRef.current;
+      if (!shouldCancel) return;
+
       cancelled = true;
-      if (!createdDeckRef.current) cancelRequestedRef.current = true;
+      cancelRequestedRef.current = true;
       abortControllerRef.current?.abort();
-      if (!createdDeckRef.current || cancelRequestedRef.current) setBackgroundTask(taskId, null);
+      setBackgroundTask(taskId, null);
     };
   // Matching starts only when the modal opens. It intentionally continues after Create closes the modal.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,6 +229,7 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
   const convertedTracks = useMemo(() => buildConvertedTracks(rows), [rows, targetProvider]);
 
   const handleCreate = () => {
+    createRequestedRef.current = true;
     const created = onCreate({
       ...deck,
       id: randomId("deck"),

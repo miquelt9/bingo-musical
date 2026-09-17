@@ -39,7 +39,7 @@ import { useDeckRoute } from "../hooks/useDeckRoute";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { stopPlayback } from "../lib/player/player";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
-import { getTrackSourceId } from "../lib/music/providers";
+import { getProviderLabel, getTrackSourceId } from "../lib/music/providers";
 import { isDeferredDeezerPreview } from "../lib/deezer/previewUrl";
 import {
   CollaborativeApiError,
@@ -61,6 +61,7 @@ import {
   ArrowRightLeft,
   Wand2,
   RefreshCw,
+  Music2,
 } from "lucide-react";
 
 function collaborativeTrackKey(track: Track): string {
@@ -936,6 +937,14 @@ export const EditorPage: React.FC = () => {
                   <Users className="w-3.5 h-3.5" />
                 </span>
               )}
+              <span
+                className="home-deck-recommended inline-flex items-center gap-1 shrink-0"
+                title={`Songs in this deck use ${getProviderLabel(deck.provider)}`}
+                aria-label={`Provider: ${getProviderLabel(deck.provider)}`}
+              >
+                <Music2 className="w-3.5 h-3.5" aria-hidden="true" />
+                {getProviderLabel(deck.provider)}
+              </span>
               <span>
                 {isLoadingDeezerPreviews
                   ? `Loading Deezer previews… (${deezerHydration.completed}/${deezerHydration.total})`
