@@ -9,6 +9,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
 import { APP_NAME, GITHUB_REPO_URL } from "../lib/app/meta";
+import { getVerifiedPublishedBuildId } from "../lib/version/deployedBuild";
 import {
   Check,
   ExternalLink,
@@ -24,8 +25,6 @@ import {
   Download,
   Upload,
 } from "lucide-react";
-
-const BUILD_ID = import.meta.env.VITE_BUILD_ID || "dev";
 
 interface CollapsibleSectionProps {
   title: React.ReactNode;
@@ -67,11 +66,22 @@ export const SettingsPage: React.FC = () => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(!isMobile);
   const [dataNotesOpen, setDataNotesOpen] = useState(false);
+  const [publishedBuildId, setPublishedBuildId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setAboutOpen(!isMobile);
   }, [isMobile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getVerifiedPublishedBuildId().then((buildId) => {
+      if (!cancelled) setPublishedBuildId(buildId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleResetSampleDeck = () => {
     saveStoredDecks([SAMPLE_DEEZER_DECK]);
@@ -135,22 +145,21 @@ export const SettingsPage: React.FC = () => {
         {GITHUB_REPO_URL}
         <ExternalLink className="w-3 h-3" />
       </a>
-      <p className="text-xs mt-3 text-muted">
-        Build commit: {BUILD_ID === "dev" ? (
-          <code>dev</code>
-        ) : (
+      {publishedBuildId ? (
+        <p className="text-xs mt-3 text-muted">
+          Build commit:{" "}
           <a
-            href={`${GITHUB_REPO_URL}/commit/${BUILD_ID}`}
+            href={`${GITHUB_REPO_URL}/commit/${publishedBuildId}`}
             target="_blank"
             rel="noreferrer"
             className="pc-link inline-flex items-center gap-0.5"
-            title={BUILD_ID}
+            title={publishedBuildId}
           >
-            <code>{BUILD_ID.slice(0, 7)}</code>
+            <code>{publishedBuildId.slice(0, 7)}</code>
             <ExternalLink className="w-3 h-3" />
           </a>
-        )}
-      </p>
+        </p>
+      ) : null}
     </>
   );
 

@@ -53,3 +53,21 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Verify published build
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_BUILD_ID: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          version_url="${PAGE_URL%/}/version.json?verify=${EXPECTED_BUILD_ID}"
+          for attempt in 1 2 3 4 5; do
+            if response="$(curl --fail --silent --show-error --location --retry 2 --retry-delay 2 --retry-all-errors "$version_url")" \
+              && printf '%s' "$response" | jq -e --arg expected "$EXPECTED_BUILD_ID" '.buildId == $expected' >/dev/null 2>&1; then
+              echo "Published build matches $EXPECTED_BUILD_ID."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "GitHub Pages did not expose the expected build marker: $EXPECTED_BUILD_ID" >&2
+          exit 1
