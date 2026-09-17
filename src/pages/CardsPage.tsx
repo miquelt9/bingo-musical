@@ -844,7 +844,7 @@ export const CardsPage: React.FC = () => {
                       <input
                         type="range"
                         min={10}
-                        max={120}
+                        max={kind === "songs" ? 150 : 120}
                         step={5}
                         value={cellContentSizes[kind]}
                         disabled={!cellContent[kind]}

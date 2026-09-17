@@ -24,15 +24,15 @@ export function normalizeCellContentSizes(
   sizes: Partial<BingoCellContentSizes> | null | undefined
 ): BingoCellContentSizes {
   return {
-    numbers: clampCellContentSize(sizes?.numbers),
-    songs: clampCellContentSize(sizes?.songs),
-    authors: clampCellContentSize(sizes?.authors),
+    numbers: clampCellContentSize(sizes?.numbers, 120),
+    songs: clampCellContentSize(sizes?.songs, 150),
+    authors: clampCellContentSize(sizes?.authors, 120),
   };
 }
 
-function clampCellContentSize(value: number | undefined): number {
+function clampCellContentSize(value: number | undefined, max: number): number {
   return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(120, Math.max(10, value))
+    ? Math.min(max, Math.max(10, value))
     : 100;
 }
 

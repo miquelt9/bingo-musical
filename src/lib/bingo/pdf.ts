@@ -126,7 +126,12 @@ function fitText(
   maxWidth: number,
   maxLines: number
 ): FittedText {
-  for (let fontSize = requestedSize; fontSize >= minimumSize; fontSize -= 1) {
+  // Keep the requested size as the upper bound. In particular, do not let the
+  // fallback minimum enlarge text when a content-size control is turned down.
+  const safeRequestedSize = Math.max(0.1, requestedSize);
+  const safeMinimumSize = Math.min(safeRequestedSize, Math.max(0.1, minimumSize));
+
+  for (let fontSize = safeRequestedSize; fontSize >= safeMinimumSize; fontSize -= 1) {
     setPdfFont(doc, family, style);
     doc.setFontSize(fontSize);
     const lines = splitExplicitLines(doc, text, maxWidth);
@@ -134,12 +139,12 @@ function fitText(
   }
 
   setPdfFont(doc, family, style);
-  doc.setFontSize(minimumSize);
+  doc.setFontSize(safeMinimumSize);
   const lines = splitExplicitLines(doc, text, maxWidth).slice(0, maxLines);
   if (lines.length === maxLines) {
     lines[maxLines - 1] = truncateToWidth(doc, lines[maxLines - 1] ?? "", maxWidth);
   }
-  return { lines, fontSize: minimumSize };
+  return { lines, fontSize: safeMinimumSize };
 }
 
 function drawWrappedCentered(
@@ -447,7 +452,7 @@ function drawMasterListPages(
   eventTitle: string,
   shareUrl: string | undefined,
   qrCache: Map<string, string>,
-  fontFamily: PdfFontFamily
+  appearance: ResolvedPdfAppearance
 ): Promise<void> {
   const marginTop = 18;
   const rowHeight = 7;
@@ -463,14 +468,23 @@ function drawMasterListPages(
     for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
       if (pageIndex > 0) doc.addPage("a4", "portrait");
       let cursorY = marginTop;
-      const masterTitle = fitText(doc, eventTitle, fontFamily, "bold", 20, 12, 170, 2);
-      setPdfFont(doc, fontFamily, "bold");
+      const masterTitle = fitText(
+        doc,
+        eventTitle,
+        appearance.titleFontFamily,
+        "bold",
+        appearance.titleSizePt,
+        12,
+        170,
+        2
+      );
+      setPdfFont(doc, appearance.titleFontFamily, "bold");
       doc.setFontSize(masterTitle.fontSize);
       setPdfColor(doc, DEFAULT_TEXT);
       const masterTitleLineHeight = getLineHeight(masterTitle.fontSize, 1.08);
       drawWrappedCentered(doc, masterTitle.lines, PAGE_WIDTH / 2, cursorY, masterTitleLineHeight);
       cursorY += masterTitle.lines.length * masterTitleLineHeight + 2;
-      setPdfFont(doc, fontFamily, "normal");
+      setPdfFont(doc, appearance.cellFontFamily, "normal");
       doc.setFontSize(10);
       setPdfColor(doc, MUTED_TEXT);
       doc.text(
@@ -484,7 +498,7 @@ function drawMasterListPages(
       doc.setLineWidth(0.6);
       doc.line(MARGIN_X, cursorY, PAGE_WIDTH - MARGIN_X, cursorY);
       cursorY += 5;
-      setPdfFont(doc, fontFamily, "bold");
+      setPdfFont(doc, appearance.cellFontFamily, "bold");
       doc.setFontSize(9);
       setPdfColor(doc, DEFAULT_TEXT);
       doc.text("#", MARGIN_X, cursorY);
@@ -497,14 +511,14 @@ function drawMasterListPages(
 
       for (const track of pages[pageIndex] ?? []) {
         const number = getTrackSongNumber(tracks, track.id);
-        setPdfFont(doc, fontFamily, "bold");
+        setPdfFont(doc, appearance.cellFontFamily, "bold");
         doc.setFontSize(11);
         setPdfColor(doc, DEFAULT_TEXT);
         doc.text(String(number), MARGIN_X, cursorY);
-        setPdfFont(doc, fontFamily, "bold");
+        setPdfFont(doc, appearance.cellFontFamily, "bold");
         doc.setFontSize(9);
         doc.text((doc.splitTextToSize(track.title, 85) as string[])[0] ?? "", MARGIN_X + 14, cursorY);
-        setPdfFont(doc, fontFamily, "normal");
+        setPdfFont(doc, appearance.cellFontFamily, "normal");
         doc.setFontSize(9);
         setPdfColor(doc, MUTED_TEXT);
         doc.text((doc.splitTextToSize(track.artist, 70) as string[])[0] ?? "", MARGIN_X + 105, cursorY);
@@ -533,6 +547,7 @@ export async function generateBingoPdf(
   const numberOnly = showNumbers && !showSongs && !showAuthors;
   const tracks = options.tracks ?? [];
   const shareUrl = options.shareUrl?.trim() || undefined;
+  const exportAppearance = normalizePdfAppearance(options.appearance);
   const qrCache = new Map<string, string>();
   const includeMasterList = Boolean(options.includeMasterList && tracks.length > 0);
   const preparedBackground = options.appearance?.background
@@ -547,7 +562,7 @@ export async function generateBingoPdf(
       eventTitle,
       shareUrl,
       qrCache,
-      options.appearance?.cellFontFamily ?? "helvetica"
+      exportAppearance
     );
     cardsStarted = true;
   }
@@ -623,9 +638,29 @@ export async function generateBingoPdf(
         const artistFont = Math.max(5.5, 7.5 * layout.cellSize / 36) * sizes.authors / 100;
         const authorOnlyFont = Math.max(7, 10 * layout.cellSize / 36) * sizes.authors / 100;
         const numberFont = (numberOnly ? Math.max(18, 28 * layout.cellSize / 36) : Math.max(10, 16 * layout.cellSize / 36)) * sizes.numbers / 100;
-        const title = showSongs ? fitText(doc, track.title, appearance.cellFontFamily, "bold", titleFont, 5.5, textWidth, appearance.tileStyle === "circle" ? 2 : 3) : { lines: [], fontSize: titleFont };
+        const title = showSongs
+          ? fitText(
+              doc,
+              track.title,
+              appearance.cellFontFamily,
+              "bold",
+              titleFont,
+              5.5 * sizes.songs / 100,
+              textWidth,
+              appearance.tileStyle === "circle" ? 2 : 3
+            )
+          : { lines: [], fontSize: titleFont };
         const artist = showAuthors
-          ? fitText(doc, track.artist, appearance.cellFontFamily, showSongs ? "normal" : "bold", showSongs ? artistFont : authorOnlyFont, 5, textWidth, appearance.tileStyle === "circle" ? 2 : 3)
+          ? fitText(
+              doc,
+              track.artist,
+              appearance.cellFontFamily,
+              showSongs ? "normal" : "bold",
+              showSongs ? artistFont : authorOnlyFont,
+              5 * sizes.authors / 100,
+              textWidth,
+              appearance.tileStyle === "circle" ? 2 : 3
+            )
           : { lines: [], fontSize: artistFont };
         const numberLineHeight = getLineHeight(numberFont, 1);
         const titleLineHeight = getLineHeight(title.fontSize, 1.03);
