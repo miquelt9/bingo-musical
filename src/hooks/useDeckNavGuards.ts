@@ -34,6 +34,8 @@ export function useDeckNavGuards(deckId: string | undefined): DeckNavGuards {
       hostBlockReason = EMPTY_DECK_ACTION_TITLE;
     } else if (readiness.blockedCount > 0) {
       hostBlockReason = "All songs must be playable before hosting";
+    } else if (readiness.deferredPreviewCount > 0) {
+      hostBlockReason = "Preview the Deezer songs before hosting";
     } else if (readiness.tooFewForHost) {
       hostBlockReason = `Need at least ${readiness.minHostTracks} playable songs to host`;
     } else if (!readiness.canHost) {

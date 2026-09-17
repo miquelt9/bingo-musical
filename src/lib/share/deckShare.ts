@@ -29,8 +29,12 @@ export function buildShareMessage(_deck: Deck, shareUrl?: string): string {
   return shareUrl || "";
 }
 
+export function isNativeShareAvailable(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+}
+
 export async function shareDeckNative(_deck: Deck, shareUrl: string): Promise<boolean> {
-  if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
+  if (!isNativeShareAvailable()) {
     return false;
   }
 

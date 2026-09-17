@@ -8,6 +8,7 @@ import { fetchSharedDeckPayload, isShareApiConfigured } from "../lib/share/share
 import { validateDeckSchema } from "../lib/storage/decks";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { getProviderLabel } from "../lib/music/providers";
+import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
 
 export const SharedDeckPage: React.FC = () => {
   const { shareId } = useParams<{ shareId: string }>();
@@ -68,7 +69,6 @@ export const SharedDeckPage: React.FC = () => {
     return validation.deck;
   }, [payload]);
 
-
   const handleImport = async () => {
     if (!shareId) return;
     setIsImporting(true);
@@ -122,12 +122,16 @@ export const SharedDeckPage: React.FC = () => {
             <div className="pc-bevel-inset p-3 max-h-56 overflow-y-auto">
               <p className="text-xs font-bold mb-2">Songs</p>
               <ul className="text-xs space-y-1">
-                {preview.tracks.map((track) => (
-                  <li key={track.id} className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>
-                    {track.media ? <ClipPreviewButton track={track} size="sm" /> : <span className="text-pc-warning">Unavailable</span>}
-                  </li>
-                ))}
+                {preview.tracks.map((track) => {
+                  const thumbnailUrl = track.albumArtUrl || (track.media?.provider === "youtube" ? getYoutubeThumbnailUrl(track.media.id, "mqdefault") : "");
+                  return (
+                    <li key={track.id} className="flex items-center gap-2">
+                      {thumbnailUrl ? <img src={thumbnailUrl} alt="" className="w-9 h-9 object-cover shrink-0 pc-bevel-inset" /> : <Music2 className="w-7 h-7 shrink-0 opacity-60" />}
+                      <span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>
+                      {track.media ? <ClipPreviewButton track={track} size="sm" /> : <span className="text-pc-warning">Unavailable</span>}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
 

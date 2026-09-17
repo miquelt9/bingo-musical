@@ -39,13 +39,15 @@ import {
 const ONBOARDING_KEY = "mb_onboarding_dismissed";
 const SAMPLE_DECK_ID = SAMPLE_DEEZER_DECK.id;
 
-function healthBadgeLabel(health: ReturnType<typeof getDeckReadiness>["health"], blocked: number, empty: boolean): string {
+function healthBadgeLabel(health: ReturnType<typeof getDeckReadiness>["health"], blocked: number, deferredPreviews: number, empty: boolean): string {
   if (empty) return "In progress";
   switch (health) {
     case "ready":
       return "Ready";
     case "needs_fix":
       return blocked > 0 ? `Needs fix (${blocked})` : "Needs fix";
+    case "previews_pending":
+      return `${deferredPreviews} preview${deferredPreviews === 1 ? "" : "s"} on click`;
     case "empty":
       return "Empty";
     case "too_few":
@@ -182,7 +184,7 @@ export const HomePage: React.FC = () => {
 
     const healthBadge = (
       <span className={healthBadgeClass(emptyDeck || isLoadingDeezerPreviews ? "empty" : readiness.health)}>
-        {isLoadingDeezerPreviews ? "Loading…" : healthBadgeLabel(readiness.health, readiness.blockedCount, emptyDeck)}
+        {isLoadingDeezerPreviews ? "Loading…" : healthBadgeLabel(readiness.health, readiness.blockedCount, readiness.deferredPreviewCount, emptyDeck)}
       </span>
     );
 
@@ -238,8 +240,10 @@ export const HomePage: React.FC = () => {
             ? EMPTY_DECK_ACTION_TITLE
             : readiness.blockedCount > 0
               ? "Fix songs in Edit before hosting"
-              : readiness.tooFewForHost
-                ? `Add at least ${readiness.minHostTracks} playable songs before hosting`
+              : readiness.deferredPreviewCount > 0
+                ? "Preview the Deezer songs before hosting"
+                : readiness.tooFewForHost
+                  ? `Add at least ${readiness.minHostTracks} playable songs before hosting`
                 : "Some songs need attention before hosting"
         }
       >

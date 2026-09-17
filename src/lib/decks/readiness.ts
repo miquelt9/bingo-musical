@@ -3,14 +3,17 @@ import { cellCount, normalizeGridSize } from "../bingo/generateCards";
 import { canStartGame, isTrackNeedsVerification } from "../youtube/playabilityGate";
 import { getUnplayableTracks, isTrackUnplayable } from "../youtube/validator";
 import { getTrackProvider, isTrackPlayable } from "../music/providers";
+import { isDeferredDeezerPreview } from "../deezer/previewUrl";
 
-export type DeckHealth = "ready" | "needs_fix" | "empty" | "too_few";
+export type DeckHealth = "ready" | "needs_fix" | "empty" | "too_few" | "previews_pending";
 
 export interface DeckReadiness {
   total: number;
   readyCount: number;
   blockedCount: number;
   unmatchedCount: number;
+  /** Matched Deezer sources whose signed preview URL will be loaded on click. */
+  deferredPreviewCount: number;
   needsVerificationCount: number;
   canHost: boolean;
   health: DeckHealth;
@@ -54,7 +57,8 @@ export function getLargestValidGridSize(trackCount: number): number {
 /** A track is ready when its selected provider has a usable playback source. */
 export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
   const total = tracks.length;
-  const blockedCount = getUnplayableTracks(tracks).length;
+  const deferredPreviewCount = tracks.filter(isDeferredDeezerPreview).length;
+  const blockedCount = getUnplayableTracks(tracks).filter((track) => !isDeferredDeezerPreview(track)).length;
   const unmatchedCount = tracks.filter((t) => !t.media).length;
   const readyCount = tracks.filter(
     (t) => isTrackPlayable(t) && !isTrackUnplayable(t)
@@ -70,6 +74,7 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
   let health: DeckHealth = "ready";
   if (total === 0) health = "empty";
   else if (blockedCount > 0 || unmatchedCount > 0) health = "needs_fix";
+  else if (deferredPreviewCount > 0) health = "previews_pending";
   else if (tooFewForHost) health = "too_few";
 
   return {
@@ -77,6 +82,7 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
     readyCount,
     blockedCount,
     unmatchedCount,
+    deferredPreviewCount,
     needsVerificationCount,
     canHost,
     health,
@@ -102,6 +108,9 @@ export function formatReadinessSecondary(readiness: DeckReadiness): string | nul
   }
   if (readiness.blockedCount > 0) {
     return `${readiness.blockedCount} need fixing`;
+  }
+  if (readiness.deferredPreviewCount > 0) {
+    return `${readiness.deferredPreviewCount} Deezer preview${readiness.deferredPreviewCount === 1 ? "" : "s"} load when you click Preview`;
   }
   if (readiness.unmatchedCount > 0) {
     return `${readiness.unmatchedCount} unmatched`;

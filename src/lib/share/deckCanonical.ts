@@ -12,6 +12,7 @@ export interface CanonicalSong {
   title: string;
   artist: string;
   album?: string;
+  albumArtUrl?: string;
   start: number;
   end: number;
   media?: CanonicalMedia;
@@ -58,6 +59,7 @@ function canonicalSongFromRecord(raw: unknown, provider: MusicProvider, legacy: 
   };
 
   if (typeof song.album === "string" && song.album.trim()) canonical.album = song.album.trim();
+  if (typeof song.albumArtUrl === "string" && song.albumArtUrl.trim()) canonical.albumArtUrl = song.albumArtUrl.trim();
 
   if (legacy) {
     const youtube = readYoutubeId(song.youtube) ?? readYoutubeId(song.youtubeVideoId) ?? readYoutubeId(song.url);
@@ -86,6 +88,7 @@ export function buildCanonicalSharePayload(deck: Deck): CanonicalSharePayload {
         end: track.endTime,
       };
       if (track.album?.trim()) song.album = track.album.trim();
+      if (track.albumArtUrl?.trim()) song.albumArtUrl = track.albumArtUrl.trim();
       const legacyYoutubeId = (track as Track & { youtubeVideoId?: string | null }).youtubeVideoId;
       if (track.media) song.media = { provider: track.media.provider, id: track.media.id };
       else if (legacyYoutubeId) song.media = { provider: "youtube", id: legacyYoutubeId };
@@ -158,6 +161,7 @@ export function serializeCanonicalPayload(payload: CanonicalSharePayload): strin
         end: song.end,
       };
       if (song.album) entry.album = song.album;
+      if (song.albumArtUrl) entry.albumArtUrl = song.albumArtUrl;
       if (song.media) entry.media = song.media;
       return entry;
     }),

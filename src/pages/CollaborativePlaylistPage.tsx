@@ -17,6 +17,7 @@ import {
   fetchCollaborativePlaylist,
 } from "../lib/share/collaborativePlaylistsApi";
 import { getProviderLabel } from "../lib/music/providers";
+import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
 
 function trackKey(track: Track): string {
   return track.media ? `${track.media.provider}:${track.media.id}` : songIdentityKey(track.artist, track.title);
@@ -177,7 +178,7 @@ export const CollaborativePlaylistPage: React.FC = () => {
                       const results = await Promise.all(tracks.map((track) => enqueueTrack(track)));
                       return results.every(Boolean);
                     }} /></div>
-          <div><h2 className="font-bold mb-2">Songs in this playlist</h2><div className="pc-bevel-inset p-2 max-h-80 overflow-y-auto"><ul className="space-y-1 text-sm">{displayedTracks.map((track) => <li key={`${trackKey(track)}-${track.id}`} className="flex items-center gap-2 p-1.5"><span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>{pending.some((item) => trackKey(item) === trackKey(track)) ? <span className="text-xs opacity-70">Syncing…</span> : track.media ? <ClipPreviewButton track={track} size="sm" /> : <Check className="w-3.5 h-3.5 text-pc-warning" />}</li>)}</ul></div></div>
+          <div><h2 className="font-bold mb-2">Songs in this playlist</h2><div className="pc-bevel-inset p-2 max-h-80 overflow-y-auto"><ul className="space-y-1 text-sm">{displayedTracks.map((track) => { const thumbnailUrl = track.albumArtUrl || (track.media?.provider === "youtube" ? getYoutubeThumbnailUrl(track.media.id, "mqdefault") : ""); return <li key={`${trackKey(track)}-${track.id}`} className="flex items-center gap-2 p-1.5">{thumbnailUrl ? <img src={thumbnailUrl} alt="" className="w-9 h-9 object-cover shrink-0 pc-bevel-inset" /> : <span className="w-9 h-9 shrink-0 flex items-center justify-center"><Check className="w-3.5 h-3.5 opacity-60" /></span>}<span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>{pending.some((item) => trackKey(item) === trackKey(track)) ? <span className="text-xs opacity-70">Syncing…</span> : track.media ? <ClipPreviewButton track={track} size="sm" /> : <Check className="w-3.5 h-3.5 text-pc-warning" />}</li>; })}</ul></div></div>
         </div> : null}
       </Window>
       <p className="text-xs text-center opacity-70">No account required. This link is the access.</p>

@@ -272,6 +272,8 @@ export function serializeDeckForExport(deck: Deck): SerializedDeckExport {
       end: track.endTime,
     };
     if (track.album) entry.album = track.album;
+    if (track.albumArtUrl) entry.albumArtUrl = track.albumArtUrl;
+    if (track.durationMs > 0) entry.durationMs = track.durationMs;
     if (track.media) {
       // Deezer preview URLs are short-lived signed CDN URLs. Export only the
       // stable provider identity; the player refreshes the URL when needed.

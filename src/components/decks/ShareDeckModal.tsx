@@ -4,7 +4,8 @@ import { AlertCircle, AlertTriangle, Check, Copy, Download, Loader2, Share2, Use
 import { Deck } from "../../types/deck";
 import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
-import { buildSharedDeckUrl, shareDeckNative } from "../../lib/share/deckShare";
+import { useIsMobile } from "../../hooks/useMediaQuery";
+import { buildSharedDeckUrl, isNativeShareAvailable, shareDeckNative } from "../../lib/share/deckShare";
 import { buildCollaborativeUrl } from "../../lib/share/collaborativeShare";
 import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
 import { getStoredCollaborationId, rememberCollaborationLink } from "../../lib/share/collaborationLinks";
@@ -27,6 +28,8 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   onClose,
 }) => {
   const { showToast } = useToast();
+  const isMobile = useIsMobile();
+  const showNativeShare = isMobile && isNativeShareAvailable();
   const [shareId, setShareId] = useState<string | undefined>(initialShareId);
   const [shareUrl, setShareUrl] = useState<string | undefined>(initialShareUrl);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -184,10 +187,12 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
             <>
               <div className="pc-bevel-inset p-3 break-all text-xs">{shareUrl}</div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="primary" onClick={() => void shareDeck()}>
-                  <Share2 className="w-4 h-4" />
-                  Share
-                </Button>
+                {showNativeShare ? (
+                  <Button type="button" variant="primary" onClick={() => void shareDeck()}>
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </Button>
+                ) : null}
                 <Button type="button" onClick={() => void copyLink()}>
                   <Copy className="w-4 h-4" />
                   Copy link
@@ -220,10 +225,12 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
             <>
               <div className="pc-bevel-inset p-3 break-all text-xs">{collaborationUrl}</div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="primary" onClick={() => void shareNatively(collaborationUrl)}>
-                  <Share2 className="w-4 h-4" />
-                  Share
-                </Button>
+                {showNativeShare ? (
+                  <Button type="button" variant="primary" onClick={() => void shareNatively(collaborationUrl)}>
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </Button>
+                ) : null}
                 <Button type="button" onClick={() => void copyLink(collaborationUrl, "Collaborative link copied to clipboard.")}>
                   <Copy className="w-4 h-4" />
                   Copy link
