@@ -40,6 +40,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { stopPlayback } from "../lib/player/player";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { getTrackSourceId } from "../lib/music/providers";
+import { isDeferredDeezerPreview } from "../lib/deezer/previewUrl";
 import {
   CollaborativeApiError,
   CollaborativePlaylist,
@@ -223,7 +224,7 @@ export const EditorPage: React.FC = () => {
     const isLoadingDeezerPreviews = Boolean(backgroundTasks[`deezer-hydration:${deck.id}`]);
     if (isLoadingDeezerPreviews) return;
 
-    const count = getUnplayableTracks(deck.tracks).length;
+    const count = getUnplayableTracks(deck.tracks).filter((track) => !isDeferredDeezerPreview(track)).length;
     if (count === 0) return;
 
     blockedToastShownRef.current = true;

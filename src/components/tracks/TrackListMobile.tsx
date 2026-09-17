@@ -3,6 +3,7 @@ import { Track } from "../../types/deck";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { OverflowMenu } from "../ui/OverflowMenu";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+import { isDeferredDeezerPreview } from "../../lib/deezer/previewUrl";
 import {
   getYoutubeThumbnailUrl,
 } from "../../lib/youtube/parseUrl";
@@ -35,6 +36,7 @@ function getErrorStatus(
   track: Track,
   isBlocked: boolean
 ): { label: string; icon: React.ReactNode } | null {
+  if (isDeferredDeezerPreview(track)) return null;
   if (isBlocked) {
     return {
       label: "Needs attention",
@@ -91,7 +93,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
           (track.media?.provider === "youtube" ? getYoutubeThumbnailUrl(track.media.id, "mqdefault") : null);
         const isBlocked = isTrackBlocked(track);
         const isReady =
-          (track.matchStatus === "matched" || track.matchStatus === "manual") && !isBlocked;
+          (track.matchStatus === "matched" || track.matchStatus === "manual" || isDeferredDeezerPreview(track)) && !isBlocked;
         const hasVideo = Boolean(track.media && (track.media.provider === "youtube" || track.media.id));
         const errorStatus = getErrorStatus(track, isBlocked);
         const isEditingClip = editClipBusyId === track.id;

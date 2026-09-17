@@ -293,29 +293,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return existing;
     }
 
-    let imported = importDeckFromData(payload);
-    if (imported.provider === "deezer") {
-      const missing = imported.tracks.filter((track) => track.media?.provider === "deezer" && !track.media.previewUrl);
-      const resolved = await Promise.all(missing.map(async (track) => {
-        try {
-          return { sourceId: track.media!.id, hit: await resolveDeezerTrack(track.media!.id) };
-        } catch {
-          return null;
-        }
-      }));
-      const bySourceId = new Map(resolved.filter((item): item is NonNullable<typeof item> => item !== null).map((item) => [item.sourceId, item.hit]));
-      if (bySourceId.size > 0) {
-        imported = updateDeck({
-          ...imported,
-          tracks: imported.tracks.map((track) => {
-            const hit = track.media?.provider === "deezer" ? bySourceId.get(track.media.id) : undefined;
-            if (!hit) return track;
-            const resolvedTrack = deezerHitToTrack(hit);
-            return { ...track, album: resolvedTrack.album, albumArtUrl: resolvedTrack.albumArtUrl, durationMs: resolvedTrack.durationMs, media: resolvedTrack.media, startTime: resolvedTrack.startTime, endTime: resolvedTrack.endTime, matchStatus: "matched" as const };
-          }),
-        });
-      }
-    }
+    const imported = importDeckFromData(payload);
     refreshDecks();
     setActiveDeck(imported);
     return imported;

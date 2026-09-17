@@ -7,13 +7,12 @@ import { useDeck } from "../state/DeckContext";
 import { fetchSharedDeckPayload, isShareApiConfigured } from "../lib/share/sharedDecksApi";
 import { validateDeckSchema } from "../lib/storage/decks";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
-import { deezerHitToTrack, resolveDeezerTrack } from "../lib/deezer/api";
 import { getProviderLabel } from "../lib/music/providers";
 
 export const SharedDeckPage: React.FC = () => {
   const { shareId } = useParams<{ shareId: string }>();
   const navigate = useNavigate();
-  const { importSharedDeck } = useDeck();
+  const { importSharedDeck, loadDeck } = useDeck();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -69,37 +68,6 @@ export const SharedDeckPage: React.FC = () => {
     return validation.deck;
   }, [payload]);
 
-  useEffect(() => {
-    if (!preview || preview.provider !== "deezer") return;
-    const missing = preview.tracks.filter((track) => track.media?.provider === "deezer" && !track.media.previewUrl);
-    if (missing.length === 0) return;
-    let cancelled = false;
-    void Promise.all(missing.map(async (track) => {
-      try {
-        return { sourceId: track.media!.id, hit: await resolveDeezerTrack(track.media!.id) };
-      } catch {
-        return null;
-      }
-    })).then((resolved) => {
-      if (cancelled) return;
-      const byId = new Map(resolved.filter((item): item is NonNullable<typeof item> => item !== null).map((item) => [item.sourceId, item.hit]));
-      if (byId.size === 0) return;
-      setPayload((current: unknown) => {
-        const validation = validateDeckSchema(current);
-        if (!validation.deck) return current;
-        return {
-          ...validation.deck,
-          tracks: validation.deck.tracks.map((track) => {
-            const hit = track.media?.provider === "deezer" ? byId.get(track.media.id) : undefined;
-            if (!hit) return track;
-            const resolvedTrack = deezerHitToTrack(hit);
-            return { ...track, album: resolvedTrack.album, albumArtUrl: resolvedTrack.albumArtUrl, durationMs: resolvedTrack.durationMs, media: resolvedTrack.media, startTime: resolvedTrack.startTime, endTime: resolvedTrack.endTime, matchStatus: "matched" as const };
-          }),
-        };
-      });
-    });
-    return () => { cancelled = true; };
-  }, [preview]);
 
   const handleImport = async () => {
     if (!shareId) return;
@@ -107,7 +75,8 @@ export const SharedDeckPage: React.FC = () => {
     setError(null);
     try {
       const imported = await importSharedDeck(shareId);
-      navigate(`/deck/${imported.id}`);
+      loadDeck(imported.id);
+      navigate(`/deck/${imported.id}`, { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -153,15 +122,12 @@ export const SharedDeckPage: React.FC = () => {
             <div className="pc-bevel-inset p-3 max-h-56 overflow-y-auto">
               <p className="text-xs font-bold mb-2">Songs</p>
               <ul className="text-xs space-y-1">
-                {preview.tracks.slice(0, 12).map((track) => (
+                {preview.tracks.map((track) => (
                   <li key={track.id} className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>
                     {track.media ? <ClipPreviewButton track={track} size="sm" /> : <span className="text-pc-warning">Unavailable</span>}
                   </li>
                 ))}
-                {preview.tracks.length > 12 ? (
-                  <li className="opacity-70">…and {preview.tracks.length - 12} more</li>
-                ) : null}
               </ul>
             </div>
 

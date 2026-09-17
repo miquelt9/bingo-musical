@@ -96,14 +96,16 @@ function normalizeTrack(raw: unknown, index: number, provider: MusicProvider): T
     ? Math.min(Math.max(startTime + 1, endValue), (previewDurationMs ?? 30000) / 1000)
     : Math.max(startTime + 1, endValue);
   const statusValue = value.matchStatus;
-  const matchStatus: MatchStatus =
-    typeof statusValue === "string" && ["pending", "matched", "failed", "manual"].includes(statusValue)
+  const hasDeferredDeezerPreview = media?.provider === "deezer" && Boolean(media.id) && !media.previewUrl;
+  // A missing signed Deezer URL is a lazy playback state, not a failed match.
+  // Normalize older imported decks that persisted this state as "failed".
+  const matchStatus: MatchStatus = hasDeferredDeezerPreview
+    ? statusValue === "manual" ? "manual" : "matched"
+    : typeof statusValue === "string" && ["pending", "matched", "failed", "manual"].includes(statusValue)
       ? statusValue as MatchStatus
-      : media?.provider === "deezer" && !media.previewUrl
-        ? "failed"
-        : media
-          ? "matched"
-          : "pending";
+      : media
+        ? "matched"
+        : "pending";
 
   return {
     id: typeof value.id === "string" && value.id.trim() ? value.id.trim() : `track-${index}-${Math.random().toString(36).slice(2, 8)}`,
@@ -323,7 +325,10 @@ function parseExportedSong(raw: unknown, index: number, provider: MusicProvider)
     albumArtUrl: typeof song.albumArtUrl === "string" ? song.albumArtUrl : "",
     durationMs,
     media,
-    matchStatus: media?.provider === "deezer" && !media.previewUrl ? "failed" : media ? "matched" : "pending",
+    // Shared/exported Deezer media keeps the stable track id but omits its
+    // short-lived preview URL. It is still a matched source; the preview is
+    // refreshed lazily when the user clicks Preview.
+    matchStatus: media ? "matched" : "pending",
   });
   track.startTime = media?.provider === "deezer" ? Math.max(0, Math.min(startTime, 29)) : startTime;
   track.endTime = media?.provider === "deezer"

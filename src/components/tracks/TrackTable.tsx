@@ -8,7 +8,7 @@ import { ManualDeezerModal } from "./ManualDeezerModal";
 import { TrackListMobile } from "./TrackListMobile";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { isVideoEmbedBlocked } from "../../lib/youtube/validator";
-import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../../lib/deezer/previewUrl";
+import { ensureFreshDeezerPreview, isDeferredDeezerPreview, withFreshDeezerMedia } from "../../lib/deezer/previewUrl";
 import { buildTrackSongNumberMap } from "../../lib/bingo/songNumbers";
 import {
   Search,
@@ -140,15 +140,18 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     track.matchStatus !== "failed";
 
   const isTrackBlocked = (track: Track): boolean => {
+    // A shared/imported Deezer track can have a stable matched id without a
+    // preview URL. Preview buttons refresh that URL on demand, so this is not
+    // an auto-match case.
+    if (isDeferredDeezerPreview(track)) return false;
     if (track.matchStatus === "failed") return true;
     if (isLoadingDeezerTrack(track)) return false;
-    return isVideoEmbedBlocked(track.media?.provider === "youtube" ? track.media.id : null) ||
-      (track.media?.provider === "deezer" && !track.media.previewUrl);
+    return isVideoEmbedBlocked(track.media?.provider === "youtube" ? track.media.id : null);
   };
 
   const isTrackReady = (track: Track) =>
     !isLoadingDeezerTrack(track) &&
-    Boolean(track.media) && (track.matchStatus === "matched" || track.matchStatus === "manual") && !isTrackBlocked(track);
+    Boolean(track.media) && (track.matchStatus === "matched" || track.matchStatus === "manual" || isDeferredDeezerPreview(track)) && !isTrackBlocked(track);
 
   const needsAttentionCount = tracks.filter((track) => !isLoadingDeezerTrack(track) && !isTrackReady(track)).length;
   const needsAttention = needsAttentionCount > 0;

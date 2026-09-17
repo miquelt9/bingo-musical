@@ -35,7 +35,7 @@ function mergeTracks(remote: Track[], pending: Track[]): Track[] {
 export const CollaborativePlaylistPage: React.FC = () => {
   const { collaborationId } = useParams<{ collaborationId: string }>();
   const navigate = useNavigate();
-  const { createDeck } = useDeck();
+  const { createDeck, loadDeck } = useDeck();
   const { showToast } = useToast();
   const [playlist, setPlaylist] = useState<CollaborativePlaylist | null>(null);
   const [pending, setPending] = useState<Track[]>([]);
@@ -150,7 +150,8 @@ export const CollaborativePlaylistPage: React.FC = () => {
       const now = new Date().toISOString();
       const saved = createDeck({ schemaVersion: 2, id: `deck-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: playlist.name, createdAt: now, updatedAt: now, provider: playlist.provider, source: { type: "manual", name: `Collaborative playlist ${playlist.id}` }, collaboration: { id: playlist.id, revision: playlist.revision }, tracks: displayedTracks });
       showToast({ title: "Added to my decks", message: `Saved ${saved.tracks.length} songs as “${saved.name}”.`, duration: 4000 });
-      navigate(`/deck/${saved.id}`);
+      loadDeck(saved.id);
+      navigate(`/deck/${saved.id}`, { replace: true });
     } finally { setIsSaving(false); }
   };
 
