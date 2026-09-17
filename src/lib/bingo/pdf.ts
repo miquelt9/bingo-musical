@@ -122,29 +122,24 @@ function fitText(
   family: PdfFontFamily,
   style: "normal" | "bold",
   requestedSize: number,
-  minimumSize: number,
   maxWidth: number,
   maxLines: number
 ): FittedText {
-  // Keep the requested size as the upper bound. In particular, do not let the
-  // fallback minimum enlarge text when a content-size control is turned down.
-  const safeRequestedSize = Math.max(0.1, requestedSize);
-  const safeMinimumSize = Math.min(safeRequestedSize, Math.max(0.1, minimumSize));
-
-  for (let fontSize = safeRequestedSize; fontSize >= safeMinimumSize; fontSize -= 1) {
-    setPdfFont(doc, family, style);
-    doc.setFontSize(fontSize);
-    const lines = splitExplicitLines(doc, text, maxWidth);
-    if (lines.length <= maxLines) return { lines, fontSize };
-  }
-
+  // Keep the configured size fixed. Long text is wrapped to the allowed number
+  // of lines and ellipsized instead of shrinking the user's selected size.
+  const fontSize = Math.max(0.1, requestedSize);
   setPdfFont(doc, family, style);
-  doc.setFontSize(safeMinimumSize);
-  const lines = splitExplicitLines(doc, text, maxWidth).slice(0, maxLines);
-  if (lines.length === maxLines) {
-    lines[maxLines - 1] = truncateToWidth(doc, lines[maxLines - 1] ?? "", maxWidth);
-  }
-  return { lines, fontSize: safeMinimumSize };
+  doc.setFontSize(fontSize);
+  const lines = splitExplicitLines(doc, text, maxWidth);
+  if (lines.length <= maxLines) return { lines, fontSize };
+
+  const visibleLines = lines.slice(0, maxLines);
+  visibleLines[maxLines - 1] = truncateToWidth(
+    doc,
+    visibleLines[maxLines - 1] ?? "",
+    maxWidth
+  );
+  return { lines: visibleLines, fontSize };
 }
 
 function drawWrappedCentered(
@@ -336,7 +331,6 @@ function calculateCardLayout(
     appearance.titleFontFamily,
     "bold",
     appearance.titleSizePt,
-    12,
     TITLE_MAX_WIDTH,
     3
   );
@@ -474,7 +468,6 @@ function drawMasterListPages(
         appearance.titleFontFamily,
         "bold",
         appearance.titleSizePt,
-        12,
         170,
         2
       );
@@ -645,7 +638,6 @@ export async function generateBingoPdf(
               appearance.cellFontFamily,
               "bold",
               titleFont,
-              5.5 * sizes.songs / 100,
               textWidth,
               appearance.tileStyle === "circle" ? 2 : 3
             )
@@ -657,7 +649,6 @@ export async function generateBingoPdf(
               appearance.cellFontFamily,
               showSongs ? "normal" : "bold",
               showSongs ? artistFont : authorOnlyFont,
-              5 * sizes.authors / 100,
               textWidth,
               appearance.tileStyle === "circle" ? 2 : 3
             )
