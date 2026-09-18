@@ -8,6 +8,8 @@ const BATCH_CHUNK_SIZE = 10;
 // Keep well below Deezer's 50 requests / 5 seconds limit when several
 // browser batches are needed for a large deck.
 const BATCH_GAP_MS = 1500;
+const BATCH_FAILED_RETRY_ATTEMPTS = 3;
+const BATCH_FAILED_RETRY_DELAY_MS = 5000;
 const MAX_RETRIES = 2;
 const DEEZER_TRACK_REQUEST_INTERVAL_MS = 500;
 
@@ -197,30 +199,67 @@ export async function searchDeezerTracksBatch(
   onProgress?: (completed: number, total: number) => void,
 ): Promise<DeezerTrackHit[][]> {
   if (tracks.length === 0) return [];
-  const results: DeezerTrackHit[][] = [];
-  for (let start = 0; start < tracks.length; start += BATCH_CHUNK_SIZE) {
-    const body = await fetchJson<{ data?: Array<Partial<DeezerTrackHit>[]> }>(
-      "/api/deezer/batch-search",
-      signal,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          songs: tracks.slice(start, start + BATCH_CHUNK_SIZE).map((track) => ({
-            id: track.media?.provider === "deezer" ? track.media.id : undefined,
-            title: track.title,
-            artist: track.artist,
-          })),
-        }),
-      },
-      BATCH_TIMEOUT_MS
-    );
-    results.push(...(body.data || []).map((items) =>
-      (items || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null)
-    ));
-    onProgress?.(Math.min(start + BATCH_CHUNK_SIZE, tracks.length), tracks.length);
-    if (start + BATCH_CHUNK_SIZE < tracks.length) await sleep(BATCH_GAP_MS);
+
+  const results: DeezerTrackHit[][] = Array.from({ length: tracks.length }, () => []);
+  const pendingIndexes = new Set(tracks.map((_, index) => index));
+  const canRetry = (track: Pick<Track, "media">): boolean => (
+    track.media?.provider === "deezer" && Boolean(track.media.id)
+  );
+
+  for (let attempt = 0; attempt <= BATCH_FAILED_RETRY_ATTEMPTS && pendingIndexes.size > 0; attempt += 1) {
+    if (attempt > 0) await sleep(BATCH_FAILED_RETRY_DELAY_MS);
+    const indexes = [...pendingIndexes];
+
+    for (let start = 0; start < indexes.length; start += BATCH_CHUNK_SIZE) {
+      const chunkIndexes = indexes.slice(start, start + BATCH_CHUNK_SIZE);
+      let data: Array<Partial<DeezerTrackHit>[]> = [];
+
+      try {
+        const body = await fetchJson<{ data?: Array<Partial<DeezerTrackHit>[]> }>(
+          "/api/deezer/batch-search",
+          signal,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              songs: chunkIndexes.map((index) => {
+                const track = tracks[index];
+                return {
+                  id: track.media?.provider === "deezer" ? track.media.id : undefined,
+                  title: track.title,
+                  artist: track.artist,
+                };
+              }),
+            }),
+          },
+          BATCH_TIMEOUT_MS
+        );
+        data = body.data || [];
+      } catch (error) {
+        if (signal?.aborted || (error as Error).name === "AbortError") throw error;
+        // Leave this whole chunk in the pending queue for the next pass.
+        if (attempt >= BATCH_FAILED_RETRY_ATTEMPTS) {
+          chunkIndexes.forEach((index) => pendingIndexes.delete(index));
+        }
+        data = [];
+      }
+
+      chunkIndexes.forEach((index, offset) => {
+        const items = (data[offset] || [])
+          .map(mapHit)
+          .filter((item): item is DeezerTrackHit => item !== null);
+        results[index] = items;
+
+        if (items.length > 0 || !canRetry(tracks[index]) || attempt >= BATCH_FAILED_RETRY_ATTEMPTS) {
+          pendingIndexes.delete(index);
+        }
+      });
+
+      onProgress?.(tracks.length - pendingIndexes.size, tracks.length);
+      if (start + BATCH_CHUNK_SIZE < indexes.length) await sleep(BATCH_GAP_MS);
+    }
   }
+
   return results;
 }
 
