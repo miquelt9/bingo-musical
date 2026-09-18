@@ -4,8 +4,10 @@ import { createTrack, defaultDeezerClipWindow } from "../tracks";
 const API_URL = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 5000;
 const BATCH_TIMEOUT_MS = 45000;
-const BATCH_CHUNK_SIZE = 40;
-const BATCH_GAP_MS = 5500;
+const BATCH_CHUNK_SIZE = 10;
+// Keep well below Deezer's 50 requests / 5 seconds limit when several
+// browser batches are needed for a large deck.
+const BATCH_GAP_MS = 1500;
 const MAX_RETRIES = 2;
 const DEEZER_TRACK_REQUEST_INTERVAL_MS = 500;
 
