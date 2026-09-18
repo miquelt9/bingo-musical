@@ -6,6 +6,7 @@ import { BackButton } from "../components/ui/BackButton";
 import { useDeck } from "../state/DeckContext";
 import { fetchSharedDeckPayload, isShareApiConfigured } from "../lib/share/sharedDecksApi";
 import { validateDeckSchema } from "../lib/storage/decks";
+import { AlbumArt } from "../components/tracks/AlbumArt";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { getProviderLabel } from "../lib/music/providers";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
@@ -126,7 +127,7 @@ export const SharedDeckPage: React.FC = () => {
                   const thumbnailUrl = track.albumArtUrl || (track.media?.provider === "youtube" ? getYoutubeThumbnailUrl(track.media.id, "mqdefault") : "");
                   return (
                     <li key={track.id} className="flex items-center gap-2">
-                      {thumbnailUrl ? <img src={thumbnailUrl} alt="" className="w-9 h-9 object-cover shrink-0 pc-bevel-inset" /> : <Music2 className="w-7 h-7 shrink-0 opacity-60" />}
+                      {thumbnailUrl ? <AlbumArt src={thumbnailUrl} alt="" className="w-9 h-9 object-cover shrink-0 pc-bevel-inset" /> : <Music2 className="w-7 h-7 shrink-0 opacity-60" />}
                       <span className="min-w-0 flex-1 truncate">{track.artist} — {track.title}</span>
                       {track.media ? <ClipPreviewButton track={track} size="sm" /> : <span className="text-pc-warning">Unavailable</span>}
                     </li>

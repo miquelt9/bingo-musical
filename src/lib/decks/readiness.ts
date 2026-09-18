@@ -9,7 +9,10 @@ export type DeckHealth = "ready" | "needs_fix" | "empty" | "too_few" | "previews
 
 export interface DeckReadiness {
   total: number;
+  /** Tracks with a currently usable playback source. */
   readyCount: number;
+  /** Tracks with a valid matched source, including deferred Deezer previews. */
+  matchedCount: number;
   blockedCount: number;
   unmatchedCount: number;
   /** Matched Deezer sources whose signed preview URL will be loaded on click. */
@@ -63,6 +66,9 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
   const readyCount = tracks.filter(
     (t) => isTrackPlayable(t) && !isTrackUnplayable(t)
   ).length;
+  const matchedCount = tracks.filter(
+    (track) => Boolean(track.media) && (track.matchStatus !== "failed" || isDeferredDeezerPreview(track))
+  ).length;
   const needsVerificationCount = tracks.filter(
     (t) => getTrackProvider(t) === "youtube" && isTrackNeedsVerification(t)
   ).length;
@@ -80,6 +86,7 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
   return {
     total,
     readyCount,
+    matchedCount,
     blockedCount,
     unmatchedCount,
     deferredPreviewCount,
@@ -92,9 +99,17 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
 }
 
 export function formatReadinessPrimary(readiness: DeckReadiness): string {
+  // Deezer share/import payloads intentionally omit short-lived signed preview
+  // URLs. Their stable IDs are already matched, even though playback metadata
+  // will be refreshed later, so do not present those tracks as unmatched.
+  if (readiness.deferredPreviewCount > 0) {
+    const verificationSuffix = readiness.needsVerificationCount > 0 ? " · verifying…" : "";
+    return `${readiness.matchedCount}/${readiness.total} matched${verificationSuffix}`;
+  }
+
   const base = `${readiness.readyCount}/${readiness.total} ready to play`;
   if (readiness.needsVerificationCount > 0) {
-    return `${readiness.readyCount}/${readiness.total} matched · verifying…`;
+    return `${readiness.matchedCount}/${readiness.total} matched · verifying…`;
   }
   return base;
 }

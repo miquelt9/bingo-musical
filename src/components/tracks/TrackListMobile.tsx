@@ -1,5 +1,6 @@
 import React from "react";
 import { Track } from "../../types/deck";
+import { AlbumArt } from "./AlbumArt";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { OverflowMenu } from "../ui/OverflowMenu";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -171,7 +172,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 </span>
               )}
               {thumb ? (
-                <img
+                <AlbumArt
                   src={thumb}
                   alt=""
                   className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} object-cover shrink-0 pc-bevel-inset`}
