@@ -191,7 +191,8 @@ export async function searchDeezerTracks(
 
 export async function searchDeezerTracksBatch(
   tracks: Array<Pick<Track, "title" | "artist" | "media">>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<DeezerTrackHit[][]> {
   if (tracks.length === 0) return [];
   const results: DeezerTrackHit[][] = [];
@@ -215,6 +216,7 @@ export async function searchDeezerTracksBatch(
     results.push(...(body.data || []).map((items) =>
       (items || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null)
     ));
+    onProgress?.(Math.min(start + BATCH_CHUNK_SIZE, tracks.length), tracks.length);
     if (start + BATCH_CHUNK_SIZE < tracks.length) await sleep(BATCH_GAP_MS);
   }
   return results;

@@ -1,5 +1,6 @@
 import { MusicProvider, Track } from "../../types/deck";
 import { isDeezerTrackPlayable } from "../deezer/api";
+import { isDeezerPreviewUrlFresh } from "../deezer/previewUrl";
 import { getCachedEmbedStatus, isVideoEmbedBlocked } from "../youtube/validator";
 
 export function getTrackProvider(track: Track, fallback: MusicProvider = "youtube"): MusicProvider {
@@ -12,7 +13,9 @@ export function getTrackSourceId(track: Track): string | null {
 
 export function isTrackPlayable(track: Track): boolean {
   if (track.matchStatus === "failed" || !track.media) return false;
-  if (track.media.provider === "deezer") return isDeezerTrackPlayable(track);
+  if (track.media.provider === "deezer") {
+    return isDeezerTrackPlayable(track) && isDeezerPreviewUrlFresh(track.media.previewUrl);
+  }
   const cached = getCachedEmbedStatus(track.media.id);
   return !isVideoEmbedBlocked(track.media.id) && (cached === null || cached.embeddable);
 }

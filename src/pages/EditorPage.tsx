@@ -985,6 +985,7 @@ export const EditorPage: React.FC = () => {
         matchProgress={matchProgress}
         initialStatusFilter={initialStatusFilter}
         isLoadingDeezerPreviews={isLoadingDeezerPreviews}
+        deezerPreviewProgress={deezerHydration}
         isRecentlyAdded={deck.collaboration ? (track) => recentCollaborativeTrackKeys.has(collaborativeTrackKey(track)) : undefined}
         onCancelMatching={() => {
           cancelMatchingRef.current = true;

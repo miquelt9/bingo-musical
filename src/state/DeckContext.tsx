@@ -177,9 +177,10 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loaded = getStoredDecks();
     setDecks(loaded);
     setIsLoading(false);
-    // A recipient may be opening the app directly from a shared link. Let the
-    // imported deck use the Deezer request budget before hydrating the starter.
-    if (!window.location.hash.startsWith("#/share/")) {
+    // Hydrate the starter on the home page, but let a deck/shared-deck route
+    // use the Deezer request budget for the deck the user actually opened.
+    const hash = window.location.hash;
+    if (!hash || hash === "#/") {
       void hydrateDefaultDeezerSample();
     }
   }, [hydrateDefaultDeezerSample]);
@@ -193,6 +194,11 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const all = getStoredDecks();
       const match = all.find((d) => d.id === id) || null;
       setActiveDeck(match);
+      if (match?.id === SAMPLE_DEEZER_DECK.id) {
+        void hydrateDefaultDeezerSample();
+      } else if (match) {
+        void hydrateDeezerDeck(match);
+      }
       return match;
     },
     []
@@ -282,16 +288,17 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Shared exports keep Deezer IDs but omit short-lived preview URLs. Start
-   * resolving those IDs after the snapshot has been persisted and opened so a
-   * first-time recipient gets to the editor immediately. The editor shows the
-   * background task and keeps Host disabled until the previews are usable.
+   * Shared exports and persisted Deezer decks keep stable IDs but can omit
+   * short-lived preview URLs. Resolve only those known Deezer tracks after the
+   * deck opens so reloads can recover them without treating unmatched tracks
+   * as hydration candidates.
    */
-  const hydrateImportedDeezerDeck = (deck: Deck): Promise<void> => {
+  const hydrateDeezerDeck = (deck: Deck): Promise<void> => {
     if (deck.provider !== "deezer" || !isDeezerApiConfigured()) return Promise.resolve();
 
     const tracksToHydrate = deck.tracks.filter((track) => (
-      track.media?.provider === "deezer"
+      track.matchStatus !== "failed"
+      && track.media?.provider === "deezer"
       && (trackNeedsDeezerPreviewRefresh(track) || !track.albumArtUrl)
     ));
     if (tracksToHydrate.length === 0) return Promise.resolve();
@@ -308,16 +315,21 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       try {
-        const batches = await searchDeezerTracksBatch(tracksToHydrate);
+        const batches = await searchDeezerTracksBatch(
+          tracksToHydrate,
+          undefined,
+          (completed, total) => setBackgroundTask(taskId, {
+            label: "Loading Deezer previews",
+            completed,
+            total,
+          }),
+        );
         const hitsById = new Map(
           batches.flat().map((hit) => [hit.id, hit])
         );
-        const completed = tracksToHydrate.filter((track) => (
-          track.media?.provider === "deezer" && hitsById.has(track.media.id)
-        )).length;
         setBackgroundTask(taskId, {
           label: "Loading Deezer previews",
-          completed,
+          completed: tracksToHydrate.length,
           total: tracksToHydrate.length,
         });
         if (hitsById.size === 0) return;
@@ -382,6 +394,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return task;
   };
 
+
   const importSharedDeck = async (shareId: string): Promise<Deck> => {
     const payload = await fetchSharedDeckPayload(shareId);
     const candidate = validateDeckSchema(payload);
@@ -396,7 +409,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const imported = existing ?? importDeckFromData(payload);
     refreshDecks();
     setActiveDeck(imported);
-    void hydrateImportedDeezerDeck(imported);
+    void hydrateDeezerDeck(imported);
     return imported;
   };
 

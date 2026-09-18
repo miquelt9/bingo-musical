@@ -94,10 +94,12 @@ export function trackNeedsDeezerPreviewRefresh(track: Track): boolean {
 
 /**
  * A shared/imported Deezer source can be matched by id before its signed
- * preview URL is fetched. The preview button resolves that URL on demand.
+ * preview URL is fetched. Background hydration or the preview button resolves
+ * that URL when needed.
  */
 export function isDeferredDeezerPreview(track: Track): boolean {
-  return track.media?.provider === "deezer"
+  return track.matchStatus !== "failed"
+    && track.media?.provider === "deezer"
     && Boolean(track.media.id)
-    && !track.media.previewUrl;
+    && !isDeezerPreviewUrlFresh(track.media.previewUrl);
 }

@@ -36,16 +36,33 @@ export const CardsPlayabilityBanner: React.FC<CardsPlayabilityBannerProps> = ({
   return (
     <div className="space-y-2 print:hidden">
       {showChecking && (
-        <div className="flex items-center gap-2 p-2 pc-bevel-inset text-xs text-muted">
-          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-          <span>
-            {isLoadingDeezerPreviews ? "Loading Deezer previews" : "Checking song compatibility"}
-            {isLoadingDeezerPreviews
-              ? ` (${deezerPreviewProgress?.completed ?? 0} / ${deezerPreviewProgress?.total ?? "…"})`
-              : progress
-                ? ` (${progress.completed} / ${progress.total})`
-                : "..."}
-          </span>
+        <div className="p-2 pc-bevel-inset text-xs text-muted" role={isLoadingDeezerPreviews ? "status" : undefined} aria-live={isLoadingDeezerPreviews ? "polite" : undefined}>
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+            <span>
+              {isLoadingDeezerPreviews ? "Loading Deezer previews" : "Checking song compatibility"}
+              {isLoadingDeezerPreviews
+                ? ` (${deezerPreviewProgress?.completed ?? 0} / ${deezerPreviewProgress?.total ?? "…"})`
+                : progress
+                  ? ` (${progress.completed} / ${progress.total})`
+                  : "..."}
+            </span>
+          </div>
+          {isLoadingDeezerPreviews && deezerPreviewProgress && deezerPreviewProgress.total > 0 ? (
+            <div
+              className="mt-2 w-full h-2 pc-bevel-inset overflow-hidden"
+              role="progressbar"
+              aria-label="Loading Deezer previews"
+              aria-valuemin={0}
+              aria-valuemax={deezerPreviewProgress.total}
+              aria-valuenow={Math.min(deezerPreviewProgress.total, deezerPreviewProgress.completed)}
+            >
+              <div
+                className="h-full bg-[var(--pc-titlebar-bg)] transition-[width] duration-300"
+                style={{ width: `${Math.min(100, Math.max(0, (deezerPreviewProgress.completed / deezerPreviewProgress.total) * 100))}%` }}
+              />
+            </div>
+          ) : null}
         </div>
       )}
 

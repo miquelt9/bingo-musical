@@ -29,6 +29,7 @@ interface TrackTableProps {
   initialStatusFilter?: "all" | "matched" | "unmatched" | "blocked";
   onCancelMatching?: () => void;
   isLoadingDeezerPreviews?: boolean;
+  deezerPreviewProgress?: { completed: number; total: number };
   isRecentlyAdded?: (track: Track) => boolean;
 }
 
@@ -85,6 +86,7 @@ export const TrackTable: React.FC<TrackTableProps> = ({
   initialStatusFilter = "all",
   onCancelMatching,
   isLoadingDeezerPreviews = false,
+  deezerPreviewProgress,
   isRecentlyAdded,
 }) => {
   const isMobile = useIsMobile();
@@ -136,13 +138,13 @@ export const TrackTable: React.FC<TrackTableProps> = ({
     isLoadingDeezerPreviews &&
     track.media?.provider === "deezer" &&
     Boolean(track.media.id) &&
-    !track.media.previewUrl &&
-    track.matchStatus !== "failed";
+    track.matchStatus !== "failed" &&
+    isDeferredDeezerPreview(track);
 
   const isTrackBlocked = (track: Track): boolean => {
     // A shared/imported Deezer track can have a stable matched id without a
-    // preview URL. Preview buttons refresh that URL on demand, so this is not
-    // an auto-match case.
+    // preview URL. Background hydration or Preview refreshes that URL, so this
+    // is not an auto-match case.
     if (isDeferredDeezerPreview(track)) return false;
     if (track.matchStatus === "failed") return true;
     if (isLoadingDeezerTrack(track)) return false;
@@ -155,6 +157,11 @@ export const TrackTable: React.FC<TrackTableProps> = ({
 
   const needsAttentionCount = tracks.filter((track) => !isLoadingDeezerTrack(track) && !isTrackReady(track)).length;
   const needsAttention = needsAttentionCount > 0;
+  const deezerProgressTotal = deezerPreviewProgress?.total ?? tracks.length;
+  const deezerProgressCompleted = Math.min(deezerProgressTotal, deezerPreviewProgress?.completed ?? 0);
+  const deezerProgressPercent = deezerProgressTotal > 0
+    ? Math.round((deezerProgressCompleted / deezerProgressTotal) * 100)
+    : 0;
   const showAutoMatchRainbow = needsAttention && !autoMatchRainbowDismissed;
 
   useEffect(() => {
@@ -306,9 +313,27 @@ export const TrackTable: React.FC<TrackTableProps> = ({
       </div>
 
       {isLoadingDeezerPreviews && (
-        <div className="mb-4 flex items-center gap-2 p-3 pc-bevel-inset text-xs" role="status">
-          <Sparkles className="w-3.5 h-3.5 animate-spin" />
-          <span>Loading Deezer previews…</span>
+        <div className="mb-4 p-3 pc-bevel-inset text-xs" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 animate-spin" />
+              <span>Loading Deezer previews…</span>
+            </span>
+            <span className="font-mono shrink-0">{deezerProgressCompleted}/{deezerProgressTotal}</span>
+          </div>
+          <div
+            className="w-full h-2 pc-bevel-inset overflow-hidden"
+            role="progressbar"
+            aria-label="Loading Deezer previews"
+            aria-valuemin={0}
+            aria-valuemax={deezerProgressTotal}
+            aria-valuenow={deezerProgressCompleted}
+          >
+            <div
+              className="h-full bg-[var(--pc-titlebar-bg)] transition-[width] duration-300"
+              style={{ width: `${deezerProgressPercent}%` }}
+            />
+          </div>
         </div>
       )}
 
