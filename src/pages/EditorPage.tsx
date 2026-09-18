@@ -761,7 +761,6 @@ export const EditorPage: React.FC = () => {
       {isMobile ? (
         <PageHeader
           back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
-          title={deck.name}
           primaryAction={
             <div className="flex w-full items-center justify-end gap-2">
               <Button
@@ -825,14 +824,6 @@ export const EditorPage: React.FC = () => {
               </Button>
             </div>
           }
-          overflowItems={[
-            {
-              icon: <Edit3 className="w-4 h-4" />,
-              label: "Rename deck",
-              onClick: () => setIsEditingName(true),
-              title: "Rename deck",
-            },
-          ]}
         />
       ) : (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
@@ -917,19 +908,17 @@ export const EditorPage: React.FC = () => {
                 </Button>
               </div>
             ) : (
-              !isMobile && (
-                <div className="flex items-center gap-3">
-                  <h1 className="text-xl font-bold truncate">{deck.name}</h1>
-                  <button
-                    type="button"
-                    className="pc-button"
-                    onClick={() => setIsEditingName(true)}
-                    title="Rename deck"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                </div>
-              )
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl font-bold truncate">{deck.name}</h1>
+                <button
+                  type="button"
+                  className="pc-button"
+                  onClick={() => setIsEditingName(true)}
+                  title="Rename deck"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+              </div>
             )}
             <p className="mt-2 text-xs flex flex-wrap items-center gap-2">
               {deck.collaboration && (
