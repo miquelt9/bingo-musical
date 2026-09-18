@@ -4,8 +4,17 @@ import { createTrack, defaultDeezerClipWindow } from "../tracks";
 const API_URL = (import.meta.env.VITE_SHARE_API_URL ?? "").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 5000;
 const BATCH_TIMEOUT_MS = 45000;
+const BATCH_CHUNK_SIZE = 40;
+const BATCH_GAP_MS = 5500;
 const MAX_RETRIES = 2;
 const DEEZER_TRACK_REQUEST_INTERVAL_MS = 500;
+
+class DeezerHttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "DeezerHttpError";
+  }
+}
 
 // Deezer can reject a burst of individual track lookups even when the Worker
 // rate limit has not been reached. Keep all track metadata requests in one
@@ -127,14 +136,15 @@ async function fetchJson<T>(
         } catch {
           // Keep the status-based message.
         }
-        throw new Error(message);
+        throw new DeezerHttpError(response.status, message);
       }
       return await response.json() as T;
     } catch (err) {
       lastError = err as Error;
       if (signal?.aborted || (err as Error).name === "AbortError") throw err;
-      // Do not retry application/HTTP errors other than 429 (handled above).
-      if (!(err instanceof TypeError) || attempt >= MAX_RETRIES) throw err;
+      const retryableHttpError = err instanceof DeezerHttpError && err.status >= 500 && err.status <= 599;
+      // Retry network failures and transient Worker/upstream errors, but not validation or rate-limit errors.
+      if ((!retryableHttpError && !(err instanceof TypeError)) || attempt >= MAX_RETRIES) throw err;
       await sleep(500 * (attempt + 1));
     } finally {
       window.clearTimeout(timeout);
@@ -185,7 +195,7 @@ export async function searchDeezerTracksBatch(
 ): Promise<DeezerTrackHit[][]> {
   if (tracks.length === 0) return [];
   const results: DeezerTrackHit[][] = [];
-  for (let start = 0; start < tracks.length; start += 40) {
+  for (let start = 0; start < tracks.length; start += BATCH_CHUNK_SIZE) {
     const body = await fetchJson<{ data?: Array<Partial<DeezerTrackHit>[]> }>(
       "/api/deezer/batch-search",
       signal,
@@ -193,7 +203,7 @@ export async function searchDeezerTracksBatch(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          songs: tracks.slice(start, start + 40).map((track) => ({
+          songs: tracks.slice(start, start + BATCH_CHUNK_SIZE).map((track) => ({
             id: track.media?.provider === "deezer" ? track.media.id : undefined,
             title: track.title,
             artist: track.artist,
@@ -205,6 +215,7 @@ export async function searchDeezerTracksBatch(
     results.push(...(body.data || []).map((items) =>
       (items || []).map(mapHit).filter((item): item is DeezerTrackHit => item !== null)
     ));
+    if (start + BATCH_CHUNK_SIZE < tracks.length) await sleep(BATCH_GAP_MS);
   }
   return results;
 }

@@ -53,8 +53,15 @@ const DEEZER_API = "https://api.deezer.com";
 const DEEZER_EDGE_CACHE_TTL = 300;
 const DEEZER_META_CACHE_TTL_SECONDS = 300;
 const DEEZER_PREVIEW_EXPIRY_SKEW_SECONDS = 60;
-/** v2 busts Cache API entries written before signed-preview freshness checks. */
-const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/v2/";
+const DEEZER_BATCH_CONCURRENCY = 3;
+const DEEZER_BATCH_WORK_CHUNK_SIZE = 10;
+const DEEZER_BATCH_WORK_GAP_MS = 1000;
+const DEEZER_BATCH_RETRIES = 1;
+const DEEZER_BATCH_RETRY_DELAY_MS = 5500;
+const DEEZER_UPSTREAM_RETRIES = 1;
+const DEEZER_UPSTREAM_RETRY_DELAY_MS = 500;
+/** v4 busts Cache API entries written before Deezer rate-limit backoff. */
+const DEEZER_CACHE_PREFIX = "https://bingo-musical.cache/deezer/v4/";
 /** Signed preview payloads must never be HTTP-cached by browsers/CDNs. */
 const DEEZER_PREVIEW_CACHE_CONTROL = "private, no-store";
 const YOUTUBE_CACHE_PREFIX = "https://bingo-musical.cache/youtube/";
@@ -257,9 +264,32 @@ async function deezerTrackCacheKey(id: string): Promise<string> {
   return `track:${id}`;
 }
 
+function deezerUpstreamRetryDelayMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get("Retry-After");
+  const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : NaN;
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(60_000, Math.max(5_000, seconds * 1000));
+  return response.status === 429
+    ? 5_000
+    : DEEZER_UPSTREAM_RETRY_DELAY_MS * (attempt + 1);
+}
+
 /** Bypass CF edge cache — Deezer track JSON embeds short-lived signed preview URLs. */
-function fetchDeezerTrackUpstream(id: string): Promise<Response> {
-  return fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}?cb=preview-v2`);
+async function fetchDeezerTrackUpstream(id: string): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= DEEZER_UPSTREAM_RETRIES; attempt += 1) {
+    try {
+      const response = await fetch(`${DEEZER_API}/track/${encodeURIComponent(id)}?cb=preview-v2`);
+      const shouldRetry = response.status === 429 || response.status >= 500;
+      if (!shouldRetry || attempt >= DEEZER_UPSTREAM_RETRIES) return response;
+      await new Promise((resolve) => setTimeout(resolve, deezerUpstreamRetryDelayMs(response, attempt)));
+    } catch (error) {
+      lastError = error;
+      if (attempt >= DEEZER_UPSTREAM_RETRIES) throw error;
+      await new Promise((resolve) => setTimeout(resolve, DEEZER_UPSTREAM_RETRY_DELAY_MS * (attempt + 1)));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Deezer track request failed.");
 }
 
 function setDeezerPreviewResponseHeaders(response: Response, cacheStatus: "HIT" | "MISS"): void {
@@ -952,14 +982,35 @@ async function handleDeezerBatchSearch(request: Request, env: Env): Promise<Resp
 
   try {
     const results: Record<string, unknown>[][] = Array.from({ length: queries.length }, () => []);
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < queries.length) {
-        const index = cursor++;
-        results[index] = await searchDeezerCatalog(queries[index].title, queries[index].artist, queries[index].id || undefined);
+    const runLookups = async (indexes: number[]) => {
+      for (let start = 0; start < indexes.length; start += DEEZER_BATCH_WORK_CHUNK_SIZE) {
+        const chunk = indexes.slice(start, start + DEEZER_BATCH_WORK_CHUNK_SIZE);
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < chunk.length) {
+            const index = chunk[cursor++];
+            try {
+              results[index] = await searchDeezerCatalog(queries[index].title, queries[index].artist, queries[index].id || undefined);
+            } catch {
+              // Keep the batch usable when one Deezer lookup fails transiently.
+              results[index] = [];
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(DEEZER_BATCH_CONCURRENCY, chunk.length) }, worker));
+        if (start + DEEZER_BATCH_WORK_CHUNK_SIZE < indexes.length) {
+          await new Promise((resolve) => setTimeout(resolve, DEEZER_BATCH_WORK_GAP_MS));
+        }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(6, queries.length) }, worker));
+
+    await runLookups(queries.map((_, index) => index));
+    for (let attempt = 0; attempt < DEEZER_BATCH_RETRIES; attempt += 1) {
+      const missingIndexes = results.flatMap((items, index) => items.length === 0 ? [index] : []);
+      if (missingIndexes.length === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, DEEZER_BATCH_RETRY_DELAY_MS * (attempt + 1)));
+      await runLookups(missingIndexes);
+    }
 
     const response = jsonResponse(request, env, { data: results }, 200);
     response.headers.set("Cache-Control", "private, max-age=300");
