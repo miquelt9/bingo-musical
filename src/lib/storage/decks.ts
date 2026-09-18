@@ -328,8 +328,8 @@ function parseExportedSong(raw: unknown, index: number, provider: MusicProvider)
     durationMs,
     media,
     // Shared/exported Deezer media keeps the stable track id but omits its
-    // short-lived preview URL. It is still a matched source; the preview is
-    // refreshed lazily when the user clicks Preview.
+    // short-lived preview URL. It is still a matched source; shared imports
+    // refresh it after opening, with Preview remaining a fallback.
     matchStatus: media ? "matched" : "pending",
   });
   track.startTime = media?.provider === "deezer" ? Math.max(0, Math.min(startTime, 29)) : startTime;

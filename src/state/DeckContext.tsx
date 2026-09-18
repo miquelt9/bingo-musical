@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { Deck, Track } from "../types/deck";
 import {
   getStoredDecks,
@@ -63,6 +63,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
   const [backgroundTasks, setBackgroundTasks] = useState<Record<string, BackgroundTaskStatus>>({});
+  const importedDeezerHydrationInFlight = useRef(new Map<string, Promise<void>>());
   const { showToast } = useToast();
 
   const setBackgroundTask = useCallback((id: string, status: BackgroundTaskStatus | null) => {
@@ -176,7 +177,11 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loaded = getStoredDecks();
     setDecks(loaded);
     setIsLoading(false);
-    void hydrateDefaultDeezerSample();
+    // A recipient may be opening the app directly from a shared link. Let the
+    // imported deck use the Deezer request budget before hydrating the starter.
+    if (!window.location.hash.startsWith("#/share/")) {
+      void hydrateDefaultDeezerSample();
+    }
   }, [hydrateDefaultDeezerSample]);
 
   useEffect(() => {
@@ -277,60 +282,104 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Shared exports keep Deezer IDs but omit short-lived preview URLs. Resolve
-   * those IDs before opening the imported deck so the recipient can host
-   * immediately, while still preserving the shared clip window and metadata.
+   * Shared exports keep Deezer IDs but omit short-lived preview URLs. Start
+   * resolving those IDs after the snapshot has been persisted and opened so a
+   * first-time recipient gets to the editor immediately. The editor shows the
+   * background task and keeps Host disabled until the previews are usable.
    */
-  const hydrateImportedDeezerDeck = async (deck: Deck): Promise<Deck> => {
-    if (deck.provider !== "deezer" || !isDeezerApiConfigured()) return deck;
+  const hydrateImportedDeezerDeck = (deck: Deck): Promise<void> => {
+    if (deck.provider !== "deezer" || !isDeezerApiConfigured()) return Promise.resolve();
 
     const tracksToHydrate = deck.tracks.filter((track) => (
       track.media?.provider === "deezer"
       && (trackNeedsDeezerPreviewRefresh(track) || !track.albumArtUrl)
     ));
-    if (tracksToHydrate.length === 0) return deck;
+    if (tracksToHydrate.length === 0) return Promise.resolve();
 
-    try {
-      const batches = await searchDeezerTracksBatch(tracksToHydrate);
-      const hitsById = new Map(
-        batches.flat().map((hit) => [hit.id, hit])
-      );
-      if (hitsById.size === 0) return deck;
+    const existingTask = importedDeezerHydrationInFlight.current.get(deck.id);
+    if (existingTask) return existingTask;
 
-      const tracks = deck.tracks.map((track) => {
-        const media = track.media?.provider === "deezer" ? track.media : null;
-        const hit = media ? hitsById.get(media.id) : undefined;
-        if (!hit) return track;
-
-        const resolved = deezerHitToTrack(hit);
-        const previewDurationSec = Math.max(1, (resolved.media?.provider === "deezer"
-          ? resolved.media.previewDurationMs ?? 30000
-          : 30000) / 1000);
-        const startTime = Math.max(0, Math.min(track.startTime, Math.max(0, previewDurationSec - 1)));
-        const endTime = Math.min(
-          Math.max(startTime + 1, track.endTime),
-          previewDurationSec,
-        );
-
-        return {
-          ...track,
-          album: resolved.album || track.album,
-          albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
-          durationMs: resolved.durationMs || track.durationMs,
-          media: resolved.media,
-          startTime,
-          endTime,
-          // A known Deezer ID is matched even if Deezer has no preview for it.
-          matchStatus: "matched" as const,
-        };
+    const taskId = `deezer-hydration:${deck.id}`;
+    const task = (async () => {
+      setBackgroundTask(taskId, {
+        label: "Loading Deezer previews",
+        completed: 0,
+        total: tracksToHydrate.length,
       });
 
-      return persistDeck({ ...deck, tracks });
-    } catch {
-      // Do not make a shared deck impossible to import when Deezer is offline.
-      // The existing stable IDs remain available for a later Preview refresh.
-      return deck;
-    }
+      try {
+        const batches = await searchDeezerTracksBatch(tracksToHydrate);
+        const hitsById = new Map(
+          batches.flat().map((hit) => [hit.id, hit])
+        );
+        const completed = tracksToHydrate.filter((track) => (
+          track.media?.provider === "deezer" && hitsById.has(track.media.id)
+        )).length;
+        setBackgroundTask(taskId, {
+          label: "Loading Deezer previews",
+          completed,
+          total: tracksToHydrate.length,
+        });
+        if (hitsById.size === 0) return;
+
+        // Merge into the latest saved deck so edits made while hydration runs
+        // (renames, clip changes, added or deleted tracks) are preserved.
+        const latest = getStoredDecks().find((stored) => stored.id === deck.id);
+        if (!latest || latest.provider !== "deezer") return;
+
+        const tracks = latest.tracks.map((track) => {
+          const media = track.media?.provider === "deezer" ? track.media : null;
+          const hit = media ? hitsById.get(media.id) : undefined;
+          if (!hit) return track;
+
+          const resolved = deezerHitToTrack(hit);
+          const previewDurationSec = Math.max(1, (resolved.media?.provider === "deezer"
+            ? resolved.media.previewDurationMs ?? 30000
+            : 30000) / 1000);
+          const startTime = Math.max(0, Math.min(track.startTime, Math.max(0, previewDurationSec - 1)));
+          const endTime = Math.min(
+            Math.max(startTime + 1, track.endTime),
+            previewDurationSec,
+          );
+
+          return {
+            ...track,
+            album: resolved.album || track.album,
+            albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
+            durationMs: resolved.durationMs || track.durationMs,
+            media: resolved.media,
+            startTime,
+            endTime,
+            // A known Deezer ID is matched even if Deezer has no preview for it.
+            matchStatus: "matched" as const,
+          };
+        });
+
+        const saved = persistDeck({ ...latest, tracks });
+        setDecks(getStoredDecks());
+        setActiveDeck((current) => (current?.id === saved.id ? saved : current));
+      } catch {
+        // Do not make a shared deck impossible to import when Deezer is offline.
+        // The existing stable IDs remain available for a later Preview refresh.
+      } finally {
+        setBackgroundTask(taskId, null);
+      }
+    })();
+
+    importedDeezerHydrationInFlight.current.set(deck.id, task);
+    void task.then(
+      () => {
+        if (importedDeezerHydrationInFlight.current.get(deck.id) === task) {
+          importedDeezerHydrationInFlight.current.delete(deck.id);
+        }
+      },
+      () => {
+        if (importedDeezerHydrationInFlight.current.get(deck.id) === task) {
+          importedDeezerHydrationInFlight.current.delete(deck.id);
+        }
+      },
+    );
+    return task;
   };
 
   const importSharedDeck = async (shareId: string): Promise<Deck> => {
@@ -344,16 +393,10 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
       canonicalPayloadsEqual(buildCanonicalSharePayload(deck), canonicalPayload)
     ));
 
-    if (existing) {
-      const hydrated = await hydrateImportedDeezerDeck(existing);
-      refreshDecks();
-      setActiveDeck(hydrated);
-      return hydrated;
-    }
-
-    const imported = await hydrateImportedDeezerDeck(importDeckFromData(payload));
+    const imported = existing ?? importDeckFromData(payload);
     refreshDecks();
     setActiveDeck(imported);
+    void hydrateImportedDeezerDeck(imported);
     return imported;
   };
 

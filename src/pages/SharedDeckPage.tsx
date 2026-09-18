@@ -143,8 +143,13 @@ export const SharedDeckPage: React.FC = () => {
 
             <Button type="button" variant="primary" disabled={isImporting} onClick={() => void handleImport()}>
               <Download className="w-4 h-4" />
-              {isImporting ? "Preparing previews…" : "Add to my decks"}
+              {isImporting ? "Adding deck…" : "Add to my decks"}
             </Button>
+            {preview.provider === "deezer" ? (
+              <p className="text-xs opacity-75">
+                The deck opens immediately. Deezer previews continue loading in the editor, and hosting becomes available when they are ready.
+              </p>
+            ) : null}
           </div>
         ) : null}
       </Window>
