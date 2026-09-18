@@ -143,7 +143,7 @@ export const SharedDeckPage: React.FC = () => {
 
             <Button type="button" variant="primary" disabled={isImporting} onClick={() => void handleImport()}>
               <Download className="w-4 h-4" />
-              {isImporting ? "Adding…" : "Add to my decks"}
+              {isImporting ? "Preparing previews…" : "Add to my decks"}
             </Button>
           </div>
         ) : null}

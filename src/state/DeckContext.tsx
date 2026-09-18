@@ -14,7 +14,7 @@ import { fetchSharedDeckPayload } from "../lib/share/sharedDecksApi";
 import { buildCanonicalSharePayload, canonicalPayloadsEqual } from "../lib/share/deckCanonical";
 import { isEmptyDeck } from "../lib/decks/discardable";
 import { ShareDeckModal } from "../components/decks/ShareDeckModal";
-import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack } from "../lib/deezer/api";
+import { deezerHitToTrack, isDeezerApiConfigured, resolveDeezerTrack, searchDeezerTracksBatch } from "../lib/deezer/api";
 import { trackNeedsDeezerPreviewRefresh } from "../lib/deezer/previewUrl";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { useToast } from "./ToastContext";
@@ -276,6 +276,63 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return imported;
   };
 
+  /**
+   * Shared exports keep Deezer IDs but omit short-lived preview URLs. Resolve
+   * those IDs before opening the imported deck so the recipient can host
+   * immediately, while still preserving the shared clip window and metadata.
+   */
+  const hydrateImportedDeezerDeck = async (deck: Deck): Promise<Deck> => {
+    if (deck.provider !== "deezer" || !isDeezerApiConfigured()) return deck;
+
+    const tracksToHydrate = deck.tracks.filter((track) => (
+      track.media?.provider === "deezer"
+      && (trackNeedsDeezerPreviewRefresh(track) || !track.albumArtUrl)
+    ));
+    if (tracksToHydrate.length === 0) return deck;
+
+    try {
+      const batches = await searchDeezerTracksBatch(tracksToHydrate);
+      const hitsById = new Map(
+        batches.flat().map((hit) => [hit.id, hit])
+      );
+      if (hitsById.size === 0) return deck;
+
+      const tracks = deck.tracks.map((track) => {
+        const media = track.media?.provider === "deezer" ? track.media : null;
+        const hit = media ? hitsById.get(media.id) : undefined;
+        if (!hit) return track;
+
+        const resolved = deezerHitToTrack(hit);
+        const previewDurationSec = Math.max(1, (resolved.media?.provider === "deezer"
+          ? resolved.media.previewDurationMs ?? 30000
+          : 30000) / 1000);
+        const startTime = Math.max(0, Math.min(track.startTime, Math.max(0, previewDurationSec - 1)));
+        const endTime = Math.min(
+          Math.max(startTime + 1, track.endTime),
+          previewDurationSec,
+        );
+
+        return {
+          ...track,
+          album: resolved.album || track.album,
+          albumArtUrl: resolved.albumArtUrl || track.albumArtUrl,
+          durationMs: resolved.durationMs || track.durationMs,
+          media: resolved.media,
+          startTime,
+          endTime,
+          // A known Deezer ID is matched even if Deezer has no preview for it.
+          matchStatus: "matched" as const,
+        };
+      });
+
+      return persistDeck({ ...deck, tracks });
+    } catch {
+      // Do not make a shared deck impossible to import when Deezer is offline.
+      // The existing stable IDs remain available for a later Preview refresh.
+      return deck;
+    }
+  };
+
   const importSharedDeck = async (shareId: string): Promise<Deck> => {
     const payload = await fetchSharedDeckPayload(shareId);
     const candidate = validateDeckSchema(payload);
@@ -288,12 +345,13 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ));
 
     if (existing) {
+      const hydrated = await hydrateImportedDeezerDeck(existing);
       refreshDecks();
-      setActiveDeck(existing);
-      return existing;
+      setActiveDeck(hydrated);
+      return hydrated;
     }
 
-    const imported = importDeckFromData(payload);
+    const imported = await hydrateImportedDeezerDeck(importDeckFromData(payload));
     refreshDecks();
     setActiveDeck(imported);
     return imported;
