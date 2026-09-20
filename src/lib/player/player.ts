@@ -8,6 +8,7 @@ export type { ClipPlaybackOptions, PlayableClip, PlayerPlaybackState } from "./t
 let activeProvider: MusicProvider = "youtube";
 let listenersAttached = false;
 const listeners = new Set<(state: PlayerPlaybackState) => void>();
+const clipTransitionListeners = new Set<(clip: PlayableClip) => void>();
 
 let currentState: PlayerPlaybackState = {
   isReady: false,
@@ -55,6 +56,24 @@ function attachSubscriptions(): void {
   deezer.subscribeToPlayerState((state) => {
     if (activeProvider === "deezer") notify(state);
   });
+  youtube.subscribeToClipTransitions((clip) => {
+    if (activeProvider !== "youtube") return;
+    const playableClip: PlayableClip = {
+      provider: "youtube",
+      sourceId: clip.videoId,
+      startTime: clip.startTime,
+      endTime: clip.endTime,
+      trackId: clip.trackId,
+      title: clip.title,
+      artist: clip.artist,
+    };
+    for (const listener of clipTransitionListeners) listener({ ...playableClip });
+  });
+  deezer.subscribeToClipTransitions((clip) => {
+    if (activeProvider === "deezer") {
+      for (const listener of clipTransitionListeners) listener({ ...clip });
+    }
+  });
 }
 
 function toYoutubeClip(clip: PlayableClip): youtube.Clip {
@@ -78,6 +97,12 @@ export function subscribeToPlayerState(listener: (state: PlayerPlaybackState) =>
   listeners.add(listener);
   listener({ ...currentState });
   return () => listeners.delete(listener);
+}
+
+export function subscribeToClipTransitions(listener: (clip: PlayableClip) => void): () => void {
+  attachSubscriptions();
+  clipTransitionListeners.add(listener);
+  return () => clipTransitionListeners.delete(listener);
 }
 
 export function getPlayerState(): PlayerPlaybackState {

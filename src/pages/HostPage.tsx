@@ -24,6 +24,7 @@ import {
   resumePlayback,
   stopPlayback,
   subscribeToPlayerState,
+  subscribeToClipTransitions,
   setVolume,
   toggleMute,
   preloadClip,
@@ -215,6 +216,7 @@ export const HostPage: React.FC = () => {
 
   const videoViewportRef = useRef<HTMLDivElement>(null);
   const uncalledIdsRef = useRef(uncalledIds);
+  const currentCallRef = useRef(currentCall);
   const autoCallNextOnEndRef = useRef(autoCallNextOnEnd);
   const crossfadeOverlapMsRef = useRef(crossfadeOverlapMs);
   const handleCallNextRef = useRef<() => void>(() => {});
@@ -226,6 +228,10 @@ export const HostPage: React.FC = () => {
   useEffect(() => {
     uncalledIdsRef.current = uncalledIds;
   }, [uncalledIds]);
+
+  useEffect(() => {
+    currentCallRef.current = currentCall;
+  }, [currentCall]);
 
   useEffect(() => {
     autoCallNextOnEndRef.current = autoCallNextOnEnd;
@@ -266,7 +272,7 @@ export const HostPage: React.FC = () => {
 
   const preloadNextTrack = useCallback(
     (remainingIds: string[]) => {
-      if (!deck || !autoCallNextOnEndRef.current || remainingIds.length === 0) return;
+      if (!deck || remainingIds.length === 0) return;
       const nextTrack = deck.tracks.find((t) => t.id === remainingIds[0]);
       if (!nextTrack) return;
       void resolveHostClip(nextTrack).then((resolved) => {
@@ -345,6 +351,8 @@ export const HostPage: React.FC = () => {
     const isLastCall = remaining.length === 0;
     const playbackOpts = { fadeIn: isFirstCall, fadeOut: isLastCall };
 
+    uncalledIdsRef.current = remaining;
+    currentCallRef.current = newEntry;
     setUncalledIds(remaining);
     setCurrentCall(newEntry);
     setCalledHistory((prev) => [newEntry, ...prev]);
@@ -375,6 +383,44 @@ export const HostPage: React.FC = () => {
       }
     });
   }, [deck, canHost, uncalledIds, calledHistory.length, onClipEnd, preloadNextTrack, persistRefreshedTrack]);
+
+  const handleCrossfadeTransition = useCallback(
+    (clip: PlayableClip) => {
+      if (!deck || !clip.trackId) return;
+      if (currentCallRef.current?.track.id === clip.trackId) return;
+
+      const pendingIds = uncalledIdsRef.current;
+      if (pendingIds[0] !== clip.trackId) return;
+      const track = deck.tracks.find((candidate) => candidate.id === clip.trackId);
+      if (!track) return;
+
+      const remaining = pendingIds.slice(1);
+      const newEntry: CalledEntry = {
+        callNumber: calledHistory.length + 1,
+        track,
+        calledAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      };
+
+      uncalledIdsRef.current = remaining;
+      currentCallRef.current = newEntry;
+      setUncalledIds(remaining);
+      setCurrentCall(newEntry);
+      setCalledHistory((prev) => [newEntry, ...prev]);
+      setIsRevealed(false);
+      revealArmedRef.current = false;
+      setHostClipError(null);
+      preloadNextTrack(remaining);
+    },
+    [deck, calledHistory.length, preloadNextTrack]
+  );
+
+  useEffect(() => {
+    return subscribeToClipTransitions(handleCrossfadeTransition);
+  }, [handleCrossfadeTransition]);
 
   useEffect(() => {
     handleCallNextRef.current = handleCallNext;

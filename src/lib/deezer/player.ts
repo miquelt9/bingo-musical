@@ -6,6 +6,7 @@ export const DEFAULT_INTRO_FADE_MS = 1500;
 export const DEFAULT_OUTRO_FADE_MS = 2000;
 
 type StateListener = (state: PlayerPlaybackState) => void;
+type ClipTransitionListener = (clip: PlayableClip) => void;
 
 interface AudioSlot {
   wrapperId: string;
@@ -34,7 +35,9 @@ let outroFadeInProgress = false;
 /** True only after the active clip has reached a real `playing` event. */
 let playbackStarted = false;
 let pendingPlay: { clip: PlayableClip; handleEnd?: ClipEndHandler; options?: ClipPlaybackOptions } | null = null;
+let deferredPreload: PlayableClip | null = null;
 const listeners = new Set<StateListener>();
+const clipTransitionListeners = new Set<ClipTransitionListener>();
 
 let currentState: PlayerPlaybackState = {
   isReady: false,
@@ -53,6 +56,10 @@ let currentState: PlayerPlaybackState = {
 
 function notify(): void {
   for (const listener of listeners) listener({ ...currentState });
+}
+
+function notifyClipTransition(clip: PlayableClip): void {
+  for (const listener of clipTransitionListeners) listener({ ...clip });
 }
 
 function getActiveSlot(): AudioSlot | null {
@@ -149,9 +156,9 @@ function loadAudio(slot: AudioSlot, clip: PlayableClip): void {
   }
 }
 
-function effectiveOverlap(clip: PlayableClip): number {
+function effectiveOverlap(clip: PlayableClip, force = false): number {
   const durationMs = Math.max(0, clip.endTime - clip.startTime) * 1000;
-  return crossfadeEnabled ? Math.min(crossfadeOverlapMs, durationMs * 0.4) : 0;
+  return crossfadeEnabled || force ? Math.min(crossfadeOverlapMs, durationMs) : 0;
 }
 
 function clearClipEndCallback(): void {
@@ -210,12 +217,12 @@ function finishClip(): void {
   fireClipEnd();
 }
 
-function startCrossfade(incomingClip: PlayableClip): void {
-  if (crossfadeInProgress || !slots) return;
+function startCrossfade(incomingClip: PlayableClip, force = false): boolean {
+  if (crossfadeInProgress || !slots) return false;
   const outgoing = getActiveSlot();
   const incoming = getStandbySlot();
-  const overlap = effectiveOverlap(incomingClip);
-  if (!outgoing || !incoming || overlap <= 0) return;
+  const overlap = effectiveOverlap(activeClip ?? incomingClip, force);
+  if (!outgoing || !incoming || overlap <= 0) return false;
 
   crossfadeInProgress = true;
   cancelVolumeRamp();
@@ -234,11 +241,22 @@ function startCrossfade(incomingClip: PlayableClip): void {
 
   const started = performance.now();
   const target = getTargetVolume();
+  currentState.currentClip = incomingClip;
+  resetProgressForClip(incomingClip);
+  currentState.activePlayerElementId = incoming.wrapperId;
+  currentState.visiblePlayerElementId = incoming.wrapperId;
+  notifyClipTransition(incomingClip);
+  notify();
   const tick = (now: number) => {
     const progress = Math.min(1, (now - started) / overlap);
-    const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-    setAudioVolume(outgoing, target * (1 - eased));
-    setAudioVolume(incoming, target * eased);
+    setAudioVolume(outgoing, target * (1 - progress));
+    setAudioVolume(incoming, target * progress);
+    const incomingTime = incoming.audio.currentTime || incomingClip.startTime;
+    const incomingDuration = Math.max(0.1, incomingClip.endTime - incomingClip.startTime);
+    currentState.currentTime = incomingTime;
+    currentState.duration = incomingDuration;
+    currentState.progress = Math.min(1, Math.max(0, (incomingTime - incomingClip.startTime) / incomingDuration));
+    currentState.remainingTime = Math.max(0, incomingClip.endTime - incomingTime);
     if (progress < 1) crossfadeRafId = requestAnimationFrame(tick);
     else {
       crossfadeRafId = null;
@@ -248,23 +266,27 @@ function startCrossfade(incomingClip: PlayableClip): void {
       incoming.preloadedClip = null;
       activeSlotIndex = activeSlotIndex === 0 ? 1 : 0;
       const chainCb = onClipEndCallback;
-      // Switch active clip before progress/notify so Host never sees stale
-      // remainingTime ≈ 0 from the outgoing track on the incoming currentClip.
+      // The incoming clip owns the end callback now; do not fire the outgoing
+      // callback here or the host would immediately skip past this clip.
       activeClip = incomingClip;
       currentState.currentClip = incomingClip;
       currentState.state = "playing";
       currentState.errorMessage = null;
       currentState.activePlayerElementId = incoming.wrapperId;
       currentState.visiblePlayerElementId = incoming.wrapperId;
-      updateProgress();
-      notify();
-      fireClipEnd();
       handoffChainToClip(incomingClip, chainCb);
+      if (deferredPreload) {
+        const next = deferredPreload;
+        deferredPreload = null;
+        preloadClip(next);
+      }
       playbackStarted = true;
       startPoll();
+      notify();
     }
   };
   crossfadeRafId = requestAnimationFrame(tick);
+  return true;
 }
 
 function startPoll(): void {
@@ -273,7 +295,7 @@ function startPoll(): void {
     if (!activeClip || !getActiveSlot()) return stopPoll();
     const remaining = updateProgress();
     const standby = getStandbySlot();
-    if (standby?.preloadedClip && remaining * 1000 <= effectiveOverlap(standby.preloadedClip) + 50) {
+    if (standby?.preloadedClip && remaining * 1000 <= effectiveOverlap(activeClip ?? standby.preloadedClip) + 50) {
       startCrossfade(standby.preloadedClip);
       return;
     }
@@ -400,10 +422,15 @@ export function subscribeToPlayerState(listener: StateListener): () => void {
   return () => listeners.delete(listener);
 }
 
+export function subscribeToClipTransitions(listener: ClipTransitionListener): () => void {
+  clipTransitionListeners.add(listener);
+  return () => clipTransitionListeners.delete(listener);
+}
+
 export function getPlayerState(): PlayerPlaybackState { return { ...currentState }; }
 
 export function setCrossfadeConfig(overlapMs: number, enabled: boolean): void {
-  crossfadeOverlapMs = Math.max(0, Math.min(3000, overlapMs));
+  crossfadeOverlapMs = Math.max(0, Math.min(10000, overlapMs));
   crossfadeEnabled = enabled;
 }
 
@@ -413,6 +440,10 @@ export function setPlaybackFadeConfig(introMs: number, outroMs: number): void {
 }
 
 export function preloadClip(clip: PlayableClip): void {
+  if (crossfadeInProgress) {
+    deferredPreload = clip;
+    return;
+  }
   const standby = getStandbySlot();
   if (!standby || !clip.previewUrl) return;
   standby.preloadedClip = clip;
@@ -425,6 +456,7 @@ export function preloadClip(clip: PlayableClip): void {
 }
 
 export function clearPreload(): void {
+  deferredPreload = null;
   const standby = getStandbySlot();
   if (standby) standby.preloadedClip = null;
 }
@@ -444,6 +476,14 @@ export function continueClipPlayback(clip: PlayableClip, handleEnd?: ClipEndHand
 export function activatePreloadedClip(clip: PlayableClip, handleEnd?: ClipEndHandler, options?: ClipPlaybackOptions): boolean {
   if (continueClipPlayback(clip, handleEnd, options)) return true;
   const standby = getStandbySlot();
+  if (standby?.preloadedClip && standby.preloadedClip.sourceId !== clip.sourceId) return false;
+
+  if (activeClip && currentState.state === "playing" && standby && startCrossfade(clip, true)) {
+    onClipEndCallback = handleEnd ?? null;
+    applyOptions(options);
+    return true;
+  }
+
   if (!standby?.preloadedClip || standby.preloadedClip.sourceId !== clip.sourceId) return false;
   const outgoing = getActiveSlot();
   outgoing?.audio.pause();
@@ -564,6 +604,7 @@ export function stopPlayback(): void {
   activeClip = null;
   onClipEndCallback = null;
   chainEndFired = false;
+  deferredPreload = null;
   playbackStarted = false;
   pendingPlay = null;
   currentState.currentClip = null;
