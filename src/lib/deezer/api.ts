@@ -8,8 +8,9 @@ const BATCH_CHUNK_SIZE = 10;
 // Keep well below Deezer's 50 requests / 5 seconds limit when several
 // browser batches are needed for a large deck.
 const BATCH_GAP_MS = 1500;
-const BATCH_FAILED_RETRY_ATTEMPTS = 3;
+const BATCH_FAILED_RETRY_ATTEMPTS = 2;
 const BATCH_FAILED_RETRY_DELAY_MS = 5000;
+const BATCH_PROGRESS_STEP_DELAY_MS = 50;
 const MAX_RETRIES = 2;
 const DEEZER_TRACK_REQUEST_INTERVAL_MS = 500;
 
@@ -244,7 +245,7 @@ export async function searchDeezerTracksBatch(
         data = [];
       }
 
-      chunkIndexes.forEach((index, offset) => {
+      for (const [offset, index] of chunkIndexes.entries()) {
         const items = (data[offset] || [])
           .map(mapHit)
           .filter((item): item is DeezerTrackHit => item !== null);
@@ -253,9 +254,10 @@ export async function searchDeezerTracksBatch(
         if (items.length > 0 || !canRetry(tracks[index]) || attempt >= BATCH_FAILED_RETRY_ATTEMPTS) {
           pendingIndexes.delete(index);
         }
-      });
 
-      onProgress?.(tracks.length - pendingIndexes.size, tracks.length);
+        onProgress?.(tracks.length - pendingIndexes.size, tracks.length);
+        if (onProgress) await sleep(BATCH_PROGRESS_STEP_DELAY_MS);
+      }
       if (start + BATCH_CHUNK_SIZE < indexes.length) await sleep(BATCH_GAP_MS);
     }
   }
