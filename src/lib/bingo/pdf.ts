@@ -40,6 +40,8 @@ export interface PdfExportOptions extends BingoCardOptions {
   cellContent?: BingoCellContentSelection;
   cellContentSizes?: BingoCellContentSizes;
   shareUrl?: string;
+  /** Verification code keyed by generated card id. */
+  verificationCodes?: Record<string, string>;
 }
 
 interface PreparedImage {
@@ -323,7 +325,8 @@ function calculateCardLayout(
   showSongs: boolean,
   showAuthors: boolean,
   showNumbers: boolean,
-  hasQr: boolean
+  hasQr: boolean,
+  hasVerificationQr: boolean
 ): CardLayout {
   const title = fitText(
     doc,
@@ -331,13 +334,13 @@ function calculateCardLayout(
     appearance.titleFontFamily,
     "bold",
     appearance.titleSizePt,
-    TITLE_MAX_WIDTH,
+    hasVerificationQr ? 138 : TITLE_MAX_WIDTH,
     3
   );
   const titleLineHeight = getLineHeight(title.fontSize, 1.08);
   const headerTop = 17;
   const headerBottom = headerTop + title.lines.length * titleLineHeight + 4;
-  const footerReserve = hasQr ? 28 : 8;
+  const footerReserve = hasQr ? 34 : 18;
   const availableHeight = PAGE_HEIGHT - BOTTOM_MARGIN - footerReserve - headerBottom;
   const gap = appearance.tileStyle === "compactSquare" ? 0 : appearance.tileGapMm;
   const widthBased = (GRID_WIDTH - (gridSize - 1) * gap) / gridSize;
@@ -433,11 +436,56 @@ async function drawShareFooter(
   const qrSize = 18;
   const qrX = pageWidth - marginX - qrSize;
   const qrY = footerY - 4;
+  setPdfFont(doc, "helvetica", "bold");
+  doc.setFontSize(6.5);
+  setPdfColor(doc, DEFAULT_TEXT);
+  doc.text("OPEN THIS DECK ONLINE", qrX - 2, qrY - 1, { align: "right" });
   try {
     doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
   } catch {
     // Continue without QR if image embedding fails.
   }
+}
+
+async function drawCardVerification(
+  doc: jsPDF,
+  code: string | undefined,
+  qrCache: Map<string, string>
+): Promise<void> {
+  if (!code) return;
+  let qrDataUrl = qrCache.get(`verify:${code}`);
+  if (!qrDataUrl) {
+    qrDataUrl = await generateQrDataUrl(code, 220);
+    qrCache.set(`verify:${code}`, qrDataUrl);
+  }
+
+  const qrSize = 20;
+  const qrX = PAGE_WIDTH - MARGIN_X - qrSize;
+  const qrY = 12;
+  try {
+    doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+    setPdfFont(doc, "helvetica", "bold");
+    doc.setFontSize(6.5);
+    setPdfColor(doc, DEFAULT_TEXT);
+    doc.text("VERIFY CARD", qrX + qrSize / 2, qrY + qrSize + 3, { align: "center" });
+    setPdfFont(doc, "courier", "normal");
+    doc.setFontSize(4.3);
+    setPdfColor(doc, MUTED_TEXT);
+    const codeLines = doc.splitTextToSize(code, qrSize + 4) as string[];
+    codeLines.slice(0, 3).forEach((line, index) => {
+      doc.text(line, qrX + qrSize / 2, qrY + qrSize + 5.5 + index * 2.3, { align: "center" });
+    });
+  } catch {
+    // Continue without QR if image embedding fails.
+  }
+}
+
+function drawCardInstructions(doc: jsPDF): void {
+  setPdfFont(doc, "helvetica", "normal");
+  doc.setFontSize(6.5);
+  setPdfColor(doc, MUTED_TEXT);
+  doc.text("LINE: Complete every filled cell in one horizontal row.", MARGIN_X, PAGE_HEIGHT - 9);
+  doc.text("BINGO: Complete every filled cell on the card. Only one line prize is awarded; after that, claim Bingo.", MARGIN_X, PAGE_HEIGHT - 5.5);
 }
 
 function drawMasterListPages(
@@ -553,7 +601,7 @@ export async function generateBingoPdf(
       doc,
       tracks,
       eventTitle,
-      shareUrl,
+      undefined,
       qrCache,
       exportAppearance
     );
@@ -576,7 +624,8 @@ export async function generateBingoPdf(
       showSongs,
       showAuthors,
       showNumbers,
-      Boolean(shareUrl)
+      Boolean(shareUrl),
+      Boolean(options.verificationCodes?.[card.id])
     );
 
     if (appearance.background?.mode === "fullPage") {
@@ -585,6 +634,7 @@ export async function generateBingoPdf(
 
     drawFestiveHeader(doc, appearance);
     drawTitle(doc, layout.title, appearance, TOP_MARGIN + 8);
+    await drawCardVerification(doc, options.verificationCodes?.[card.id], qrCache);
 
     if (appearance.background?.mode === "cardWatermark") {
       drawBackground(
@@ -693,8 +743,9 @@ export async function generateBingoPdf(
     }
 
     if (shareUrl) {
-      await drawShareFooter(doc, shareUrl, MARGIN_X, PAGE_WIDTH, layout.footerY, qrCache);
+      await drawShareFooter(doc, shareUrl, MARGIN_X, PAGE_WIDTH, PAGE_HEIGHT - 27, qrCache);
     }
+    drawCardInstructions(doc);
     onProgress?.(cardIndex + 1, cards.length);
   }
 

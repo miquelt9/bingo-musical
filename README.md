@@ -43,6 +43,10 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Configurable **3×3 to 6×6** grids with adjustable **bingo percent** (how much of the deck appears on each card).
   - Leftover squares become dark blocked tiles — no fixed center free space required.
   - Clean browser print layout (`@media print`).
+  - Every printed card includes a local verification QR in the top-right corner; the host can scan it to verify a horizontal line or Bingo without storing cards in Cloudflare KV.
+  - A compact card code is printed with the verification QR for camera-less host devices.
+  - Optional deck-sharing QR on each bingo card, with explanatory printed text; it is separate from verification.
+  - Printed cards explain that blank cells are ignored, lines are horizontal only, all filled cells count for Bingo, and only one line prize is awarded.
   - Crisp vector PDF generator powered by `jsPDF` for multi-card batch downloads.
   - Export generated card sets as JSON for reuse.
 - 🎙️ **Interactive Host Game Dashboard:**
@@ -52,7 +56,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - Crossfade overlap between songs, hide-answer mode (default), and auto-call-next chaining.
   - **Display mode** (`#/deck/:id/display`) — audience-facing progress view for a projector; syncs with the host via BroadcastChannel. Mirror the display window, not the full host UI.
   - Answer reveal card with countdown/clip-finished trigger or manual toggle.
-  - Live searchable history log of called songs, verification, and celebratory Bingo confetti.
+  - Live searchable history log of called songs, local card verification by camera or card code, and celebratory Bingo confetti.
   - **Space** toggles play/pause or calls the next song during a live game.
   - Host session state persists in `sessionStorage` across page refreshes.
 - 🖥️ **Classic desktop UI:**
@@ -122,7 +126,7 @@ The beacon loads only in production builds and does not use cookies.
 1. Open a deck (or use the share button on the home page deck list).
 2. Click **Share** — the app resolves a short link like `…/bingo-musical/#/share/xYz12Ab3Cd` from the deck content. Identical decks (same name and songs/clips) always get the same id.
 3. The app checks whether that deck is already on the server (read-only) before uploading. Only the first share of a given deck writes to KV; later shares reuse the existing snapshot.
-4. Send the link on WhatsApp, Telegram, or email (no JSON file required).
+4. Send the link on WhatsApp, Telegram, or email (no JSON file required). On the Cards page, the optional **Show deck sharing QR code** setting adds the same deck link to every printed bingo card. This QR opens the deck online; it does not verify a card.
 5. Recipients open the link, preview the songs, and click **Add to my decks** to copy it locally.
 
 ### Collaborative link
@@ -137,7 +141,7 @@ Older random share links (`#/share/…`) keep working until they expire.
 
 Run `npm run compute:sample-share-id` to print the stable share id for the built-in starter deck.
 
-If link sharing is not configured, the share dialog falls back to downloading a `.json` file and the `#/import` flow.
+If link sharing is not configured, the share dialog falls back to downloading a `.json` file and the `#/import` flow. Printed card verification is separate: the host must load the same unchanged deck version, then use **Verify Line / Bingo** to scan a card QR or enter its printed code. Changing the songs, order, titles, artists, or other card-source data after printing produces a deck-version mismatch; re-open the original shared snapshot or restore the deck used to print.
 
 ---
 

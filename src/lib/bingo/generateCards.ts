@@ -10,13 +10,37 @@ export const MAX_GRID_SIZE = 6;
 export const GRID_SIZES = [3, 4, 5, 6] as const;
 
 // Fisher-Yates array shuffle
-export function shuffleArray<T>(array: T[]): T[] {
+export function shuffleArray<T>(array: T[], random: () => number = Math.random): T[] {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+function hashSeed(seed: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/** Small deterministic PRNG used so printed cards can be recreated from their batch seed. */
+export function createSeededRandom(seed: string): () => number {
+  let state = hashSeed(seed) || 0x9e3779b9;
+  return () => {
+    state = Math.imul(state ^ (state >>> 16), 2246822507);
+    state = Math.imul(state ^ (state >>> 13), 3266489909);
+    state ^= state >>> 16;
+    return (state >>> 0) / 4294967296;
+  };
+}
+
+export function cardSeedForNumber(batchSeed: string, cardNumber: number): string {
+  return `${batchSeed}:${cardNumber}`;
 }
 
 export function normalizeGridSize(size: number): number {
@@ -52,7 +76,7 @@ export function isBlankCell(cell: BingoCardCell): boolean {
 export function generateSingleBingoCard(
   tracks: Track[],
   cardNumber: number,
-  options: Pick<BingoCardOptions, "gridSize" | "bingoPercent" | "cellContent">
+  options: Pick<BingoCardOptions, "gridSize" | "bingoPercent" | "cellContent"> & { seed?: string }
 ): BingoCard {
   const selection = normalizeCellContent(options.cellContent ?? DEFAULT_CELL_CONTENT);
   const pool = cellContentPool(tracks, selection);
@@ -63,9 +87,10 @@ export function generateSingleBingoCard(
   const gridSize = normalizeGridSize(options.gridSize);
   const slots = cellCount(gridSize);
   const filledCount = uniqueSongCount(pool.length, slots, options.bingoPercent);
-  const picked = shuffleArray(pool).slice(0, filledCount);
+  const random = options.seed ? createSeededRandom(options.seed) : Math.random;
+  const picked = shuffleArray(pool, random).slice(0, filledCount);
   const filledPositions = new Set(
-    shuffleArray(Array.from({ length: slots }, (_, i) => i)).slice(0, filledCount)
+    shuffleArray(Array.from({ length: slots }, (_, i) => i), random).slice(0, filledCount)
   );
 
   const grid: BingoCardCell[] = [];
@@ -85,7 +110,9 @@ export function generateSingleBingoCard(
   }
 
   return {
-    id: `card-${cardNumber}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    id: options.seed
+      ? `card-${cardNumber}-${options.seed}`
+      : `card-${cardNumber}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     cardNumber,
     gridSize,
     grid,
@@ -111,6 +138,7 @@ export function generateBingoCards(
         gridSize: options.gridSize,
         bingoPercent: options.bingoPercent,
         cellContent: selection,
+        seed: options.seed ? cardSeedForNumber(options.seed, i) : undefined,
       })
     );
   }

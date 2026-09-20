@@ -83,6 +83,8 @@ export interface BingoCardOptions {
   cellContent?: BingoCellContentSelection;
   /** Relative font sizes for number, song title, and author text (100 = default). */
   cellContentSizes?: BingoCellContentSizes;
-  /** Share URL printed under a QR code so players can reopen the deck. */
+  /** Share URL printed under an optional deck-sharing QR code. */
   shareUrl?: string;
+  /** Local batch seed used to reproduce printed card layouts. */
+  seed?: string;
 }

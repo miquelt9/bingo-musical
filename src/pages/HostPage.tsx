@@ -7,6 +7,7 @@ import { Track } from "../types/deck";
 import { shuffleArray } from "../lib/bingo/generateCards";
 import { getTrackSongNumber } from "../lib/bingo/songNumbers";
 import { AnswerCard } from "../components/host/AnswerCard";
+import { CardVerificationModal } from "../components/host/CardVerificationModal";
 import { CallNextControls } from "../components/host/CallNextControls";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
@@ -49,7 +50,7 @@ import {
   SerializedCalledEntry,
 } from "../lib/host/session";
 import { trackEvent } from "../lib/usage/events";
-import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown, Edit3 } from "lucide-react";
+import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown, Edit3, ScanLine } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -132,6 +133,7 @@ function readHostSession(
   isRevealed: boolean;
   autoCallNextOnEnd: boolean;
   autoRevealOnEnd: boolean;
+  lineAwarded: boolean;
 } | null {
   try {
     const raw = sessionStorage.getItem(`${HOST_SESSION_KEY}.${deckId}`);
@@ -153,6 +155,7 @@ function readHostSession(
       isRevealed: data.isRevealed ?? false,
       autoCallNextOnEnd: data.autoCallNextOnEnd ?? true,
       autoRevealOnEnd: data.autoRevealOnEnd ?? true,
+      lineAwarded: data.lineAwarded ?? false,
     };
   } catch {
     return null;
@@ -168,6 +171,7 @@ function writeHostSession(
     isRevealed: boolean;
     autoCallNextOnEnd: boolean;
     autoRevealOnEnd: boolean;
+    lineAwarded?: boolean;
   }
 ): void {
   try {
@@ -178,6 +182,7 @@ function writeHostSession(
       isRevealed: data.isRevealed,
       autoCallNextOnEnd: data.autoCallNextOnEnd,
       autoRevealOnEnd: data.autoRevealOnEnd,
+      lineAwarded: data.lineAwarded ?? false,
     };
     sessionStorage.setItem(`${HOST_SESSION_KEY}.${deckId}`, JSON.stringify(payload));
   } catch {
@@ -205,6 +210,7 @@ export const HostPage: React.FC = () => {
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
   const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(true);
+  const [lineAwarded, setLineAwarded] = useState<boolean>(false);
   const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [hostClipError, setHostClipError] = useState<string | null>(null);
@@ -212,6 +218,7 @@ export const HostPage: React.FC = () => {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showContinueModal, setShowContinueModal] = useState(false);
   const [showBingoModal, setShowBingoModal] = useState(false);
+  const [showCardVerification, setShowCardVerification] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
 
   const videoViewportRef = useRef<HTMLDivElement>(null);
@@ -317,6 +324,7 @@ export const HostPage: React.FC = () => {
     setCalledHistory([]);
     setCurrentCall(null);
     setIsRevealed(false);
+    setLineAwarded(false);
     setHostClipError(null);
     revealArmedRef.current = false;
     stopPlayback();
@@ -457,6 +465,7 @@ export const HostPage: React.FC = () => {
       setCalledHistory([]);
       setCurrentCall(null);
       setIsRevealed(false);
+      setLineAwarded(false);
       stopPlayback();
       writeHostSession(deck.id, {
         uncalledIds: shuffled,
@@ -477,6 +486,7 @@ export const HostPage: React.FC = () => {
       calledHistory,
       currentCall,
       isRevealed,
+      lineAwarded,
       autoCallNextOnEnd,
       autoRevealOnEnd,
     });
@@ -488,6 +498,7 @@ export const HostPage: React.FC = () => {
     isRevealed,
     autoCallNextOnEnd,
     autoRevealOnEnd,
+    lineAwarded,
     sessionReady,
   ]);
 
@@ -597,6 +608,7 @@ export const HostPage: React.FC = () => {
     setCalledHistory(restored.calledHistory);
     setCurrentCall(restored.currentCall);
     setIsRevealed(restored.isRevealed);
+    setLineAwarded(restored.lineAwarded);
     setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
     setAutoRevealOnEnd(restored.autoRevealOnEnd);
     pendingRestoreRef.current = null;
@@ -617,6 +629,7 @@ export const HostPage: React.FC = () => {
     setCalledHistory([]);
     setCurrentCall(null);
     setIsRevealed(false);
+    setLineAwarded(false);
     stopPlayback();
     writeHostSession(deck.id, {
       uncalledIds: shuffled,
@@ -930,6 +943,10 @@ export const HostPage: React.FC = () => {
         primaryAction={
           currentCall ? (
             <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" onClick={() => setShowCardVerification(true)}>
+                <ScanLine className="w-3.5 h-3.5" />
+                {isMobile ? "Verify" : "Verify Line / Bingo"}
+              </Button>
               <Button type="button" onClick={triggerConfetti}>
                 <Sparkles className="w-3.5 h-3.5" />
                 {isMobile ? "Bingo!" : "Someone Called Bingo!"}
@@ -1015,6 +1032,19 @@ export const HostPage: React.FC = () => {
         </PcModal>
       )}
 
+      {showCardVerification && (
+        <CardVerificationModal
+          deck={deck}
+          calledTrackIds={new Set(calledHistory.map((entry) => entry.track.id))}
+          lineAwarded={lineAwarded}
+          onAcceptLine={() => {
+            setLineAwarded(true);
+            setShowCardVerification(false);
+          }}
+          onClose={() => setShowCardVerification(false)}
+        />
+      )}
+
       {showBingoModal && (
         <PcModal title="Bingo!" onClose={() => setShowBingoModal(false)}>
           <p className="text-sm mb-3">
@@ -1038,8 +1068,8 @@ export const HostPage: React.FC = () => {
             })}
           </ul>
           <p className="text-[11px] text-muted mb-4">
-            Use the called songs log search to confirm the player&apos;s claim. The display
-            window shows a BINGO celebration while this is open.
+            Use Verify Line / Bingo to scan the card&apos;s verification QR or enter its card code.
+            The display window shows a BINGO celebration while this is open.
           </p>
           <div className="flex justify-end">
             <Button type="button" variant="primary" onClick={() => setShowBingoModal(false)}>

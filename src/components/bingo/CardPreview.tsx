@@ -28,7 +28,11 @@ interface CardPreviewProps {
   tracks: Track[];
   cellContent?: BingoCellContentSelection;
   cellContentSizes?: BingoCellContentSizes;
+  /** Optional deck-sharing QR, shown in the card footer. */
   qrDataUrl?: string | null;
+  /** Unique card-verification QR shown in the top-right corner. */
+  verificationQrDataUrl?: string | null;
+  verificationCode?: string;
   interactiveMarks?: boolean;
   appearance?: PdfAppearanceOptions;
   cardIndex?: number;
@@ -74,6 +78,8 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   cellContent = DEFAULT_CELL_CONTENT,
   cellContentSizes = DEFAULT_CELL_CONTENT_SIZES,
   qrDataUrl = null,
+  verificationQrDataUrl = null,
+  verificationCode,
   interactiveMarks = true,
   appearance,
   cardIndex = 0,
@@ -170,7 +176,24 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
         />
       )}
       <div className="relative z-10">
-        <div className="text-center mb-4 sm:mb-5 print:mb-3">
+        <div className={`text-center mb-4 sm:mb-5 print:mb-3 relative ${verificationQrDataUrl ? "pr-20 sm:pr-24" : ""}`}>
+          {verificationQrDataUrl && (
+            <div className="absolute top-0 right-0 w-16 sm:w-[72px] print:w-[72px] text-center">
+              <img
+                src={verificationQrDataUrl}
+                alt="QR code for verifying this bingo card"
+                className="w-16 h-16 sm:w-[72px] sm:h-[72px] print:w-[72px] print:h-[72px]"
+              />
+              <span className="block mt-0.5 text-[7px] leading-tight font-bold uppercase tracking-tight">
+                Verify card
+              </span>
+              {verificationCode && (
+                <span className="block mt-0.5 text-[5px] leading-tight font-mono break-all text-zinc-500">
+                  {verificationCode}
+                </span>
+              )}
+            </div>
+          )}
           {resolved.headerStyle === "festive" && (
             <div className="h-1 mb-2 flex items-center gap-2" aria-hidden="true">
               <span className="h-1 flex-1 bg-red-700" />
@@ -321,12 +344,22 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
           </div>
         </div>
 
+        <div className="mt-4 pt-3 border-t border-zinc-100 text-[9px] leading-tight text-zinc-500 space-y-0.5">
+          <p><strong>LINE:</strong> Complete every filled cell in one horizontal row.</p>
+          <p><strong>BINGO:</strong> Complete every filled cell on the card.</p>
+          <p>Only one line prize is awarded; after that, claim Bingo.</p>
+        </div>
+
         {qrDataUrl && (
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-end">
+          <div className="mt-3 pt-3 border-t border-zinc-100 flex items-end justify-between gap-3">
+            <div className="min-w-0 text-[9px] leading-tight text-zinc-500">
+              <p className="font-bold text-zinc-700">Open this deck online</p>
+              <p>Scan this QR code to view or add the deck on your phone.</p>
+            </div>
             <img
               src={qrDataUrl}
               alt="QR code linking to this deck"
-              className="w-16 h-16 sm:w-[72px] sm:h-[72px] print:w-[72px] print:h-[72px]"
+              className="w-16 h-16 sm:w-[72px] sm:h-[72px] print:w-[72px] print:h-[72px] shrink-0"
             />
           </div>
         )}

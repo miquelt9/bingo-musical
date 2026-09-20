@@ -37,6 +37,11 @@ import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { buildSharedDeckUrl } from "../lib/share/deckShare";
 import { generateQrDataUrl } from "../lib/bingo/qr";
+import {
+  computeDeckFingerprintHex,
+  createCardBatchSeed,
+  encodeCardVerificationCode,
+} from "../lib/bingo/verification";
 import { estimateBingoTimes, formatEstimateDraws, formatEstimateDuration } from "../lib/bingo/estimator";
 import {
   DEFAULT_PDF_APPEARANCE,
@@ -77,12 +82,14 @@ const MAX_BACKGROUND_EDGE = 2048;
 type PrintJob = "cards" | "master" | "all";
 
 interface CardSettings {
-  version?: 2;
+  version?: 3;
   cardCount: number;
   gridSize: number;
   cellContent: BingoCellContentSelection;
   cellContentSizes: BingoCellContentSizes;
   includeMasterList: boolean;
+  includeShareQr?: boolean;
+  batchSeed?: string;
   appearance?: PdfAppearanceOptions;
 }
 
@@ -144,9 +151,14 @@ export const CardsPage: React.FC = () => {
   const [cellContent, setCellContent] = useState<BingoCellContentSelection>(DEFAULT_CELL_CONTENT);
   const [cellContentSizes, setCellContentSizes] = useState<BingoCellContentSizes>(DEFAULT_CELL_CONTENT_SIZES);
   const [includeMasterList, setIncludeMasterList] = useState(true);
+  const [includeShareQr, setIncludeShareQr] = useState(true);
+  const [batchSeed, setBatchSeed] = useState("");
+  const [deckFingerprint, setDeckFingerprint] = useState<string | null>(null);
   const [appearance, setAppearance] = useState<PdfAppearanceOptions>(DEFAULT_APPEARANCE);
 
   const [cards, setCards] = useState<BingoCard[]>([]);
+  const [verificationCodes, setVerificationCodes] = useState<Record<string, string>>({});
+  const [verificationQrDataUrls, setVerificationQrDataUrls] = useState<Record<string, string>>({});
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
   const [printCards, setPrintCards] = useState<BingoCard[] | null>(null);
   const [printJob, setPrintJob] = useState<PrintJob>("all");
@@ -209,8 +221,9 @@ export const CardsPage: React.FC = () => {
       shareUrl: shareUrl ?? undefined,
       cellContentSizes,
       appearance,
+      seed: batchSeed,
     };
-  }, [deck, customTitle, cardCount, gridSize, cellContent, cellContentSizes, shareUrl, appearance]);
+  }, [deck, customTitle, cardCount, gridSize, cellContent, cellContentSizes, shareUrl, appearance, batchSeed]);
 
   const layoutKeyRef = useRef("");
 
@@ -234,6 +247,10 @@ export const CardsPage: React.FC = () => {
       if (typeof stored.includeMasterList === "boolean") {
         setIncludeMasterList(stored.includeMasterList);
       }
+      setIncludeShareQr(stored.includeShareQr !== false);
+      setBatchSeed(typeof stored.batchSeed === "string" && /^[0-9a-f]{8}$/i.test(stored.batchSeed)
+        ? stored.batchSeed
+        : createCardBatchSeed());
       if (stored.appearance && typeof stored.appearance === "object") {
         setAppearance({ ...DEFAULT_APPEARANCE, ...stored.appearance });
       } else {
@@ -241,8 +258,19 @@ export const CardsPage: React.FC = () => {
       }
     } else if (trackCount > 0) {
       setGridSize(getLargestValidGridSize(trackCount));
+      setIncludeShareQr(true);
+      setBatchSeed(createCardBatchSeed());
     }
-  }, [deck?.id, deck?.name, deck?.tracks.length]);
+
+    let cancelled = false;
+    setDeckFingerprint(null);
+    void computeDeckFingerprintHex(deck).then((fingerprint) => {
+      if (!cancelled) setDeckFingerprint(fingerprint);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deck?.id, deck?.name, deck?.updatedAt, deck?.tracks.length]);
 
   useEffect(() => {
     if (!deck) return;
@@ -250,26 +278,28 @@ export const CardsPage: React.FC = () => {
       localStorage.setItem(
         `${CARD_SETTINGS_KEY}.${deck.id}`,
         JSON.stringify({
-          version: 2,
+          version: 3,
           cardCount,
           gridSize,
           cellContent,
           cellContentSizes,
           includeMasterList,
+          includeShareQr,
+          batchSeed,
           appearance,
         } satisfies CardSettings)
       );
     } catch {
       // ignore
     }
-  }, [deck?.id, cardCount, gridSize, cellContent, cellContentSizes, includeMasterList, appearance]);
+  }, [deck?.id, cardCount, gridSize, cellContent, cellContentSizes, includeMasterList, includeShareQr, batchSeed, appearance]);
 
   useEffect(() => {
     setActivePreviewIndex((prev) => (cards.length === 0 ? 0 : Math.min(prev, cards.length - 1)));
   }, [cards.length]);
 
   useEffect(() => {
-    if (!deck || poolCount === 0) {
+    if (!deck || poolCount === 0 || !batchSeed) {
       setCards([]);
       setActivePreviewIndex(0);
       layoutKeyRef.current = "";
@@ -277,7 +307,7 @@ export const CardsPage: React.FC = () => {
     }
 
     const authorMode = usesAuthorPool(cellContent) ? "authors" : "songs";
-    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}:${authorMode}`;
+    const layoutKey = `${deck.id}:${deck.updatedAt}:${cardCount}:${gridSize}:${authorMode}:${batchSeed}`;
     const layoutChanged = layoutKey !== layoutKeyRef.current;
     layoutKeyRef.current = layoutKey;
 
@@ -289,6 +319,7 @@ export const CardsPage: React.FC = () => {
         gridSize,
         bingoPercent: BINGO_PERCENT,
         cellContent,
+        seed: batchSeed,
       })
     );
 
@@ -304,6 +335,7 @@ export const CardsPage: React.FC = () => {
     gridSize,
     cellContent.songs,
     cellContent.authors,
+    batchSeed,
   ]);
 
   // If author-only mode shrinks the pool below the current grid, step down.
@@ -312,7 +344,7 @@ export const CardsPage: React.FC = () => {
   }, [deck, poolCount, gridSize]);
 
   useEffect(() => {
-    if (!deck || !isShareApiConfigured() || deck.tracks.length === 0) {
+    if (!deck || !includeShareQr || !isShareApiConfigured() || deck.tracks.length === 0) {
       setShareUrl(null);
       setQrDataUrl(null);
       return;
@@ -334,7 +366,7 @@ export const CardsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [deck?.id, deck?.updatedAt, deck?.tracks.length]);
+  }, [deck?.id, deck?.updatedAt, deck?.tracks.length, includeShareQr]);
 
   useEffect(() => {
     if (!shareUrl) {
@@ -351,9 +383,45 @@ export const CardsPage: React.FC = () => {
     };
   }, [shareUrl]);
 
+  useEffect(() => {
+    if (!deck || !deckFingerprint || !batchSeed || cards.length === 0) {
+      setVerificationCodes({});
+      setVerificationQrDataUrls({});
+      return;
+    }
+
+    let cancelled = false;
+    const codes: Record<string, string> = {};
+    for (const card of cards) {
+      codes[card.id] = encodeCardVerificationCode({
+        fingerprintHex: deckFingerprint,
+        batchSeed,
+        cardNumber: card.cardNumber,
+        gridSize: card.gridSize,
+        bingoPercent: BINGO_PERCENT,
+        cellContent,
+      });
+    }
+    setVerificationCodes(codes);
+    void Promise.all(
+      cards.map(async (card) => [
+        card.id,
+        await generateQrDataUrl(codes[card.id], 220),
+      ] as const)
+    ).then((entries) => {
+      if (!cancelled) setVerificationQrDataUrls(Object.fromEntries(entries));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deck, deckFingerprint, batchSeed, cards, cellContent]);
+
   const handleRegenerate = () => {
     if (!deck || !cardOptions || poolCount === 0) return;
-    const generated = generateBingoCards(deck.tracks, cardOptions);
+    const nextSeed = createCardBatchSeed();
+    const generated = generateBingoCards(deck.tracks, { ...cardOptions, seed: nextSeed });
+    setBatchSeed(nextSeed);
     setCards(generated);
     setActivePreviewIndex(0);
   };
@@ -412,6 +480,7 @@ export const CardsPage: React.FC = () => {
           cellContentSizes,
           shareUrl: shareUrl ?? undefined,
           includeMasterList,
+          verificationCodes,
         },
         (current, total) => setPdfProgress({ current, total })
       );
@@ -483,9 +552,12 @@ export const CardsPage: React.FC = () => {
   const readiness = getDeckReadiness(deck.tracks, gridSize);
   const deezerHydration = backgroundTasks[`deezer-hydration:${deck.id}`];
   const currentCard = cards[activePreviewIndex] || cards[0];
+  const currentVerificationCode = currentCard ? verificationCodes[currentCard.id] : undefined;
+  const currentVerificationQrDataUrl = currentCard ? verificationQrDataUrls[currentCard.id] : undefined;
   const cardsForPrint = printCards ?? cards;
   const canGenerate = poolCount > 0;
-  const exportsDisabled = cards.length === 0 || !canGenerate;
+  const verificationReady = cards.length > 0 && Object.keys(verificationCodes).length === cards.length;
+  const exportsDisabled = cards.length === 0 || !canGenerate || !verificationReady;
   const showCardsInPrint = printJob === "cards" || printJob === "all";
   const eventTitle = customTitle || deck.name;
 
@@ -882,6 +954,26 @@ export const CardsPage: React.FC = () => {
                 </span>
               </label>
 
+              <label className="flex items-start gap-2 text-xs font-bold cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={includeShareQr}
+                  onChange={(e) => setIncludeShareQr(e.target.checked)}
+                />
+                <span>
+                  Show deck sharing QR code
+                  <span className="block font-normal text-muted mt-0.5">
+                    Lets players scan to view or add this deck on their phone. This is separate from the card verification QR.
+                  </span>
+                  {!isShareApiConfigured() && (
+                    <span className="block font-normal text-pc-warning mt-0.5">
+                      Sharing is not configured, so this QR will not appear.
+                    </span>
+                  )}
+                </span>
+              </label>
+
               {!isMobile && (
                 <Button
                   type="button"
@@ -1058,6 +1150,8 @@ export const CardsPage: React.FC = () => {
                 cellContent={cellContent}
                 cellContentSizes={cellContentSizes}
                 qrDataUrl={qrDataUrl}
+                verificationQrDataUrl={currentVerificationQrDataUrl}
+                verificationCode={currentVerificationCode}
                 interactiveMarks={false}
                 appearance={appearance}
                 cardIndex={activePreviewIndex}
@@ -1076,8 +1170,6 @@ export const CardsPage: React.FC = () => {
               <MasterSongList
                 eventTitle={eventTitle}
                 tracks={deck.tracks}
-                shareUrl={shareUrl}
-                qrDataUrl={qrDataUrl}
               />
             </div>
           )}
@@ -1091,6 +1183,8 @@ export const CardsPage: React.FC = () => {
                 cellContent={cellContent}
                 cellContentSizes={cellContentSizes}
                 qrDataUrl={qrDataUrl}
+                verificationQrDataUrl={verificationQrDataUrls[c.id]}
+                verificationCode={verificationCodes[c.id]}
                 interactiveMarks={false}
                 appearance={appearance}
                 cardIndex={cards.indexOf(c)}

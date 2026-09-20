@@ -17,6 +17,8 @@ export interface HostSessionData {
   isRevealed: boolean;
   autoCallNextOnEnd: boolean;
   autoRevealOnEnd: boolean;
+  /** Whether the single line prize has already been accepted in this game. */
+  lineAwarded?: boolean;
 }
 
 export interface HostDisplayState {
