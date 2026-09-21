@@ -236,6 +236,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
       unique.forEach((item) => next.add(suggestHitId(item)));
       return next;
     });
+    onClose();
   };
 
   const modalTitle =

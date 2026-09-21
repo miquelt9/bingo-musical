@@ -4,6 +4,7 @@ import { Deck, Track } from "../types/deck";
 import {
   getStoredDecks,
   saveDeck as persistDeck,
+  updateExistingDeck,
   deleteDeck as removeDeck,
   duplicateDeck as cloneDeck,
   exportDeckToJson,
@@ -57,6 +58,8 @@ const DeckContext = createContext<DeckContextType | undefined>(undefined);
 
 /** Prevent React Strict Mode from running two overlapping sample hydrations. */
 let deezerSampleHydrateInFlight: Promise<void> | null = null;
+/** Bumped when the sample deck is deleted so an in-flight hydrate aborts. */
+let deezerSampleHydrateGeneration = 0;
 
 export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -66,6 +69,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [shareTarget, setShareTarget] = useState<ShareDeckTarget | null>(null);
   const [backgroundTasks, setBackgroundTasks] = useState<Record<string, BackgroundTaskStatus>>({});
   const importedDeezerHydrationInFlight = useRef(new Map<string, Promise<void>>());
+  const cancelledDeezerHydrations = useRef(new Set<string>());
   const { showToast } = useToast();
 
   // Share lives above the route tree; close it on every navigation (including Back / hash).
@@ -88,6 +92,9 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await deezerSampleHydrateInFlight;
       return;
     }
+
+    const generation = deezerSampleHydrateGeneration;
+    cancelledDeezerHydrations.current.delete(SAMPLE_DEEZER_DECK.id);
 
     deezerSampleHydrateInFlight = (async () => {
       if (!isDeezerApiConfigured()) return;
@@ -129,12 +136,25 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // instead of showing every track as needing attention until the final request.
         const tracks = [...withKnownIds];
         for (let index = 0; index < tracks.length; index += 1) {
+          if (
+            generation !== deezerSampleHydrateGeneration ||
+            cancelledDeezerHydrations.current.has(sample.id)
+          ) {
+            break;
+          }
+
           const track = tracks[index];
           if (track.media?.provider !== "deezer" || !track.media.id) continue;
           if (track.media.previewUrl && !trackNeedsDeezerPreviewRefresh(track)) continue;
 
           try {
             const hit = await resolveDeezerTrack(track.media.id);
+            if (
+              generation !== deezerSampleHydrateGeneration ||
+              cancelledDeezerHydrations.current.has(sample.id)
+            ) {
+              break;
+            }
             if (!hit.previewUrl) continue;
             const resolved = deezerHitToTrack(hit);
             tracks[index] = {
@@ -149,21 +169,28 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
               matchStatus: "matched" as const,
             };
 
-            const saved = persistDeck({
+            const saved = updateExistingDeck({
               ...sample,
               tracks,
               updatedAt: new Date().toISOString(),
             });
+            // Deck was deleted while hydration was in flight — stop and do not recreate it.
+            if (!saved) break;
             setDecks(getStoredDecks());
             setActiveDeck((current) => (current?.id === saved.id ? saved : current));
           } catch {
             // Keep this track available for manual matching and continue hydrating the rest.
           } finally {
-            setBackgroundTask(taskId, {
-              label: "Loading Deezer previews",
-              completed: tracksToResolve.findIndex((candidate) => candidate.id === track.id) + 1,
-              total: tracksToResolve.length,
-            });
+            if (
+              generation === deezerSampleHydrateGeneration &&
+              !cancelledDeezerHydrations.current.has(sample.id)
+            ) {
+              setBackgroundTask(taskId, {
+                label: "Loading Deezer previews",
+                completed: tracksToResolve.findIndex((candidate) => candidate.id === track.id) + 1,
+                total: tracksToResolve.length,
+              });
+            }
           }
         }
       } catch {
@@ -178,7 +205,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       deezerSampleHydrateInFlight = null;
     }
-  }, []);
+  }, [setBackgroundTask]);
 
   const refreshDecks = useCallback(() => {
     const loaded = getStoredDecks();
@@ -248,6 +275,12 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteDeck = (id: string) => {
+    cancelledDeezerHydrations.current.add(id);
+    importedDeezerHydrationInFlight.current.delete(id);
+    setBackgroundTask(`deezer-hydration:${id}`, null);
+    if (id === SAMPLE_DEEZER_DECK.id) {
+      deezerSampleHydrateGeneration += 1;
+    }
     removeDeck(id);
     refreshDecks();
     if (activeDeck?.id === id) {
@@ -313,6 +346,8 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const existingTask = importedDeezerHydrationInFlight.current.get(deck.id);
     if (existingTask) return existingTask;
 
+    cancelledDeezerHydrations.current.delete(deck.id);
+
     const taskId = `deezer-hydration:${deck.id}`;
     const task = (async () => {
       setBackgroundTask(taskId, {
@@ -325,12 +360,17 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const batches = await searchDeezerTracksBatch(
           tracksToHydrate,
           undefined,
-          (completed, total) => setBackgroundTask(taskId, {
-            label: "Loading Deezer previews",
-            completed,
-            total,
-          }),
+          (completed, total) => {
+            if (cancelledDeezerHydrations.current.has(deck.id)) return;
+            setBackgroundTask(taskId, {
+              label: "Loading Deezer previews",
+              completed,
+              total,
+            });
+          },
         );
+        if (cancelledDeezerHydrations.current.has(deck.id)) return;
+
         const hitsById = new Map(
           batches.flat().map((hit) => [hit.id, hit])
         );
@@ -345,6 +385,7 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // (renames, clip changes, added or deleted tracks) are preserved.
         const latest = getStoredDecks().find((stored) => stored.id === deck.id);
         if (!latest || latest.provider !== "deezer") return;
+        if (cancelledDeezerHydrations.current.has(deck.id)) return;
 
         const tracks = latest.tracks.map((track) => {
           const media = track.media?.provider === "deezer" ? track.media : null;
@@ -374,7 +415,8 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
 
-        const saved = persistDeck({ ...latest, tracks });
+        const saved = updateExistingDeck({ ...latest, tracks });
+        if (!saved) return;
         setDecks(getStoredDecks());
         setActiveDeck((current) => (current?.id === saved.id ? saved : current));
       } catch {

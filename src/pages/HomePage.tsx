@@ -11,7 +11,6 @@ import {
   getNextDeckName,
 } from "../lib/decks/readiness";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
-import { saveStoredDecks } from "../lib/storage/decks";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
@@ -146,14 +145,6 @@ export const HomePage: React.FC = () => {
     });
     setDeckNamePrompt(null);
     navigate(`/deck/${saved.id}`);
-  };
-
-  const handleRestoreSample = () => {
-    const others = decks.filter(
-      (d) => d.id !== SAMPLE_DECK_ID && d.id !== "deck-sample-pop-classics"
-    );
-    saveStoredDecks([SAMPLE_DEEZER_DECK, ...others]);
-    window.location.reload();
   };
 
   const renderDeckCard = (deck: Deck) => {
@@ -360,8 +351,6 @@ export const HomePage: React.FC = () => {
     );
   };
 
-  const onlyEmptyCustom = decks.length === 0 || decks.every((d) => isEmptyDeck(d));
-
   return (
     <Window fill title="Your bingo decks" className="home-decks">
       <p className="home-decks-intro text-sm mb-1">
@@ -402,26 +391,6 @@ export const HomePage: React.FC = () => {
             <button type="button" className="pc-button text-xs" onClick={dismissOnboarding}>
               Don&apos;t show again
             </button>
-          </div>
-        </div>
-      )}
-
-      {onlyEmptyCustom && (
-        <div className="pc-bevel-inset p-4 mb-4 text-sm text-center">
-          <p className="mb-3">Create a deck or restore the sample to get started.</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <button type="button" className="pc-button pc-button--primary" onClick={handleRestoreSample}>
-              Restore sample deck
-            </button>
-            <button type="button" className="pc-button" onClick={() => handleCreateEmptyDeck("youtube")}>
-              Create YouTube deck
-            </button>
-            <button type="button" className="pc-button" onClick={() => handleCreateEmptyDeck("deezer")}>
-              Create Deezer deck
-            </button>
-            <Link to="/import" className="pc-button">
-              Import JSON
-            </Link>
           </div>
         </div>
       )}

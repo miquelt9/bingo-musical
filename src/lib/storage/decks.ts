@@ -225,6 +225,17 @@ export function saveDeck(deck: Deck): Deck {
   return updatedDeck;
 }
 
+/** Update a deck only if it still exists. Never recreates a deleted deck. */
+export function updateExistingDeck(deck: Deck): Deck | null {
+  const decks = getStoredDecks();
+  const index = decks.findIndex((item) => item.id === deck.id);
+  if (index === -1) return null;
+  const updatedDeck: Deck = { ...deck, schemaVersion: 2, updatedAt: new Date().toISOString() };
+  decks[index] = updatedDeck;
+  saveStoredDecks(decks);
+  return updatedDeck;
+}
+
 export function deleteDeck(id: string): void {
   saveStoredDecks(getStoredDecks().filter((deck) => deck.id !== id));
 }
