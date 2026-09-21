@@ -9,6 +9,7 @@ import {
   formatReadinessSecondary,
   getDeckReadiness,
   getNextDeckName,
+  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
@@ -25,7 +26,7 @@ import {
   Copy,
   Trash2,
   Share2,
-
+  Printer,
   X,
   Sparkles,
   Music2,
@@ -154,6 +155,8 @@ export const HomePage: React.FC = () => {
     const isLoadingDeezerPreviews = Boolean(deezerHydration);
     const hostReady = readiness.canHost;
     const fixHref = `/deck/${deck.id}?filter=blocked`;
+    const editHref =
+      !isLoadingDeezerPreviews && readiness.blockedCount > 0 ? fixHref : `/deck/${deck.id}`;
     const secondary = formatReadinessSecondary(readiness);
     const isSample = deck.id === SAMPLE_DECK_ID;
     const isCollaborative = Boolean(deck.collaboration?.id);
@@ -177,6 +180,11 @@ export const HomePage: React.FC = () => {
       </span>
     );
 
+    const canOpenCards = !emptyDeck && deck.tracks.length >= MIN_CARDS_TRACKS;
+    const cardsDisabledTitle = emptyDeck
+      ? EMPTY_DECK_ACTION_TITLE
+      : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`;
+
     const overflowItems = [
       {
         icon: <Share2 className="w-4 h-4" />,
@@ -185,11 +193,17 @@ export const HomePage: React.FC = () => {
         disabled: emptyDeck,
         title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
       },
-
       {
         icon: <Copy className="w-4 h-4" />,
         label: "Duplicate",
         onClick: () => duplicateDeck(deck.id),
+      },
+      {
+        icon: <Printer className="w-4 h-4" />,
+        label: "Cards",
+        onClick: () => navigate(`/deck/${deck.id}/cards`),
+        disabled: !canOpenCards,
+        title: canOpenCards ? undefined : cardsDisabledTitle,
       },
       {
         icon: <Trash2 className="w-4 h-4" />,
@@ -242,7 +256,11 @@ export const HomePage: React.FC = () => {
 
       return (
         <article key={deck.id} className="home-deck-card">
-          <div className="home-deck-card-body">
+          <Link
+            to={editHref}
+            className="home-deck-card-body home-deck-card-body--link"
+            aria-label={`Edit ${deck.name}`}
+          >
             <Music className="home-deck-card-icon w-5 h-5 shrink-0" aria-hidden />
             <div className="home-deck-card-info min-w-0">
               <div className="flex flex-col gap-1.5 min-w-0">
@@ -266,12 +284,10 @@ export const HomePage: React.FC = () => {
               {healthBadge}
               {statsLine}
               {!isLoadingDeezerPreviews && !hostReady && readiness.blockedCount > 0 && (
-                <Link to={fixHref} className="pc-link text-xs mt-1 inline-block">
-                  Open editor to fix songs
-                </Link>
+                <span className="pc-link text-xs mt-1 inline-block">Open editor to fix songs</span>
               )}
             </div>
-          </div>
+          </Link>
           <div className="home-deck-card-actions home-deck-card-actions--mobile">
             {hostReady ? hostAction : (
               <Link to={`/deck/${deck.id}`} className="pc-button pc-button--primary home-deck-card-primary">
@@ -292,7 +308,11 @@ export const HomePage: React.FC = () => {
 
     return (
       <article key={deck.id} className="home-deck-card">
-        <div className="home-deck-card-body">
+        <Link
+          to={editHref}
+          className="home-deck-card-body home-deck-card-body--link"
+          aria-label={`Edit ${deck.name}`}
+        >
           <Music className="home-deck-card-icon w-6 h-6 shrink-0" aria-hidden />
           <div className="home-deck-card-info min-w-0 flex-1">
             <div className="flex flex-col gap-1.5 min-w-0 flex-1">
@@ -316,7 +336,7 @@ export const HomePage: React.FC = () => {
             {healthBadge}
             {statsLine}
           </div>
-        </div>
+        </Link>
         <div className="home-deck-card-actions home-deck-card-actions--desktop">
           <div className="home-deck-card-toolbar home-deck-card-toolbar--above-play">
             <button
@@ -345,6 +365,19 @@ export const HomePage: React.FC = () => {
             <Edit3 className="w-3.5 h-3.5" />
             Edit
           </Link>
+          {canOpenCards ? (
+            <Link to={`/deck/${deck.id}/cards`} className="pc-button home-deck-card-action-cards" title="Print bingo cards">
+              <Printer className="w-3.5 h-3.5" />
+              Cards
+            </Link>
+          ) : (
+            <span title={cardsDisabledTitle} className="contents">
+              <span className="pc-button home-deck-card-action-cards opacity-60 pointer-events-none" aria-disabled>
+                <Printer className="w-3.5 h-3.5" />
+                Cards
+              </span>
+            </span>
+          )}
           {hostAction}
         </div>
       </article>

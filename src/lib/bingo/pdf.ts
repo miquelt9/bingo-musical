@@ -70,6 +70,7 @@ interface CardLayout {
   gap: number;
   footerY: number;
   title: FittedText;
+  titleY: number;
   titleLineHeight: number;
   headerBottom: number;
 }
@@ -343,18 +344,23 @@ function calculateCardLayout(
     3
   );
   const titleLineHeight = getLineHeight(title.fontSize, 1.08);
-  const headerTop = 17;
-  const headerBottom = headerTop + title.lines.length * titleLineHeight + 4;
+  const titleY = TOP_MARGIN + 14;
+  const headerBottom = titleY + title.lines.length * titleLineHeight + 3;
+  // Verification caption sits under the QR. Keep the grid below that text.
+  const verificationBottom = hasVerificationQr ? 16 + 20 + 12 : 0;
+  const minGridY = Math.max(headerBottom + 5, verificationBottom + 3);
   const footerReserve = hasQr ? 34 : 18;
-  const availableHeight = PAGE_HEIGHT - BOTTOM_MARGIN - footerReserve - headerBottom;
+  const contentBottom = PAGE_HEIGHT - BOTTOM_MARGIN - footerReserve;
   const gap = appearance.tileStyle === "compactSquare" ? 0 : appearance.tileGapMm;
+  const availableHeight = Math.max(40, contentBottom - minGridY);
   const widthBased = (GRID_WIDTH - (gridSize - 1) * gap) / gridSize;
   const heightBased = (availableHeight - (gridSize - 1) * gap) / gridSize;
   const cellSize = Math.max(10, Math.min(widthBased, heightBased));
   const gridWidth = gridSize * cellSize + (gridSize - 1) * gap;
   const gridHeight = gridWidth;
   const gridX = (PAGE_WIDTH - gridWidth) / 2;
-  const gridY = headerBottom + 3;
+  const slack = Math.max(0, contentBottom - minGridY - gridHeight);
+  const gridY = minGridY + Math.min(8, slack / 2);
 
   void sizes;
   void showSongs;
@@ -370,6 +376,7 @@ function calculateCardLayout(
     gap,
     footerY: gridY + gridHeight + 8,
     title,
+    titleY,
     titleLineHeight,
     headerBottom,
   };
@@ -466,7 +473,7 @@ async function drawCardVerification(
 
   const qrSize = 20;
   const qrX = PAGE_WIDTH - MARGIN_X - qrSize;
-  const qrY = 12;
+  const qrY = 15;
   try {
     doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
     setPdfFont(doc, "helvetica", "bold");
@@ -640,7 +647,7 @@ export async function generateBingoPdf(
     }
 
     drawFestiveHeader(doc, appearance);
-    drawTitle(doc, layout.title, appearance, TOP_MARGIN + 8);
+    drawTitle(doc, layout.title, appearance, layout.titleY);
     await drawCardVerification(doc, options.verificationCodes?.[card.id], qrCache);
 
     if (appearance.background?.mode === "cardWatermark") {
@@ -783,70 +790,119 @@ export async function downloadBingoPdf(
   URL.revokeObjectURL(url);
 }
 
+/** Open during the click, before PDF generation, so the browser allows the window. */
+export function openPrintWindow(): Window | null {
+  const printWindow = window.open("", "bingo-card-print");
+  if (!printWindow) return null;
+  try {
+    printWindow.document.title = "Print bingo cards";
+    printWindow.document.body.innerHTML =
+      '<p style="font:14px system-ui,sans-serif;padding:24px">Preparing cards for print…</p>';
+  } catch {
+    // Navigation to the PDF still works if the blank document is locked.
+  }
+  return printWindow;
+}
+
 /**
- * Open a PDF in a hidden iframe and invoke the browser print dialog.
- * Used so Print and Download share the same layout.
+ * Open a PDF and invoke the browser print dialog.
+ * Print and Download share the same jsPDF layout. Chromium will not print a
+ * PDF loaded in a 0×0 frame, and a window opened after generation is blocked.
  */
 export async function printBingoPdf(
   cards: BingoCard[],
   options: PdfExportOptions,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  printWindow?: Window | null
 ): Promise<void> {
   const blob = await generateBingoPdf(cards, options, onProgress);
   const url = URL.createObjectURL(blob);
+  const target = printWindow && !printWindow.closed ? printWindow : null;
 
-  await new Promise<void>((resolve, reject) => {
-    const iframe = document.createElement("iframe");
-    iframe.setAttribute("title", "Print bingo cards");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.style.opacity = "0";
-    iframe.style.pointerEvents = "none";
+  try {
+    if (target) {
+      await printPdfInWindow(target, url);
+      return;
+    }
+    await printPdfInFrame(url);
+  } catch (err) {
+    URL.revokeObjectURL(url);
+    if (target && !target.closed) target.close();
+    throw err;
+  }
+}
 
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      window.setTimeout(() => {
-        iframe.remove();
-        URL.revokeObjectURL(url);
-      }, 1500);
-      resolve();
-    };
+function releasePrintUrl(url: string): void {
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+}
 
-    iframe.onload = () => {
+function printPdfInWindow(printWindow: Window, url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let started = false;
+
+    const startPrint = () => {
+      if (started || printWindow.closed) return;
+      started = true;
       try {
-        const frameWindow = iframe.contentWindow;
-        if (!frameWindow) {
-          reject(new Error("Could not open the print preview."));
-          finish();
-          return;
-        }
-        const cleanup = () => {
-          frameWindow.removeEventListener("afterprint", cleanup);
-          finish();
-        };
-        frameWindow.addEventListener("afterprint", cleanup);
-        frameWindow.focus();
-        frameWindow.print();
-        // Some browsers never fire afterprint for PDF frames.
-        window.setTimeout(cleanup, 60_000);
+        printWindow.focus();
+        printWindow.print();
+        resolve();
+        releasePrintUrl(url);
       } catch (err) {
         reject(err instanceof Error ? err : new Error("Print failed."));
-        finish();
       }
     };
 
-    iframe.onerror = () => {
-      reject(new Error("Could not load the printable PDF."));
-      finish();
+    printWindow.addEventListener("load", () => window.setTimeout(startPrint, 700), { once: true });
+    // PDF viewers sometimes skip the load event.
+    window.setTimeout(startPrint, 1800);
+
+    try {
+      printWindow.location.replace(url);
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Could not open the printable PDF."));
+    }
+  });
+}
+
+function printPdfInFrame(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("title", "Print bingo cards");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText =
+      "position:fixed;left:0;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;z-index:-1;";
+
+    let started = false;
+    const startPrint = () => {
+      if (started) return;
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) return;
+      started = true;
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+        resolve();
+        window.setTimeout(() => {
+          iframe.remove();
+          URL.revokeObjectURL(url);
+        }, 120_000);
+      } catch (err) {
+        iframe.remove();
+        reject(err instanceof Error ? err : new Error("Print failed."));
+      }
     };
 
-    document.body.appendChild(iframe);
+    iframe.addEventListener("load", () => window.setTimeout(startPrint, 800), { once: true });
     iframe.src = url;
+    document.body.appendChild(iframe);
+    window.setTimeout(() => {
+      if (started) return;
+      startPrint();
+      if (!started) {
+        iframe.remove();
+        reject(new Error("Could not open the print preview."));
+      }
+    }, 4000);
   });
 }

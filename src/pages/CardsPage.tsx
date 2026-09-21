@@ -24,6 +24,7 @@ import {
   isGridSizeValidForDeck,
 } from "../lib/decks/readiness";
 import { PdfCardPreview } from "../components/bingo/PdfCardPreview";
+import { openPrintWindow } from "../lib/bingo/pdf";
 import { BingoCard } from "../types/deck";
 import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
 import { AlertModal } from "../components/ui/AppDialog";
@@ -476,10 +477,19 @@ export const CardsPage: React.FC = () => {
     }
   };
 
-  const runPdfPrint = async (selection: BingoCard[], job: PrintJob) => {
-    if (!deck || !cardOptions || isExportingPdf || isPrintingPdf) return;
-    if (job !== "master" && selection.length === 0) return;
-    if (job === "master" && deck.tracks.length === 0) return;
+  const runPdfPrint = async (selection: BingoCard[], job: PrintJob, printWindow: Window | null) => {
+    if (!deck || !cardOptions || isExportingPdf || isPrintingPdf) {
+      printWindow?.close();
+      return;
+    }
+    if (job !== "master" && selection.length === 0) {
+      printWindow?.close();
+      return;
+    }
+    if (job === "master" && deck.tracks.length === 0) {
+      printWindow?.close();
+      return;
+    }
 
     setIsPrintingPdf(true);
     const total = Math.max(1, selection.length);
@@ -505,7 +515,8 @@ export const CardsPage: React.FC = () => {
           verificationCodes,
           appearanceCardOffset: selection.length === 1 ? Math.max(0, cards.findIndex((c) => c.id === selection[0].id)) : 0,
         },
-        (current, nextTotal) => setPdfProgress({ current, total: nextTotal })
+        (current, nextTotal) => setPdfProgress({ current, total: nextTotal }),
+        printWindow
       );
       trackEvent("cards_printed", "cards", { output: "pdf" });
       dismissToast(loadingToastId);
@@ -514,6 +525,7 @@ export const CardsPage: React.FC = () => {
       const message = err instanceof Error ? err.message : "Unknown error";
       setPdfError("Failed to print PDF: " + message);
       dismissToast(loadingToastId);
+      printWindow?.close();
       showToast({
         title: "Print failed",
         icon: <AlertCircle className="w-3.5 h-3.5" />,
@@ -527,17 +539,17 @@ export const CardsPage: React.FC = () => {
   };
 
   const handleBrowserPrint = () => {
-    void runPdfPrint(cards, includeMasterList ? "all" : "cards");
+    void runPdfPrint(cards, includeMasterList ? "all" : "cards", openPrintWindow());
   };
 
   const handlePrintMasterOnly = () => {
-    void runPdfPrint([], "master");
+    void runPdfPrint([], "master", openPrintWindow());
   };
 
   const handlePrintPreviewCard = () => {
     const card = cards[activePreviewIndex];
     if (!card) return;
-    void runPdfPrint([card], "cards");
+    void runPdfPrint([card], "cards", openPrintWindow());
   };
 
   if (notFound) {
