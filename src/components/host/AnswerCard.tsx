@@ -136,23 +136,12 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
                 </div>
               ) : thumbUrl ? (
                 <div className="host-answer-card-thumb-inner pc-bevel-inset overflow-hidden bg-black/5">
-                  <img src={thumbUrl} alt={track.title} className="h-full w-full object-cover" />
+                  <img src={thumbUrl} alt={track.title} className="h-full w-full object-contain" />
                 </div>
               ) : (
                 <div className="host-answer-card-thumb-inner pc-bevel-inset flex items-center justify-center">
                   <Music2 className="w-12 h-12" />
                 </div>
-              )}
-              {isRevealed && providerUrl && (
-                <a
-                  href={providerUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="pc-button absolute bottom-1 right-1"
-                  title={`Open ${providerLabel} source in new tab`}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
               )}
             </div>
             <div className="host-answer-card-details min-w-0">
@@ -164,9 +153,23 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
               >
                 {isRevealed && songNumber != null ? `Song #${songNumber}` : "Song #00"}
               </p>
-              <h2 className="text-xl font-extrabold leading-tight truncate">
-                {isRevealed ? track.title : "Mystery Track Playing…"}
-              </h2>
+              <div className="flex items-start gap-2 min-w-0">
+                <h2 className="text-xl font-extrabold leading-tight truncate min-w-0 flex-1">
+                  {isRevealed ? track.title : "Mystery Track Playing…"}
+                </h2>
+                {isRevealed && providerUrl && (
+                  <a
+                    href={providerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="pc-button shrink-0"
+                    title={`Open ${providerLabel} source in new tab`}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="sr-only">Open in {providerLabel}</span>
+                  </a>
+                )}
+              </div>
               <p className="text-sm font-medium truncate">
                 {isRevealed ? track.artist : "Artist & title hidden"}
               </p>

@@ -48,7 +48,16 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
       ) : (
         <>
           <div className={`relative ${track.media?.provider === "deezer" ? "w-full min-h-[4.5rem]" : "aspect-video"} pc-bevel-inset overflow-hidden bg-black mb-3`}>
-            <div id={editor.elementId} className="absolute inset-0" />
+            {track.media?.provider === "youtube" ? (
+              <div id={editor.elementId} className="absolute inset-0" />
+            ) : (
+              <div
+                id={editor.elementId}
+                className="absolute inset-0"
+                aria-hidden="true"
+                {...({ inert: true } as React.HTMLAttributes<HTMLDivElement>)}
+              />
+            )}
             {(editor.isLoadingPlayer || !editor.isPlayerReady) && !editor.playerError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                 <Loader2 className="w-8 h-8 animate-spin text-white" />

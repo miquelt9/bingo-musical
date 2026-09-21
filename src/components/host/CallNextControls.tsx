@@ -1,11 +1,25 @@
 import React from "react";
 import { Button, Window } from "@miquelt9/pc-ui";
-import { Shuffle, SlidersHorizontal, Music2, ChevronDown } from "lucide-react";
+import {
+  Shuffle,
+  SlidersHorizontal,
+  Music2,
+  ChevronDown,
+  ScanLine,
+  Sparkles,
+  RotateCcw,
+} from "lucide-react";
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/player/player";
 import { getTrackProvider, getTrackSourceId } from "../../lib/music/providers";
 import { Track } from "../../types/deck";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+
+function formatCrossfadeOverlap(ms: number): string {
+  const seconds = ms / 1000;
+  const label = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+  return `${label} s overlap`;
+}
 
 function buildDisplayPlayerState(
   currentTrack: Track,
@@ -86,6 +100,10 @@ interface CallNextControlsProps {
   isRevealed?: boolean;
   /** When false, hide YouTube video toggle and related copy (e.g. Deezer Host). */
   supportsVideoPreview?: boolean;
+  /** Shown beside Call Next once a song has been called. */
+  onVerify?: () => void;
+  onBingo?: () => void;
+  onReset?: () => void;
 }
 
 export const CallNextControls: React.FC<CallNextControlsProps> = ({
@@ -113,10 +131,14 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   disabled = false,
   isRevealed = true,
   supportsVideoPreview = true,
+  onVerify,
+  onBingo,
+  onReset,
 }) => {
   const isMobile = useIsMobile();
   const isDeckFinished = remainingCount === 0 && totalCount > 0 && calledCount > 0;
   const progressPercent = totalCount > 0 ? (calledCount / totalCount) * 100 : 0;
+  const showGameActions = Boolean(onVerify && onBingo && onReset && calledCount > 0);
 
   const handlePlayPause = () => {
     if (!currentTrack?.media) return;
@@ -175,7 +197,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         >
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="font-medium">Crossfade</span>
-            <span className="font-mono text-[10px]">{crossfadeOverlapMs} ms</span>
+            <span className="font-mono text-[10px]">{formatCrossfadeOverlap(crossfadeOverlapMs)}</span>
           </div>
           <input
             type="range"
@@ -186,7 +208,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
             onChange={(e) => onCrossfadeOverlapChange(Number(e.target.value))}
             disabled={disabled || gameStarted}
             className="w-full cursor-pointer"
-            aria-label="Crossfade overlap duration in milliseconds"
+            aria-label={`Crossfade overlap duration, ${crossfadeOverlapMs} milliseconds`}
           />
           {gameStarted ? (
             <p className="text-[10px] opacity-80 mt-1">Locks when game starts</p>
@@ -225,13 +247,13 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3">
         <Button
           type="button"
           variant="primary"
           onClick={onCallNext}
           disabled={disabled || isDeckFinished}
-          className="py-3 flex-1 min-w-0"
+          className="py-3 w-full min-w-0"
         >
           <Shuffle className="w-5 h-5" />
           {isDeckFinished
@@ -242,6 +264,27 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
                 : "Start Game & Call First Song"
               : "Call Next Song"}
         </Button>
+        {showGameActions && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={onVerify} className="flex-1 min-w-[7rem]">
+              <ScanLine className="w-3.5 h-3.5" />
+              {isMobile ? "Verify" : "Verify Line / Bingo"}
+            </Button>
+            <Button type="button" onClick={onBingo} className="flex-1 min-w-[7rem]">
+              <Sparkles className="w-3.5 h-3.5" />
+              {isMobile ? "Bingo!" : "Someone Called Bingo!"}
+            </Button>
+            <Button
+              type="button"
+              onClick={onReset}
+              title="Reset game and shuffle all songs"
+              className="flex-1 min-w-[7rem]"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {isMobile ? "Reset" : "Reset Bingo"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div

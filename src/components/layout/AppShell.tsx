@@ -108,8 +108,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const needsYoutubeEngine =
     (isHostRoute || isYoutubeEditorRoute || hasActiveClip || engineRequested) &&
-    (playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider ?? "youtube") ===
-      "youtube";
+    (playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider) === "youtube";
   const needsDeezerEngine =
     (isHostRoute || hasActiveClip || engineRequested) &&
     (playerState?.currentClip?.provider ?? activeDeck?.provider ?? requestedProvider) === "deezer";
@@ -208,7 +207,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           onClick={() => handleBlockedNav(blockReason)}
         >
           {icon}
-          <span className="hidden sm:inline">{label}</span>
+          <span className="text-[10px] leading-tight sm:text-inherit">{label}</span>
         </button>
       );
     }
@@ -216,7 +215,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     return (
       <NavLink to={to} title={label} aria-label={label} className={() => className}>
         {icon}
-        <span className="hidden sm:inline">{label}</span>
+        <span className="text-[10px] leading-tight sm:text-inherit">{label}</span>
       </NavLink>
     );
   };
@@ -269,7 +268,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           className={() => taskbarItemClass("decks")}
         >
           <FolderOpen className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Decks</span>
+          <span className="text-[10px] leading-tight sm:text-inherit">Decks</span>
         </NavLink>
         <NavLink
           to={currentDeckId ? `/deck/${currentDeckId}` : "/"}
@@ -279,7 +278,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           className={() => taskbarItemClass("editor")}
         >
           <Edit3 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Deck</span>
+          <span className="text-[10px] leading-tight sm:text-inherit">Deck</span>
         </NavLink>
         {renderTaskbarNav(
           "cards",
@@ -304,7 +303,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           className={() => taskbarItemClass("settings")}
         >
           <Settings className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Settings</span>
+          <span className="text-[10px] leading-tight sm:text-inherit">Settings</span>
         </NavLink>
 
         {decks.length > 0 && !isHostRoute && (
@@ -312,7 +311,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             value={activeDeck?.id || ""}
             onChange={(e) => handleDeckChange(e.target.value)}
             className="pc-select pc-taskbar-deck-select min-w-0 flex-1 sm:w-[420px] sm:max-w-[420px] sm:flex-none"
-            title="Active deck"
+            title={activeDeck?.name ?? "Active deck"}
             aria-label="Active deck"
           >
             {decks.map((d) => (

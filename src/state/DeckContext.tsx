@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { Deck, Track } from "../types/deck";
 import {
   getStoredDecks,
@@ -58,6 +59,7 @@ const DeckContext = createContext<DeckContextType | undefined>(undefined);
 let deezerSampleHydrateInFlight: Promise<void> | null = null;
 
 export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
   const [decks, setDecks] = useState<Deck[]>([]);
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -65,6 +67,11 @@ export const DeckProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [backgroundTasks, setBackgroundTasks] = useState<Record<string, BackgroundTaskStatus>>({});
   const importedDeezerHydrationInFlight = useRef(new Map<string, Promise<void>>());
   const { showToast } = useToast();
+
+  // Share lives above the route tree; close it on every navigation (including Back / hash).
+  useEffect(() => {
+    setShareTarget(null);
+  }, [location.key]);
 
   const setBackgroundTask = useCallback((id: string, status: BackgroundTaskStatus | null) => {
     setBackgroundTasks((current) => {

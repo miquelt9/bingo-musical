@@ -144,6 +144,8 @@ export function useClipTimestampEditor({
           audio.className = "w-full h-full opacity-0 absolute inset-0 pointer-events-none";
           audio.controls = false;
           audio.preload = "metadata";
+          audio.setAttribute("aria-hidden", "true");
+          audio.tabIndex = -1;
           audio.src = media.previewUrl;
           audio.onloadedmetadata = () => {
             if (cancelled) return;

@@ -32,6 +32,7 @@ import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { BackButton } from "../components/ui/BackButton";
+import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { useToast } from "../state/ToastContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
 import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
@@ -763,55 +764,57 @@ export const EditorPage: React.FC = () => {
           back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
           primaryAction={
             <div className="flex w-full items-center justify-end gap-2">
-              <Button
-                type="button"
-                onClick={() => void shareDeck(deck, handleCollaborationLinked)}
-                disabled={emptyDeck}
-                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Share"}
-                aria-label="Share"
-              >
-                <Share2 className="w-4 h-4" />
-              </Button>
-
-              {deck.collaboration && (
-                <Button
-                  type="button"
-                  onClick={() => void handleRefreshCollaborative()}
-                  disabled={isCollaborativeSyncing}
-                  title="Check for collaborative updates"
-                  aria-label="Check for collaborative updates"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />
-                </Button>
-              )}
-              {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
-                <span
-                  title={
-                    emptyDeck
+              <OverflowMenu
+                ariaLabel="More deck actions"
+                triggerLabel="More"
+                items={[
+                  {
+                    icon: <Share2 className="w-4 h-4" />,
+                    label: "Share",
+                    onClick: () => void shareDeck(deck, handleCollaborationLinked),
+                    disabled: emptyDeck,
+                    title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
+                  },
+                  ...(deck.collaboration
+                    ? [
+                        {
+                          icon: <RefreshCw className={`w-4 h-4 ${isCollaborativeSyncing ? "animate-spin" : ""}`} />,
+                          label: isCollaborativeSyncing ? "Checking…" : "Check for updates",
+                          onClick: () => void handleRefreshCollaborative(),
+                          disabled: isCollaborativeSyncing,
+                        },
+                      ]
+                    : []),
+                  {
+                    icon: <Printer className="w-4 h-4" />,
+                    label: "Cards",
+                    onClick: () => navigate(`/deck/${deck.id}/cards`),
+                    disabled: emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS,
+                    title: emptyDeck
                       ? EMPTY_DECK_ACTION_TITLE
-                      : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
-                  }
-                  className="contents"
-                >
-                  <span
-                    className="pc-button opacity-60 pointer-events-none"
-                    aria-disabled
-                    aria-label="Cards"
-                    tabIndex={-1}
-                  >
-                    <Printer className="w-4 h-4" />
-                  </span>
-                </span>
-              ) : (
-                <Link
-                  to={`/deck/${deck.id}/cards`}
-                  className="pc-button"
-                    aria-label="Cards"
-                    title="Cards"
-                >
-                  <Printer className="w-4 h-4" />
-                </Link>
-              )}
+                      : deck.tracks.length < MIN_CARDS_TRACKS
+                        ? `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
+                        : undefined,
+                  },
+                  {
+                    icon: <ArrowRightLeft className="w-4 h-4" />,
+                    label: "Convert deck",
+                    onClick: () => {
+                      stopPlayback();
+                      setShowConvertModal(true);
+                    },
+                    disabled: emptyDeck,
+                    title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
+                  },
+                  {
+                    icon: <Wand2 className="w-4 h-4" />,
+                    label: "Suggest songs",
+                    onClick: handleOpenSuggestSongs,
+                    disabled: emptyDeck,
+                    title: emptyDeck ? EMPTY_DECK_ACTION_TITLE : undefined,
+                  },
+                ]}
+              />
               <Button
                 type="button"
                 variant="primary"
@@ -821,6 +824,7 @@ export const EditorPage: React.FC = () => {
                 aria-label={hostGateChecking ? "Verifying deck…" : "Host"}
               >
                 <Radio className="w-4 h-4" />
+                {hostGateChecking ? "Verifying…" : "Host"}
               </Button>
             </div>
           }
@@ -909,7 +913,7 @@ export const EditorPage: React.FC = () => {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold truncate">{deck.name}</h1>
+                <h1 className="text-xl font-bold line-clamp-2">{deck.name}</h1>
                 <button
                   type="button"
                   className="pc-button"
@@ -947,24 +951,28 @@ export const EditorPage: React.FC = () => {
               ) : null}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => { stopPlayback(); setShowConvertModal(true); }} disabled={emptyDeck} title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Create a copy using the other music provider"}>
-              <ArrowRightLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Convert deck</span>
-            </Button>
-            <Button
-              type="button"
-              onClick={handleOpenSuggestSongs}
-              disabled={emptyDeck}
-              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Suggest songs based on this deck"}
-            >
-              <Wand2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Suggest songs</span>
-            </Button>
+          <div className={`flex items-center gap-2 ${isMobile ? "w-full" : ""}`}>
+            {!isMobile && (
+              <>
+                <Button type="button" onClick={() => { stopPlayback(); setShowConvertModal(true); }} disabled={emptyDeck} title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Create a copy using the other music provider"}>
+                  <ArrowRightLeft className="w-4 h-4" />
+                  Convert deck
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleOpenSuggestSongs}
+                  disabled={emptyDeck}
+                  title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Suggest songs based on this deck"}
+                >
+                  <Wand2 className="w-4 h-4" />
+                  Suggest songs
+                </Button>
+              </>
+            )}
             <span
-              className={`pc-rainbow-attention${showAddSongRainbow ? " pc-rainbow-attention--active" : ""}`}
+              className={`pc-rainbow-attention${showAddSongRainbow ? " pc-rainbow-attention--active" : ""}${isMobile ? " flex-1" : ""}`}
             >
-              <Button type="button" variant="primary" onClick={handleOpenAddTrack}>
+              <Button type="button" variant="primary" onClick={handleOpenAddTrack} className={isMobile ? "w-full" : undefined}>
                 <Plus className="w-4 h-4" />
                 Add song
               </Button>

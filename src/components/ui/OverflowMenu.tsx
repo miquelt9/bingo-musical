@@ -15,6 +15,8 @@ export interface OverflowMenuItem {
 interface OverflowMenuProps {
   items: OverflowMenuItem[];
   ariaLabel?: string;
+  /** Optional visible label next to the icon (e.g. "More"). */
+  triggerLabel?: string;
   className?: string;
   triggerClassName?: string;
   align?: "left" | "right";
@@ -57,6 +59,7 @@ function computeMenuPosition(
 export const OverflowMenu: React.FC<OverflowMenuProps> = ({
   items,
   ariaLabel = "More actions",
+  triggerLabel,
   className,
   triggerClassName,
   align = "right",
@@ -160,7 +163,11 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        className={twMerge("pc-button pc-overflow-menu-trigger", triggerClassName)}
+        className={twMerge(
+          "pc-button pc-overflow-menu-trigger",
+          triggerLabel && "pc-overflow-menu-trigger--labeled",
+          triggerClassName,
+        )}
         onClick={() => setOpen((value) => !value)}
         aria-label={ariaLabel}
         aria-expanded={open}
@@ -168,6 +175,7 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({
         aria-controls={menuId}
       >
         <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+        {triggerLabel ? <span>{triggerLabel}</span> : null}
       </button>
       {menuPanel && createPortal(menuPanel, document.body)}
     </div>

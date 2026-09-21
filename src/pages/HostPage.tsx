@@ -17,7 +17,7 @@ import { HostInlineVideoPanel } from "../components/player/DraggableVideoWindow"
 import { attachPlayersToViewport } from "../lib/player/player";
 import { usePlayabilityGate } from "../hooks/usePlayabilityGate";
 import { useDeckRoute } from "../hooks/useDeckRoute";
-import { useIsMobile } from "../hooks/useMediaQuery";
+import { useIsMobile, useIsTablet } from "../hooks/useMediaQuery";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import {
   playClip,
@@ -50,7 +50,7 @@ import {
   SerializedCalledEntry,
 } from "../lib/host/session";
 import { trackEvent } from "../lib/usage/events";
-import { History, Search, Sparkles, Music2, RotateCcw, ChevronDown, Edit3, ScanLine } from "lucide-react";
+import { History, Search, Music2, RotateCcw, ChevronDown, Edit3 } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -200,6 +200,7 @@ function clearHostSession(deckId: string): void {
 
 export const HostPage: React.FC = () => {
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const { deck, isLoading, notFound } = useDeckRoute();
   const { updateDeck, updateTrackInDeck } = useDeck();
   const { showVideo, toggleVideo } = usePlayerUI();
@@ -231,6 +232,12 @@ export const HostPage: React.FC = () => {
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
   /** Only auto-reveal after we've seen remainingTime > leadSec for this call. */
   const revealArmedRef = useRef(false);
+  const playerStateRef = useRef(playerState);
+  const hostModalOpenRef = useRef(false);
+  const wasPlayingBeforeModalRef = useRef(false);
+  const skipResumeAfterModalRef = useRef(false);
+
+  const hostModalOpen = showCardVerification || showBingoModal || showResetModal;
 
   useEffect(() => {
     uncalledIdsRef.current = uncalledIds;
@@ -245,10 +252,38 @@ export const HostPage: React.FC = () => {
   }, [autoCallNextOnEnd]);
 
   useEffect(() => {
+    playerStateRef.current = playerState;
+  }, [playerState]);
+
+  useEffect(() => {
+    hostModalOpenRef.current = hostModalOpen;
+  }, [hostModalOpen]);
+
+  useEffect(() => {
     crossfadeOverlapMsRef.current = crossfadeOverlapMs;
-    setCrossfadeConfig(crossfadeOverlapMs, autoCallNextOnEnd);
+    setCrossfadeConfig(crossfadeOverlapMs, autoCallNextOnEnd && !hostModalOpen);
     setPlaybackFadeConfig(crossfadeOverlapMs, crossfadeOverlapMs);
-  }, [crossfadeOverlapMs, autoCallNextOnEnd]);
+  }, [crossfadeOverlapMs, autoCallNextOnEnd, hostModalOpen]);
+
+  useEffect(() => {
+    if (hostModalOpen) {
+      const wasPlaying = playerStateRef.current?.state === "playing";
+      wasPlayingBeforeModalRef.current = wasPlaying;
+      if (wasPlaying) pausePlayback();
+      return;
+    }
+
+    if (skipResumeAfterModalRef.current) {
+      skipResumeAfterModalRef.current = false;
+      wasPlayingBeforeModalRef.current = false;
+      return;
+    }
+
+    if (wasPlayingBeforeModalRef.current) {
+      wasPlayingBeforeModalRef.current = false;
+      resumePlayback();
+    }
+  }, [hostModalOpen]);
 
   useEffect(() => {
     if (!deck) return;
@@ -332,6 +367,7 @@ export const HostPage: React.FC = () => {
   }, [deck]);
 
   const onClipEnd = useCallback(() => {
+    if (hostModalOpenRef.current) return;
     if (autoCallNextOnEndRef.current && uncalledIdsRef.current.length > 0) {
       handleCallNextRef.current();
     } else {
@@ -527,6 +563,7 @@ export const HostPage: React.FC = () => {
   }, [currentCall?.track.id, currentCall?.callNumber]);
 
   useEffect(() => {
+    if (hostModalOpen) return;
     if (!autoRevealOnEnd) return;
     if (isRevealed || !currentCall || !playerState?.currentClip) return;
     if (playerState.currentClip.trackId !== currentCall.track.id) return;
@@ -549,6 +586,7 @@ export const HostPage: React.FC = () => {
       setIsRevealed(true);
     }
   }, [
+    hostModalOpen,
     isRevealed,
     currentCall,
     playerState?.currentClip,
@@ -597,6 +635,8 @@ export const HostPage: React.FC = () => {
   };
 
   const handleResetGame = () => {
+    skipResumeAfterModalRef.current = true;
+    wasPlayingBeforeModalRef.current = false;
     setShowResetModal(false);
     initGame();
   };
@@ -695,8 +735,6 @@ export const HostPage: React.FC = () => {
   }, [isRevealed]);
 
   const triggerConfetti = () => {
-    pausePlayback();
-
     const defaults = {
       particleCount: 80,
       spread: 55,
@@ -821,6 +859,9 @@ export const HostPage: React.FC = () => {
       disabled={!canHost}
       isRevealed={isRevealed}
       supportsVideoPreview={deck.provider === "youtube"}
+      onVerify={() => setShowCardVerification(true)}
+      onBingo={triggerConfetti}
+      onReset={() => setShowResetModal(true)}
     />
   );
 
@@ -915,7 +956,7 @@ export const HostPage: React.FC = () => {
   );
 
   return (
-    <div className={`host-board ${isMobile ? "host-board--mobile" : ""}`}>
+    <div className={`host-board ${isTablet ? "host-board--mobile" : ""}`}>
       <PlayabilityGateOverlay
         deckId={deck.id}
         context="host"
@@ -940,32 +981,11 @@ export const HostPage: React.FC = () => {
 
       <PageHeader
         back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
-        primaryAction={
-          currentCall ? (
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" onClick={() => setShowCardVerification(true)}>
-                <ScanLine className="w-3.5 h-3.5" />
-                {isMobile ? "Verify" : "Verify Line / Bingo"}
-              </Button>
-              <Button type="button" onClick={triggerConfetti}>
-                <Sparkles className="w-3.5 h-3.5" />
-                {isMobile ? "Bingo!" : "Someone Called Bingo!"}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => setShowResetModal(true)}
-                title="Reset game and shuffle all songs"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                {isMobile ? "Reset" : "Reset Bingo"}
-              </Button>
-            </div>
-          ) : undefined
-        }
+        title={deck.name}
       />
 
       {sessionReady && !emptyDeck ? (
-        isMobile ? (
+        isTablet ? (
           <div className="host-board-mobile-stack">
             <div className="host-controls">{hostControls}</div>
 
@@ -987,14 +1007,14 @@ export const HostPage: React.FC = () => {
           </div>
         ) : (
           <Split direction="row" className="host-board-main">
-            <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "7" }}>
+            <div className="host-board-left pc-tile" style={{ ["--pc-tile-grow" as string]: "1" }}>
               {answerCard}
               <div className="host-controls">{hostControls}</div>
             </div>
 
             <Window
               fill
-              grow={5}
+              grow={0}
               className="host-board-log"
               title={
                 <span className="inline-flex items-center gap-2">
@@ -1021,11 +1041,11 @@ export const HostPage: React.FC = () => {
           <p className="text-sm mb-4">
             A game session for this deck was found. Continue where you left off, or start a fresh shuffle?
           </p>
-          <div className="flex justify-end gap-2">
-            <Button type="button" onClick={handleStartNewGame}>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 w-full">
+            <Button type="button" className="w-full sm:w-auto" onClick={handleStartNewGame}>
               Start New Game
             </Button>
-            <Button type="button" variant="primary" onClick={handleContinueGame}>
+            <Button type="button" variant="primary" className="w-full sm:w-auto" onClick={handleContinueGame}>
               Continue Game
             </Button>
           </div>

@@ -302,7 +302,11 @@ export const HomePage: React.FC = () => {
               </Link>
             )}
             {!hostReady && hostAction}
-            <OverflowMenu items={mobileOverflowItems} ariaLabel={`More actions for ${deck.name}`} />
+            <OverflowMenu
+              items={mobileOverflowItems}
+              ariaLabel={`More actions for ${deck.name}`}
+              triggerLabel="More"
+            />
           </div>
         </article>
       );

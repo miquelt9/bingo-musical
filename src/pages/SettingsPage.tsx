@@ -200,7 +200,7 @@ export const SettingsPage: React.FC = () => {
     <div className="max-w-4xl mx-auto space-y-4">
       <BackButton fallbackTo="/" fallbackLabel="All decks" />
       <Window title="App Settings">
-        <p className="text-sm mb-4">Appearance, integrations, and local data options.</p>
+        <p className="text-sm mb-4">Appearance, local decks, and playback.</p>
 
         <div className="space-y-6">
           <Group
@@ -263,6 +263,35 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
           </Group>
+
+          {isMobile ? (
+            <CollapsibleSection
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  Data &amp; playback
+                </span>
+              }
+              open={dataNotesOpen}
+              onToggle={() => setDataNotesOpen((open) => !open)}
+            >
+              {dataNotesContent}
+            </CollapsibleSection>
+          ) : (
+            <CollapsibleSection
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  Data &amp; playback
+                </span>
+              }
+              open={dataNotesOpen}
+              onToggle={() => setDataNotesOpen((open) => !open)}
+              className="pt-2 border-t border-[var(--pc-border)]"
+            >
+              {dataNotesContent}
+            </CollapsibleSection>
+          )}
 
           <Group
             legend={
@@ -340,61 +369,30 @@ export const SettingsPage: React.FC = () => {
           </Group>
 
           {isMobile ? (
-            <>
-              <CollapsibleSection
-                title={
-                  <span className="inline-flex items-center gap-2">
-                    <Code className="w-4 h-4" />
-                    About &amp; Open Source
-                  </span>
-                }
-                open={aboutOpen}
-                onToggle={() => setAboutOpen((open) => !open)}
-                className="pt-2 border-t border-[var(--pc-border)]"
-              >
-                {aboutContent}
-              </CollapsibleSection>
-
-              <CollapsibleSection
-                title={
-                  <span className="inline-flex items-center gap-2">
-                    <Info className="w-4 h-4" />
-                    Data &amp; playback
-                  </span>
-                }
-                open={dataNotesOpen}
-                onToggle={() => setDataNotesOpen((open) => !open)}
-              >
-                {dataNotesContent}
-              </CollapsibleSection>
-            </>
+            <CollapsibleSection
+              title={
+                <span className="inline-flex items-center gap-2">
+                  <Code className="w-4 h-4" />
+                  About &amp; Open Source
+                </span>
+              }
+              open={aboutOpen}
+              onToggle={() => setAboutOpen((open) => !open)}
+              className="pt-2 border-t border-[var(--pc-border)]"
+            >
+              {aboutContent}
+            </CollapsibleSection>
           ) : (
-            <>
-              <Group
-                legend={
-                  <span className="inline-flex items-center gap-2">
-                    <Code className="w-4 h-4" />
-                    About &amp; Open Source
-                  </span>
-                }
-              >
-                {aboutContent}
-              </Group>
-
-              <CollapsibleSection
-                title={
-                  <span className="inline-flex items-center gap-2">
-                    <Info className="w-4 h-4" />
-                    Data &amp; playback
-                  </span>
-                }
-                open={dataNotesOpen}
-                onToggle={() => setDataNotesOpen((open) => !open)}
-                className="pt-2 border-t border-[var(--pc-border)]"
-              >
-                {dataNotesContent}
-              </CollapsibleSection>
-            </>
+            <Group
+              legend={
+                <span className="inline-flex items-center gap-2">
+                  <Code className="w-4 h-4" />
+                  About &amp; Open Source
+                </span>
+              }
+            >
+              {aboutContent}
+            </Group>
           )}
         </div>
       </Window>
@@ -410,9 +408,12 @@ export const SettingsPage: React.FC = () => {
           onCancel={() => setShowResetModal(false)}
         >
           <p className="text-sm">
-            This will permanently delete <strong>all of your decks</strong> and replace them with the
-            default Deezer starter deck. Custom decks, matched songs, and game progress stored in this
-            browser will be lost.
+            This will permanently delete{" "}
+            <strong>
+              {decks.length} deck{decks.length === 1 ? "" : "s"}
+            </strong>{" "}
+            and replace {decks.length === 1 ? "it" : "them"} with the default Deezer starter deck.
+            Custom decks, matched songs, and game progress stored in this browser will be lost.
           </p>
         </Modal>
       )}

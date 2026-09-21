@@ -19,6 +19,7 @@ export const YoutubePlayerEngine: React.FC = React.memo(function YoutubePlayerEn
       ref={fallbackRef}
       className="youtube-player-engine-fallback print:hidden"
       aria-hidden="true"
+      {...({ inert: true } as React.HTMLAttributes<HTMLDivElement>)}
     >
       <YoutubeVideoSlots />
     </div>

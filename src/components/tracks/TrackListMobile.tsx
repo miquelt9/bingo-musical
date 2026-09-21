@@ -158,7 +158,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
             key={track.id}
             className={`flex p-3 pc-bevel-inset ${
               isMobile
-                ? "flex-col items-stretch gap-3 min-h-[136px]"
+                ? "flex-col items-stretch gap-2"
                 : "items-center gap-3 min-h-[88px]"
             } ${isBlocked ? "bg-pc-warning" : ""}`}
           >
@@ -175,13 +175,13 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 <AlbumArt
                   src={thumb}
                   alt=""
-                  className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} object-cover shrink-0 pc-bevel-inset`}
+                  className={`${isMobile ? "w-12 h-12" : "w-20 h-20"} object-cover shrink-0 pc-bevel-inset`}
                 />
               ) : (
                 <div
-                  className={`${isMobile ? "w-14 h-14" : "w-20 h-20"} pc-bevel-inset shrink-0 flex items-center justify-center`}
+                  className={`${isMobile ? "w-12 h-12" : "w-20 h-20"} pc-bevel-inset shrink-0 flex items-center justify-center`}
                 >
-                  <Music2 className={isMobile ? "w-7 h-7" : "w-9 h-9"} />
+                  <Music2 className={isMobile ? "w-6 h-6" : "w-9 h-9"} />
                 </div>
               )}
 
@@ -189,7 +189,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
                 <p className={`font-semibold ${isMobile ? "text-base line-clamp-2" : "text-lg truncate"}`}>
                   {track.title}
                 </p>
-                <p className={`text-muted ${isMobile ? "text-sm line-clamp-2" : "text-base truncate"}`}>
+                <p className={`text-muted ${isMobile ? "text-sm line-clamp-1" : "text-base truncate"}`}>
                   {track.artist}
                 </p>
                 {isRecentlyAdded?.(track) && (
@@ -201,7 +201,11 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
               </div>
             </div>
 
-            <div className={`flex items-center flex-wrap shrink-0 ${isMobile ? "w-full gap-1" : "gap-1.5"}`}>
+            <div
+              className={`flex items-center shrink-0 ${
+                isMobile ? "w-full gap-1 flex-nowrap overflow-x-auto" : "gap-1.5 flex-wrap"
+              }`}
+            >
               {isReady ? (
                 <button
                   type="button"

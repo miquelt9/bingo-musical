@@ -30,6 +30,8 @@ function resultClass(result: Extract<CardVerificationResult, { kind: "verified" 
   return "text-pc-error";
 }
 
+const CAMERA_UNAVAILABLE_MESSAGE = "No camera available — enter the card code instead.";
+
 export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
   deck,
   calledTrackIds,
@@ -67,6 +69,12 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(CAMERA_UNAVAILABLE_MESSAGE);
+      return undefined;
+    }
+
     const video = videoRef.current;
     if (!video) return undefined;
 
@@ -94,13 +102,9 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
         controlsRef.current = controls;
         setCameraActive(true);
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (cancelled) return;
-        setCameraError(
-          error instanceof Error && error.message
-            ? error.message
-            : "Camera access was unavailable. You can enter the card code below."
-        );
+        setCameraError(CAMERA_UNAVAILABLE_MESSAGE);
       });
 
     return () => {
@@ -115,39 +119,17 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
     onClose();
   };
 
+  const showScanner = cameraError === null;
+
   return (
     <PcModal title="Verify line or Bingo" onClose={handleClose} className="max-w-xl">
       <div className="space-y-4">
         <p className="text-sm">
-          Scan the verification QR in the card&apos;s top-right corner, or enter its card code.
+          {showScanner
+            ? "Scan the verification QR in the card's top-right corner, or enter its card code."
+            : "Enter the card code from the top-right of the printed card."}{" "}
           Verification uses this deck and the songs already called in this game.
         </p>
-
-        <div className="pc-bevel-inset p-3 space-y-2">
-          <div className="flex items-center gap-2 text-xs font-bold">
-            <Camera className="w-4 h-4" />
-            Camera scanner
-          </div>
-          <div className="relative overflow-hidden bg-black min-h-48 flex items-center justify-center">
-            <video
-              ref={videoRef}
-              muted
-              autoPlay
-              playsInline
-              className={`w-full max-h-64 object-cover ${cameraActive ? "" : "hidden"}`}
-            />
-            {!cameraActive && (
-              <div className="p-6 text-center text-xs text-white/80">
-                <ScanLine className="w-8 h-8 mx-auto mb-2" />
-                {cameraError || "Starting camera…"}
-              </div>
-            )}
-          </div>
-          {cameraError && <p className="text-[11px] text-pc-warning">{cameraError}</p>}
-          {cameraActive && (
-            <p className="text-[11px] text-muted">Point the camera at the card&apos;s verification QR.</p>
-          )}
-        </div>
 
         <form
           className="space-y-2"
@@ -166,6 +148,7 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
               onChange={(event) => setManualCode(event.target.value)}
               placeholder="B1-…"
               autoComplete="off"
+              autoFocus={!showScanner}
               className="flex-1 font-mono uppercase"
             />
             <Button type="submit" variant="primary" disabled={isVerifying || !manualCode.trim()}>
@@ -173,6 +156,37 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
             </Button>
           </div>
         </form>
+
+        {cameraError ? (
+          <p className="text-xs text-muted">{cameraError}</p>
+        ) : (
+          <div className="pc-bevel-inset p-3 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <Camera className="w-4 h-4" />
+              Camera scanner
+            </div>
+            <div className="relative overflow-hidden bg-black min-h-48 flex items-center justify-center">
+              <video
+                ref={videoRef}
+                muted
+                autoPlay
+                playsInline
+                className={`w-full max-h-64 object-cover ${cameraActive ? "" : "hidden"}`}
+              />
+              {!cameraActive && (
+                <div className="p-6 text-center text-xs text-white/80">
+                  <ScanLine className="w-8 h-8 mx-auto mb-2" />
+                  Starting camera…
+                </div>
+              )}
+            </div>
+            {cameraActive && (
+              <p className="text-[11px] text-muted">Point the camera at the card&apos;s verification QR.</p>
+            )}
+          </div>
+        )}
+
+        {/* Off-DOM mount not needed when scanner UI hosts the video; when unavailable we never start. */}
 
         {result?.kind === "invalid-code" && (
           <div className="pc-bevel-inset border-l-4 border-red-500 p-3 text-sm flex items-start gap-2">
