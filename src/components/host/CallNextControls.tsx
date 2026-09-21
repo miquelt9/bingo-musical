@@ -312,13 +312,13 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
               <div className="min-w-0">
                 {isRevealed ? (
                   <>
-                    <p className="font-bold text-sm truncate">{currentTrack.title}</p>
-                    <p className="text-xs text-muted truncate">{currentTrack.artist}</p>
+                    <p className="font-bold text-sm break-words">{currentTrack.title}</p>
+                    <p className="text-xs text-muted break-words">{currentTrack.artist}</p>
                   </>
                 ) : (
                   <>
-                    <p className="font-bold text-sm truncate">Mystery track playing…</p>
-                    <p className="text-xs text-muted truncate">Artist &amp; title hidden</p>
+                    <p className="font-bold text-sm break-words">Mystery track playing…</p>
+                    <p className="text-xs text-muted break-words">Artist &amp; title hidden</p>
                   </>
                 )}
                 <p className="text-[11px] text-pc-warning mt-0.5">

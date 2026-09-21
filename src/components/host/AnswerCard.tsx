@@ -154,7 +154,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
                 {isRevealed && songNumber != null ? `Song #${songNumber}` : "Song #00"}
               </p>
               <div className="flex items-start gap-2 min-w-0">
-                <h2 className="text-xl font-extrabold leading-tight truncate min-w-0 flex-1">
+                <h2 className="text-xl font-extrabold leading-tight break-words min-w-0 flex-1">
                   {isRevealed ? track.title : "Mystery Track Playing…"}
                 </h2>
                 {isRevealed && providerUrl && (
@@ -170,7 +170,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
                   </a>
                 )}
               </div>
-              <p className="text-sm font-medium truncate">
+              <p className="text-sm font-medium break-words">
                 {isRevealed ? track.artist : "Artist & title hidden"}
               </p>
               <p

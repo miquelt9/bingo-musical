@@ -42,6 +42,11 @@ export interface PdfExportOptions extends BingoCardOptions {
   shareUrl?: string;
   /** Verification code keyed by generated card id. */
   verificationCodes?: Record<string, string>;
+  /**
+   * When previewing a single card from a larger batch, pass its batch index so
+   * colorful accents match the full export.
+   */
+  appearanceCardOffset?: number;
 }
 
 interface PreparedImage {
@@ -608,13 +613,15 @@ export async function generateBingoPdf(
     cardsStarted = true;
   }
 
+  const appearanceOffset = Math.max(0, options.appearanceCardOffset ?? 0);
+
   for (let cardIndex = 0; cardIndex < cards.length; cardIndex++) {
     if (cardsStarted || cardIndex > 0) doc.addPage("a4", "portrait");
     cardsStarted = true;
 
     const card = cards[cardIndex];
     const gridSize = normalizeGridSize(card.gridSize || options.gridSize || 5);
-    const appearance = normalizePdfAppearance(options.appearance, cardIndex);
+    const appearance = normalizePdfAppearance(options.appearance, appearanceOffset + cardIndex);
     const layout = calculateCardLayout(
       doc,
       eventTitle,
@@ -752,6 +759,14 @@ export async function generateBingoPdf(
   return doc.output("blob");
 }
 
+function pdfDownloadBasename(options: PdfExportOptions, cardCount: number): string {
+  const cleanTitle = (options.customTitle || options.deckName || "musical-bingo")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${cleanTitle || "musical-bingo"}-cards-${cardCount}`;
+}
+
 export async function downloadBingoPdf(
   cards: BingoCard[],
   options: PdfExportOptions,
@@ -759,15 +774,79 @@ export async function downloadBingoPdf(
 ): Promise<void> {
   const blob = await generateBingoPdf(cards, options, onProgress);
   const url = URL.createObjectURL(blob);
-  const cleanTitle = (options.customTitle || options.deckName || "musical-bingo")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${cleanTitle}-cards-${cards.length}.pdf`;
+  a.download = `${pdfDownloadBasename(options, cards.length)}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Open a PDF in a hidden iframe and invoke the browser print dialog.
+ * Used so Print and Download share the same layout.
+ */
+export async function printBingoPdf(
+  cards: BingoCard[],
+  options: PdfExportOptions,
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
+  const blob = await generateBingoPdf(cards, options, onProgress);
+  const url = URL.createObjectURL(blob);
+
+  await new Promise<void>((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("title", "Print bingo cards");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.setTimeout(() => {
+        iframe.remove();
+        URL.revokeObjectURL(url);
+      }, 1500);
+      resolve();
+    };
+
+    iframe.onload = () => {
+      try {
+        const frameWindow = iframe.contentWindow;
+        if (!frameWindow) {
+          reject(new Error("Could not open the print preview."));
+          finish();
+          return;
+        }
+        const cleanup = () => {
+          frameWindow.removeEventListener("afterprint", cleanup);
+          finish();
+        };
+        frameWindow.addEventListener("afterprint", cleanup);
+        frameWindow.focus();
+        frameWindow.print();
+        // Some browsers never fire afterprint for PDF frames.
+        window.setTimeout(cleanup, 60_000);
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error("Print failed."));
+        finish();
+      }
+    };
+
+    iframe.onerror = () => {
+      reject(new Error("Could not load the printable PDF."));
+      finish();
+    };
+
+    document.body.appendChild(iframe);
+    iframe.src = url;
+  });
 }

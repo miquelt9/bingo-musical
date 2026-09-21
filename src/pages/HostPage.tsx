@@ -50,7 +50,7 @@ import {
   SerializedCalledEntry,
 } from "../lib/host/session";
 import { trackEvent } from "../lib/usage/events";
-import { History, Search, Music2, RotateCcw, ChevronDown, Edit3 } from "lucide-react";
+import { History, Search, Music2, RotateCcw, ChevronDown, Edit3, MonitorPlay } from "lucide-react";
 import confetti from "canvas-confetti";
 
 export interface CalledEntry {
@@ -982,6 +982,19 @@ export const HostPage: React.FC = () => {
       <PageHeader
         back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
         title={deck.name}
+        primaryAction={
+          <Button
+            type="button"
+            onClick={() => {
+              const displayUrl = `${window.location.origin}${window.location.pathname}#/deck/${deck.id}/display`;
+              window.open(displayUrl, `bingo-display-${deck.id}`, "noopener,noreferrer");
+            }}
+            title="Open the audience display in a new window"
+          >
+            <MonitorPlay className="w-4 h-4" />
+            Open display
+          </Button>
+        }
       />
 
       {sessionReady && !emptyDeck ? (

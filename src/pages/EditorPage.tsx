@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Input, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
@@ -13,20 +13,13 @@ import { batchMatchTracks, BatchMatchProgress } from "../lib/youtube/matcher";
 import { batchMatchDeezerTracks } from "../lib/deezer/matcher";
 import {
   validateTracksEmbeddability,
-  BatchValidationProgress,
   getCachedEmbedStatus,
   getUnplayableTracks,
 } from "../lib/youtube/validator";
 import {
-  canStartGame,
-  ensureDeckPlayable,
-  InvalidTrackEntry,
-} from "../lib/youtube/playabilityGate";
-import {
   formatReadinessPrimary,
   formatReadinessSecondary,
   getDeckReadiness,
-  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import { PcModal } from "../components/ui/PcModal";
@@ -51,14 +44,11 @@ import {
 import { songIdentityKey } from "../lib/music/songIdentity";
 import {
   Edit3,
-  Printer,
-  Radio,
   Share2,
   Users,
   Plus,
   Check,
   AlertTriangle,
-  Sparkles,
   ArrowRightLeft,
   Wand2,
   RefreshCw,
@@ -125,10 +115,6 @@ export const EditorPage: React.FC = () => {
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [suggestSeeds, setSuggestSeeds] = useState<Track[] | null>(null);
   const [addSongRainbowDismissed, setAddSongRainbowDismissed] = useState(false);
-  const [hostGateOpen, setHostGateOpen] = useState(false);
-  const [hostGateChecking, setHostGateChecking] = useState(false);
-  const [hostGateProgress, setHostGateProgress] = useState<BatchValidationProgress | null>(null);
-  const [hostGateInvalid, setHostGateInvalid] = useState<InvalidTrackEntry[]>([]);
   const backgroundVerifyRef = useRef<string | null>(null);
   const autostartMatchRef = useRef(false);
   const blockedToastShownRef = useRef(false);
@@ -675,7 +661,6 @@ export const EditorPage: React.FC = () => {
   const isTrackBusy = isMatching || isAutoFixing;
   const emptyDeck = isEmptyDeck(deck);
   const showAddSongRainbow = emptyDeck && !addSongRainbowDismissed;
-  const hostDisabled = isTrackBusy || hostGateChecking || emptyDeck || !readiness.canHost;
 
   const handleOpenSuggestSongs = () => {
     if (emptyDeck) return;
@@ -686,57 +671,6 @@ export const EditorPage: React.FC = () => {
   const handleFindSimilar = (track: Track) => {
     stopPlayback();
     setSuggestSeeds([track]);
-  };
-
-  const handleHostLiveGame = async () => {
-    if (!deck) return;
-
-    if (readiness.canHost && canStartGame(deck.tracks)) {
-      navigate(`/deck/${deck.id}/play`);
-      return;
-    }
-
-    setHostGateOpen(true);
-    setHostGateChecking(true);
-    setHostGateInvalid([]);
-    setHostGateProgress(null);
-
-    try {
-      const result = await ensureDeckPlayable(deck.tracks, {
-        onProgress: setHostGateProgress,
-      });
-
-      if (result.invalidTracks.length > 0) {
-        const invalidIds = new Set(result.invalidTracks.map((i) => i.track.id));
-        const updatedTracks = deck.tracks.map((track) =>
-          invalidIds.has(track.id) ? { ...track, matchStatus: "failed" as const } : track
-        );
-        const updatedDeck = { ...deck, tracks: updatedTracks };
-        setDeck(updatedDeck);
-        if (deck.collaboration) {
-          const invalidKeys = new Set(result.invalidTracks.map((entry) => collaborativeTrackKey(entry.track)));
-          collaborativeMutationRef.current((latest) => ({
-            ...latest,
-            tracks: latest.tracks.map((track) =>
-              invalidKeys.has(collaborativeTrackKey(track))
-                ? { ...track, matchStatus: "failed" as const }
-                : track
-            ),
-          }));
-        } else {
-          updateDeck(updatedDeck);
-        }
-        setHostGateInvalid(result.invalidTracks);
-      } else {
-        navigate(`/deck/${deck.id}/play`);
-        setHostGateOpen(false);
-      }
-    } catch (err) {
-      console.error("Host gate verification error:", err);
-    } finally {
-      setHostGateChecking(false);
-      setHostGateProgress(null);
-    }
   };
 
   const handleOpenAddTrack = () => {
@@ -786,17 +720,6 @@ export const EditorPage: React.FC = () => {
                       ]
                     : []),
                   {
-                    icon: <Printer className="w-4 h-4" />,
-                    label: "Cards",
-                    onClick: () => navigate(`/deck/${deck.id}/cards`),
-                    disabled: emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS,
-                    title: emptyDeck
-                      ? EMPTY_DECK_ACTION_TITLE
-                      : deck.tracks.length < MIN_CARDS_TRACKS
-                        ? `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
-                        : undefined,
-                  },
-                  {
                     icon: <ArrowRightLeft className="w-4 h-4" />,
                     label: "Convert deck",
                     onClick: () => {
@@ -815,17 +738,6 @@ export const EditorPage: React.FC = () => {
                   },
                 ]}
               />
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleHostLiveGame}
-                disabled={hostDisabled}
-                title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Host"}
-                aria-label={hostGateChecking ? "Verifying deck…" : "Host"}
-              >
-                <Radio className="w-4 h-4" />
-                {hostGateChecking ? "Verifying…" : "Host"}
-              </Button>
             </div>
           }
         />
@@ -854,36 +766,6 @@ export const EditorPage: React.FC = () => {
                 {isCollaborativeSyncing ? "Checking…" : "Check for updates"}
               </Button>
             )}
-            {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
-              <span
-                title={
-                  emptyDeck
-                    ? EMPTY_DECK_ACTION_TITLE
-                    : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
-                }
-                className="contents"
-              >
-                <span className="pc-button opacity-60 pointer-events-none" aria-disabled tabIndex={-1}>
-                  <Printer className="w-4 h-4" />
-                  Cards
-                </span>
-              </span>
-            ) : (
-              <Link to={`/deck/${deck.id}/cards`} className="pc-button">
-                <Printer className="w-4 h-4" />
-                Cards
-              </Link>
-            )}
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleHostLiveGame}
-              disabled={hostDisabled}
-              title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : readiness.tooFewForHost ? `Need ${readiness.minHostTracks}+ playable songs` : undefined}
-            >
-              <Radio className="w-4 h-4" />
-              {hostGateChecking ? "Verifying..." : "Host"}
-            </Button>
           </div>
         </div>
       )}
@@ -999,63 +881,6 @@ export const EditorPage: React.FC = () => {
           cancelMatchingRef.current = true;
         }}
       />
-
-      {hostGateOpen && (hostGateChecking || hostGateInvalid.length > 0) && (
-        <PcModal
-          title="Cannot Start Game"
-          onClose={() => {
-            if (!hostGateChecking) setHostGateOpen(false);
-          }}
-          className="max-w-lg"
-        >
-          {hostGateChecking ? (
-            <div className="space-y-3 text-xs">
-              <p className="font-bold">Checking audio compatibility...</p>
-              {hostGateProgress ? (
-                <p>
-                  {hostGateProgress.completed} / {hostGateProgress.total} songs checked
-                  {hostGateProgress.currentTrackTitle ? ` · ${hostGateProgress.currentTrackTitle}` : ""}
-                </p>
-              ) : (
-                <p>Verifying YouTube embed permissions...</p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4 text-xs">
-              <div>
-                <p className="font-bold">
-                  All songs must be playable before starting the game.
-                </p>
-                <p className="mt-2">
-                  {hostGateInvalid.length} song{hostGateInvalid.length > 1 ? "s" : ""} cannot be played.
-                  Use Fix all songs or fix them manually, then try again.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={handleAutoFixBlocked}
-                  disabled={isTrackBusy}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Fix all songs
-                </Button>
-                <Link
-                  to={`/deck/${deck.id}?filter=blocked`}
-                  className="pc-button"
-                  onClick={() => setHostGateOpen(false)}
-                >
-                  View Problem Songs
-                </Link>
-                <Button type="button" onClick={() => setHostGateOpen(false)}>
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </PcModal>
-      )}
 
       {showAddTrackModal && (
         <PcModal

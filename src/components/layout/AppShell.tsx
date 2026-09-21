@@ -49,11 +49,8 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   } = usePlayerUI();
   const isMobile = useIsMobile();
   const { showToast } = useToast();
-  const currentDeckId = activeDeck?.id || decks[0]?.id;
   const backgroundTaskEntries = Object.values(backgroundTasks);
   const backgroundTask = backgroundTaskEntries[backgroundTaskEntries.length - 1] ?? null;
-  const { canOpenHost, canOpenCards, hostBlockReason, cardsBlockReason } =
-    useDeckNavGuards(currentDeckId);
 
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [pendingDeckSwitch, setPendingDeckSwitch] = useState<{
@@ -84,9 +81,21 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               ? "decks"
               : null;
 
+  const routeDeckId = path.match(/^\/deck\/([^/]+)/)?.[1];
+  const currentDeckId = routeDeckId || activeDeck?.id || decks[0]?.id;
+  const { canOpenHost, canOpenCards, hostBlockReason, cardsBlockReason } =
+    useDeckNavGuards(currentDeckId);
+
   const isHostRoute = activeTab === "host";
   // Pre-mount YouTube while editing so the first Preview click retains its user gesture.
   const isYoutubeEditorRoute = activeTab === "editor" && activeDeck?.provider === "youtube";
+
+  useEffect(() => {
+    if (!currentDeckId) return;
+    if (activeDeck?.id === currentDeckId) return;
+    if (!decks.some((d) => d.id === currentDeckId)) return;
+    loadDeck(currentDeckId);
+  }, [currentDeckId, activeDeck?.id, decks, loadDeck]);
 
   useEffect(() => {
     if (isHostRoute) {
@@ -140,7 +149,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const handleDeckChange = (deckId: string) => {
-    if (deckId === activeDeck?.id) return;
+    if (deckId === currentDeckId) return;
 
     const targetDeck = decks.find((d) => d.id === deckId);
     const targetName = targetDeck?.name ?? "this deck";
@@ -221,7 +230,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   return (
-    <Desktop tiled theme={theme}>
+    <Desktop tiled theme={theme} className={isMobile ? "pc-shell--compact" : undefined}>
       <Workspace>
         <div className={`pc-workspace-scroll print:p-0 ${scrollPaddingClass}`}>{children}</div>
       </Workspace>
@@ -308,10 +317,10 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {decks.length > 0 && !isHostRoute && (
           <select
-            value={activeDeck?.id || ""}
+            value={currentDeckId || ""}
             onChange={(e) => handleDeckChange(e.target.value)}
             className="pc-select pc-taskbar-deck-select min-w-0 flex-1 sm:w-[420px] sm:max-w-[420px] sm:flex-none"
-            title={activeDeck?.name ?? "Active deck"}
+            title={decks.find((d) => d.id === currentDeckId)?.name ?? "Active deck"}
             aria-label="Active deck"
           >
             {decks.map((d) => (

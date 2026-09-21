@@ -1448,6 +1448,14 @@
   print-color-adjust: exact;
 }
 
+.bingo-pdf-preview-frame {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.bingo-pdf-preview-frame iframe {
+  background: #ffffff;
+}
+
 /* Print Stylesheet */
 @media print {
   @page {
@@ -1492,11 +1500,28 @@
   .page-break-after-always {
     page-break-after: always;
     break-after: page;
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 10mm 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .pc-shell--compact .pc-taskbar-item > span:not(.sr-only) {
+    display: none;
+  }
+
+  .pc-shell--compact .pc-taskbar-deck-select {
+    max-width: 7.5rem;
+  }
+
+  .pc-shell--compact .pc-workspace-scroll > .pc-window > .pc-titlebar,
+  .pc-shell--compact .pc-workspace-scroll .pc-window > .pc-titlebar {
+    display: none;
+  }
+
+  .pc-shell--compact .pc-workspace-scroll .pc-window-content {
+    border-top: 1px solid var(--pc-border, #1a1a1a);
   }
 }
 

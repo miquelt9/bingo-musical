@@ -9,7 +9,6 @@ import {
   formatReadinessSecondary,
   getDeckReadiness,
   getNextDeckName,
-  MIN_CARDS_TRACKS,
 } from "../lib/decks/readiness";
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { saveStoredDecks } from "../lib/storage/decks";
@@ -24,7 +23,6 @@ import {
   Plus,
   Edit3,
   Radio,
-  Printer,
   Copy,
   Trash2,
   Share2,
@@ -203,17 +201,6 @@ export const HomePage: React.FC = () => {
         onClick: () => duplicateDeck(deck.id),
       },
       {
-        icon: <Printer className="w-4 h-4" />,
-        label: "Cards",
-        onClick: () => navigate(`/deck/${deck.id}/cards`),
-        disabled: emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS,
-        title: emptyDeck
-          ? EMPTY_DECK_ACTION_TITLE
-          : deck.tracks.length < MIN_CARDS_TRACKS
-            ? `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
-            : undefined,
-      },
-      {
         icon: <Trash2 className="w-4 h-4" />,
         label: "Delete",
         destructive: true,
@@ -367,26 +354,6 @@ export const HomePage: React.FC = () => {
             <Edit3 className="w-3.5 h-3.5" />
             Edit
           </Link>
-          {emptyDeck || deck.tracks.length < MIN_CARDS_TRACKS ? (
-            <span
-              title={
-                emptyDeck
-                  ? EMPTY_DECK_ACTION_TITLE
-                  : `Need at least ${MIN_CARDS_TRACKS} songs for bingo cards`
-              }
-              className="contents"
-            >
-              <span className="pc-button home-deck-card-action-cards opacity-60 pointer-events-none" aria-disabled>
-                <Printer className="w-3.5 h-3.5" />
-                Cards
-              </span>
-            </span>
-          ) : (
-            <Link to={`/deck/${deck.id}/cards`} className="pc-button home-deck-card-action-cards" title="Print bingo cards">
-              <Printer className="w-3.5 h-3.5" />
-              Cards
-            </Link>
-          )}
           {hostAction}
         </div>
       </article>

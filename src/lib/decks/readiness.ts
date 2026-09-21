@@ -58,7 +58,7 @@ export function getLargestValidGridSize(trackCount: number): number {
 }
 
 /** A track is ready when its selected provider has a usable playback source. */
-export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
+export function getDeckReadiness(tracks: Track[], _gridSize = 5): DeckReadiness {
   const total = tracks.length;
   const deferredPreviewCount = tracks.filter(isDeferredDeezerPreview).length;
   const blockedCount = getUnplayableTracks(tracks).filter((track) => !isDeferredDeezerPreview(track)).length;
@@ -73,7 +73,7 @@ export function getDeckReadiness(tracks: Track[], gridSize = 5): DeckReadiness {
     (t) => getTrackProvider(t) === "youtube" && isTrackNeedsVerification(t)
   ).length;
 
-  const minHostTracks = Math.max(MIN_HOST_TRACKS, getMinTracksForGrid(gridSize));
+  const minHostTracks = MIN_HOST_TRACKS;
   const tooFewForHost = readyCount < minHostTracks;
   const canHost = canStartGame(tracks) && !tooFewForHost;
 
@@ -130,8 +130,14 @@ export function formatReadinessSecondary(readiness: DeckReadiness): string | nul
   if (readiness.unmatchedCount > 0) {
     return `${readiness.unmatchedCount} unmatched`;
   }
+  if (readiness.readyCount < MIN_CARDS_TRACKS) {
+    return `Need ${MIN_CARDS_TRACKS} songs to print cards · ${MIN_HOST_TRACKS} to host`;
+  }
   if (readiness.tooFewForHost) {
-    return `Add more songs (need ${readiness.minHostTracks}+)`;
+    return `Need ${MIN_HOST_TRACKS} songs to host`;
+  }
+  if (readiness.readyCount < getRecommendedTrackCount(5)) {
+    return `A 5×5 card works best with about ${getRecommendedTrackCount(5)} songs`;
   }
   return null;
 }

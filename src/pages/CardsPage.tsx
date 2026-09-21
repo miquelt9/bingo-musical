@@ -23,8 +23,7 @@ import {
   getLargestValidGridSize,
   isGridSizeValidForDeck,
 } from "../lib/decks/readiness";
-import { CardPreview } from "../components/bingo/CardPreview";
-import { MasterSongList } from "../components/bingo/MasterSongList";
+import { PdfCardPreview } from "../components/bingo/PdfCardPreview";
 import { BingoCard } from "../types/deck";
 import { CardsPlayabilityBanner } from "../components/bingo/CardsPlayabilityBanner";
 import { AlertModal } from "../components/ui/AppDialog";
@@ -36,7 +35,6 @@ import { trackEvent } from "../lib/usage/events";
 import { useDeckRoute } from "../hooks/useDeckRoute";
 import { DeckNotFoundPage } from "./DeckNotFoundPage";
 import { buildSharedDeckUrl } from "../lib/share/deckShare";
-import { generateQrDataUrl } from "../lib/bingo/qr";
 import {
   computeDeckFingerprintHex,
   createCardBatchSeed,
@@ -77,6 +75,8 @@ const CARD_SETTINGS_KEY = "bingo.cards.settings";
 
 const BINGO_PERCENT = 100;
 const EVENT_TITLE_MAX = 160;
+const DEFAULT_EVENT_TITLE = "Musical Bingo";
+const EVENT_TITLE_PLACEHOLDER = "e.g. Friday Night Bingo";
 const MAX_BACKGROUND_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_BACKGROUND_EDGE = 2048;
 
@@ -159,18 +159,14 @@ export const CardsPage: React.FC = () => {
 
   const [cards, setCards] = useState<BingoCard[]>([]);
   const [verificationCodes, setVerificationCodes] = useState<Record<string, string>>({});
-  const [verificationQrDataUrls, setVerificationQrDataUrls] = useState<Record<string, string>>({});
   const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
-  const [printCards, setPrintCards] = useState<BingoCard[] | null>(null);
-  const [printJob, setPrintJob] = useState<PrintJob>("all");
-  const [pendingPrint, setPendingPrint] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [isPrintingPdf, setIsPrintingPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<{ current: number; total: number } | null>(null);
 
   const [pdfError, setPdfError] = useState<string | null>(null);
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   const handleTracksUpdated = useCallback(
     (updatedTracks: Track[]) => {
@@ -214,7 +210,7 @@ export const CardsPage: React.FC = () => {
     if (!deck) return null;
     return {
       deckName: deck.name,
-      customTitle: customTitle || deck.name,
+      customTitle: customTitle.trim() || DEFAULT_EVENT_TITLE,
       cardCount,
       gridSize,
       bingoPercent: BINGO_PERCENT,
@@ -230,7 +226,7 @@ export const CardsPage: React.FC = () => {
 
   useEffect(() => {
     if (!deck) return;
-    setCustomTitle(deck.name);
+    setCustomTitle("");
     const stored = readCardSettings(deck.id);
     const trackCount = deck.tracks.length;
     if (stored) {
@@ -315,7 +311,7 @@ export const CardsPage: React.FC = () => {
     setCards(
       generateBingoCards(deck.tracks, {
         deckName: deck.name,
-        customTitle: customTitle || deck.name,
+        customTitle: customTitle.trim() || DEFAULT_EVENT_TITLE,
         cardCount,
         gridSize,
         bingoPercent: BINGO_PERCENT,
@@ -347,7 +343,6 @@ export const CardsPage: React.FC = () => {
   useEffect(() => {
     if (!deck || !includeShareQr || !isShareApiConfigured() || deck.tracks.length === 0) {
       setShareUrl(null);
-      setQrDataUrl(null);
       return;
     }
 
@@ -370,28 +365,11 @@ export const CardsPage: React.FC = () => {
   }, [deck?.id, deck?.updatedAt, deck?.tracks.length, includeShareQr]);
 
   useEffect(() => {
-    if (!shareUrl) {
-      setQrDataUrl(null);
-      return;
-    }
-
-    let cancelled = false;
-    void generateQrDataUrl(shareUrl, 180).then((dataUrl) => {
-      if (!cancelled) setQrDataUrl(dataUrl);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [shareUrl]);
-
-  useEffect(() => {
     if (!deck || !deckFingerprint || !batchSeed || cards.length === 0) {
       setVerificationCodes({});
-      setVerificationQrDataUrls({});
       return;
     }
 
-    let cancelled = false;
     const codes: Record<string, string> = {};
     for (const card of cards) {
       codes[card.id] = encodeCardVerificationCode({
@@ -404,18 +382,6 @@ export const CardsPage: React.FC = () => {
       });
     }
     setVerificationCodes(codes);
-    void Promise.all(
-      cards.map(async (card) => [
-        card.id,
-        await generateQrDataUrl(codes[card.id], 220),
-      ] as const)
-    ).then((entries) => {
-      if (!cancelled) setVerificationQrDataUrls(Object.fromEntries(entries));
-    });
-
-    return () => {
-      cancelled = true;
-    };
   }, [deck, deckFingerprint, batchSeed, cards, cellContent]);
 
   const handleRegenerate = () => {
@@ -460,7 +426,7 @@ export const CardsPage: React.FC = () => {
   const resetAppearance = () => setAppearance(DEFAULT_APPEARANCE);
 
   const handleDownloadPdf = async () => {
-    if (!deck || !cardOptions || cards.length === 0 || isExportingPdf) return;
+    if (!deck || !cardOptions || cards.length === 0 || isExportingPdf || isPrintingPdf) return;
     setIsExportingPdf(true);
     setPdfProgress({ current: 0, total: cards.length });
 
@@ -510,38 +476,68 @@ export const CardsPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    const resetPrintCards = () => {
-      setPrintCards(null);
-      setPrintJob("all");
-    };
-    window.addEventListener("afterprint", resetPrintCards);
-    return () => window.removeEventListener("afterprint", resetPrintCards);
-  }, []);
+  const runPdfPrint = async (selection: BingoCard[], job: PrintJob) => {
+    if (!deck || !cardOptions || isExportingPdf || isPrintingPdf) return;
+    if (job !== "master" && selection.length === 0) return;
+    if (job === "master" && deck.tracks.length === 0) return;
 
-  useEffect(() => {
-    if (!pendingPrint || printCards === null) return;
-    setPendingPrint(false);
-    trackEvent("cards_printed", "cards", { output: "browser" });
-    window.print();
-  }, [pendingPrint, printCards]);
+    setIsPrintingPdf(true);
+    const total = Math.max(1, selection.length);
+    setPdfProgress({ current: 0, total });
 
-  const triggerBrowserPrint = (selection: BingoCard[], job: PrintJob = "all") => {
-    if (job !== "master" && cards.length === 0) return;
-    setPrintJob(job);
-    setPrintCards(selection);
-    setPendingPrint(true);
+    const loadingToastId = showToast({
+      title: "Preparing print",
+      message: job === "master" ? "Building the master song list…" : `Preparing ${selection.length} bingo card${selection.length === 1 ? "" : "s"}…`,
+      duration: undefined,
+    });
+
+    try {
+      const { printBingoPdf } = await import("../lib/bingo/pdf");
+      await printBingoPdf(
+        selection,
+        {
+          ...cardOptions,
+          tracks: deck.tracks,
+          cellContent,
+          cellContentSizes,
+          shareUrl: shareUrl ?? undefined,
+          includeMasterList: job === "master" || (job === "all" && includeMasterList),
+          verificationCodes,
+          appearanceCardOffset: selection.length === 1 ? Math.max(0, cards.findIndex((c) => c.id === selection[0].id)) : 0,
+        },
+        (current, nextTotal) => setPdfProgress({ current, total: nextTotal })
+      );
+      trackEvent("cards_printed", "cards", { output: "pdf" });
+      dismissToast(loadingToastId);
+    } catch (err) {
+      console.error("PDF print failed:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setPdfError("Failed to print PDF: " + message);
+      dismissToast(loadingToastId);
+      showToast({
+        title: "Print failed",
+        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        message: "The printable PDF could not be opened.",
+        duration: 10000,
+      });
+    } finally {
+      setIsPrintingPdf(false);
+      setPdfProgress(null);
+    }
   };
 
-  const handleBrowserPrint = () =>
-    triggerBrowserPrint(cards, includeMasterList ? "all" : "cards");
+  const handleBrowserPrint = () => {
+    void runPdfPrint(cards, includeMasterList ? "all" : "cards");
+  };
 
-  const handlePrintMasterOnly = () => triggerBrowserPrint([], "master");
+  const handlePrintMasterOnly = () => {
+    void runPdfPrint([], "master");
+  };
 
   const handlePrintPreviewCard = () => {
     const card = cards[activePreviewIndex];
     if (!card) return;
-    triggerBrowserPrint([card], "cards");
+    void runPdfPrint([card], "cards");
   };
 
   if (notFound) {
@@ -554,13 +550,10 @@ export const CardsPage: React.FC = () => {
   const deezerHydration = backgroundTasks[`deezer-hydration:${deck.id}`];
   const currentCard = cards[activePreviewIndex] || cards[0];
   const currentVerificationCode = currentCard ? verificationCodes[currentCard.id] : undefined;
-  const currentVerificationQrDataUrl = currentCard ? verificationQrDataUrls[currentCard.id] : undefined;
-  const cardsForPrint = printCards ?? cards;
   const canGenerate = poolCount > 0;
   const verificationReady = cards.length > 0 && Object.keys(verificationCodes).length === cards.length;
-  const exportsDisabled = cards.length === 0 || !canGenerate || !verificationReady;
-  const showCardsInPrint = printJob === "cards" || printJob === "all";
-  const eventTitle = customTitle || deck.name;
+  const exportsDisabled = cards.length === 0 || !canGenerate || !verificationReady || isPrintingPdf;
+  const eventTitle = customTitle.trim() || DEFAULT_EVENT_TITLE;
 
   const pdfButtonLabel = pdfProgress
     ? `Generating ${pdfProgress.current}/${pdfProgress.total}`
@@ -621,18 +614,30 @@ export const CardsPage: React.FC = () => {
           back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
           title={`Cards`}
           primaryAction={
-            <div className="flex items-center gap-2">
-              <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
-                <Printer className="w-4 h-4" />
-                Print
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled} title="Print">
+                {isPrintingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                <span className="sr-only sm:not-sr-only">Print</span>
               </Button>
-              <Button type="button" variant="primary" onClick={() => void handleDownloadPdf()} disabled={isExportingPdf || exportsDisabled}>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleDownloadPdf()}
+                disabled={isExportingPdf || exportsDisabled}
+                title={pdfButtonLabel}
+              >
                 {isExportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Download PDF cards
+                <span className="hidden xs:inline">PDF</span>
+                <span className="sr-only">Download PDF cards</span>
               </Button>
-              <Button type="button" onClick={handlePrintMasterOnly} disabled={deck.tracks.length === 0}>
+              <Button
+                type="button"
+                onClick={handlePrintMasterOnly}
+                disabled={deck.tracks.length === 0 || isPrintingPdf}
+                title="Master list"
+              >
                 <ListOrdered className="w-4 h-4" />
-                Master list
+                <span className="sr-only">Master list</span>
               </Button>
             </div>
           }
@@ -644,7 +649,7 @@ export const CardsPage: React.FC = () => {
           primaryAction={
             <div className="flex items-center gap-2">
               <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled}>
-                <Printer className="w-4 h-4" />
+                {isPrintingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
                 Print
               </Button>
               <Button
@@ -681,24 +686,8 @@ export const CardsPage: React.FC = () => {
             }
           >
             <div className="space-y-4">
-              <label className="block text-xs font-bold">
-                Game / Event Title
-                <textarea
-                  className="w-full mt-1 pc-input min-h-[68px] resize-y"
-                  value={customTitle}
-                  maxLength={EVENT_TITLE_MAX}
-                  rows={2}
-                  onChange={(e) => setCustomTitle(e.target.value)}
-                  onBlur={() => setCustomTitle((current) => current.trim())}
-                  placeholder="e.g. Friday Night 80s Bingo"
-                />
-                <span className="block mt-1 text-[11px] font-normal text-muted text-right">
-                  {customTitle.length}/{EVENT_TITLE_MAX} · line breaks supported
-                </span>
-              </label>
-
               {isMobile ? (
-                <details className="border-t border-[var(--pc-border)] pt-3">
+                <details className="border-t-0 pt-0">
                   <summary className="text-xs font-bold inline-flex items-center gap-2 cursor-pointer list-none min-h-[44px]">
                     <Palette className="w-4 h-4" />
                     Adjust appearance
@@ -1309,6 +1298,22 @@ export const CardsPage: React.FC = () => {
         </div>
 
         <div className="lg:col-span-7 space-y-3 order-1 lg:order-2">
+          <label className="block text-xs font-bold">
+            Game / Event Title
+            <textarea
+              className="w-full mt-1 pc-input min-h-[68px] resize-y"
+              value={customTitle}
+              maxLength={EVENT_TITLE_MAX}
+              rows={2}
+              onChange={(e) => setCustomTitle(e.target.value)}
+              onBlur={() => setCustomTitle((current) => current.trim())}
+              placeholder={EVENT_TITLE_PLACEHOLDER}
+            />
+            <span className="block mt-1 text-[11px] font-normal text-muted text-right">
+              {customTitle.length}/{EVENT_TITLE_MAX} · shown on printed cards · blank uses “{DEFAULT_EVENT_TITLE}”
+            </span>
+          </label>
+
           {cards.length > 0 && currentCard ? (
             <Window
               title={
@@ -1352,16 +1357,15 @@ export const CardsPage: React.FC = () => {
                   </Button>
                 </div>
               </div>
-              <CardPreview
+              <PdfCardPreview
                 card={currentCard}
                 eventTitle={eventTitle}
+                deckName={deck.name}
                 tracks={deck.tracks}
                 cellContent={cellContent}
                 cellContentSizes={cellContentSizes}
-                qrDataUrl={qrDataUrl}
-                verificationQrDataUrl={currentVerificationQrDataUrl}
+                shareUrl={includeShareQr ? shareUrl : null}
                 verificationCode={currentVerificationCode}
-                interactiveMarks={false}
                 appearance={appearance}
                 cardIndex={activePreviewIndex}
               />
@@ -1370,36 +1374,6 @@ export const CardsPage: React.FC = () => {
             previewEmptyState
           )}
         </div>
-      </div>
-
-      <div className="hidden print:block space-y-8">
-        {(printJob === "master" || (printJob === "all" && includeMasterList)) &&
-          deck.tracks.length > 0 && (
-            <div className="page-break-after-always">
-              <MasterSongList
-                eventTitle={eventTitle}
-                tracks={deck.tracks}
-              />
-            </div>
-          )}
-        {showCardsInPrint &&
-          cardsForPrint.map((c) => (
-            <div key={c.id} className="page-break-after-always">
-              <CardPreview
-                card={c}
-                eventTitle={eventTitle}
-                tracks={deck.tracks}
-                cellContent={cellContent}
-                cellContentSizes={cellContentSizes}
-                qrDataUrl={qrDataUrl}
-                verificationQrDataUrl={verificationQrDataUrls[c.id]}
-                verificationCode={verificationCodes[c.id]}
-                interactiveMarks={false}
-                appearance={appearance}
-                cardIndex={cards.indexOf(c)}
-              />
-            </div>
-          ))}
       </div>
     </div>
   );

@@ -240,30 +240,6 @@ export const SettingsPage: React.FC = () => {
             </div>
           </Group>
 
-          <Group
-            legend={
-              <span className="inline-flex items-center gap-2">
-                <RotateCcw className="w-4 h-4" />
-                Local Storage & Starter Deck
-              </span>
-            }
-          >
-            <div className="flex flex-col gap-4 pc-bevel-inset p-3">
-              <div>
-                <h4 className="text-sm font-semibold">Reset all data to starter deck</h4>
-                <p className="text-xs mt-0.5">
-                  Deletes every deck in local storage and restores only the 30-track Deezer starter
-                  deck. This cannot be undone.
-                </p>
-              </div>
-              <div className="flex justify-end">
-                <Button type="button" onClick={() => setShowResetModal(true)} className="w-full sm:w-auto">
-                  Reset All Data
-                </Button>
-              </div>
-            </div>
-          </Group>
-
           {isMobile ? (
             <CollapsibleSection
               title={
@@ -316,6 +292,24 @@ export const SettingsPage: React.FC = () => {
                   Most people share decks with a link from the Share button. Use JSON files only when
                   you need a manual backup or offline transfer.
                 </p>
+
+                <div className="flex flex-col gap-4 pc-bevel-inset p-3">
+                  <div>
+                    <h4 className="text-sm font-semibold inline-flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4" />
+                      Reset all data to starter deck
+                    </h4>
+                    <p className="text-xs mt-0.5">
+                      Deletes every deck in local storage and restores only the 30-track Deezer starter
+                      deck. This cannot be undone.
+                    </p>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={() => setShowResetModal(true)} className="w-full sm:w-auto">
+                      Reset All Data
+                    </Button>
+                  </div>
+                </div>
 
                 <div>
                   <p className="text-xs font-bold mb-2">Import JSON deck</p>
