@@ -3,6 +3,7 @@ import {
   activeTabFromPath,
   deckSwitchConfirmMessage,
   isDesktopTaskbarVisible,
+  phoneSectionTabs,
   routeDeckIdFromPath,
 } from "./shellNav";
 
@@ -20,6 +21,15 @@ describe("shell navigation", () => {
   it("keeps the desktop taskbar and hides it on mobile", () => {
     expect(isDesktopTaskbarVisible(false)).toBe(true);
     expect(isDesktopTaskbarVisible(true)).toBe(false);
+  });
+
+  it("picks phone section icons for each shell tab", () => {
+    expect(phoneSectionTabs("editor")).toEqual(["cards", "host", "settings"]);
+    expect(phoneSectionTabs("cards")).toEqual(["editor", "host", "settings"]);
+    expect(phoneSectionTabs("host")).toEqual(["editor", "cards", "settings"]);
+    expect(phoneSectionTabs("decks")).toEqual(["settings"]);
+    expect(phoneSectionTabs("settings")).toEqual([]);
+    expect(phoneSectionTabs(null)).toEqual([]);
   });
 
   it("asks before leaving an editor, cards page, or live host session", () => {

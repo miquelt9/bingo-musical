@@ -2,7 +2,7 @@ import React from "react";
 import { twMerge } from "tailwind-merge";
 import { BackButton, type BackNavTarget } from "../ui/BackButton";
 import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
-import { MobileNavTrigger } from "./MobileNav";
+import { MobileBackgroundTaskStatus, MobileSectionNav } from "./MobileNav";
 
 export type { OverflowMenuItem };
 
@@ -34,7 +34,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           labelClassName="pc-page-header-back-label"
         />
         {title && <h1 className={twMerge("pc-page-header-title", titleClassName)}>{title}</h1>}
-        <MobileNavTrigger />
+        <MobileSectionNav />
       </div>
       {hasActions && (
         <div className="pc-page-header-actions">
@@ -44,6 +44,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           )}
         </div>
       )}
+      <MobileBackgroundTaskStatus />
     </header>
   );
 };

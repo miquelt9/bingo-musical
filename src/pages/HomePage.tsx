@@ -15,7 +15,7 @@ import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
-import { MobileNavTrigger } from "../components/layout/MobileNav";
+import { MobileBackgroundTaskStatus, MobileSectionNav } from "../components/layout/MobileNav";
 
 import { PcModal } from "../components/ui/PcModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -391,8 +391,9 @@ export const HomePage: React.FC = () => {
         <div className="pc-page-header mb-3">
           <div className="pc-page-header-leading">
             <h1 className="pc-page-header-title">Your bingo decks</h1>
-            <MobileNavTrigger />
+            <MobileSectionNav />
           </div>
+          <MobileBackgroundTaskStatus />
         </div>
       )}
       <p className="home-decks-intro text-sm mb-1">

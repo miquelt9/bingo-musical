@@ -222,14 +222,6 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const showDesktopTaskbar = isDesktopTaskbarVisible(isMobile);
   const mobileLinks: MobileNavLinkItem[] = [
     {
-      id: "decks",
-      label: "Decks",
-      to: "/",
-      end: true,
-      enabled: true,
-      icon: <FolderOpen className="w-4 h-4 shrink-0" />,
-    },
-    {
       id: "editor",
       label: "Deck",
       to: currentDeckId ? `/deck/${currentDeckId}` : "/",
@@ -268,11 +260,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       model={{
         activeTab,
         links: mobileLinks,
-        decks: decks.map((deck) => ({ id: deck.id, name: deck.name, trackCount: deck.tracks.length })),
-        currentDeckId: currentDeckId || "",
-        showDeckSelector: decks.length > 0 && !isHostRoute,
         backgroundTask,
-        onDeckChange: handleDeckChange,
         onBlockedNav: handleBlockedNav,
       }}
     >

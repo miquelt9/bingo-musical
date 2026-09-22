@@ -22,6 +22,25 @@ export function isDesktopTaskbarVisible(isMobile: boolean): boolean {
   return !isMobile;
 }
 
+/**
+ * Phone header section icons for the current tab.
+ * Omits Decks (Back covers it) and the active page. Home only exposes Settings.
+ */
+export function phoneSectionTabs(activeTab: ShellTab | null): ShellTab[] {
+  switch (activeTab) {
+    case "editor":
+      return ["cards", "host", "settings"];
+    case "cards":
+      return ["editor", "host", "settings"];
+    case "host":
+      return ["editor", "cards", "settings"];
+    case "decks":
+      return ["settings"];
+    default:
+      return [];
+  }
+}
+
 export function deckSwitchConfirmMessage(input: {
   activeTab: ShellTab | null;
   targetName: string;
