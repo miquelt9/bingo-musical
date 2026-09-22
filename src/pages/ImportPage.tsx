@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Window } from "@miquelt9/pc-ui";
 import { AlertCircle, Upload } from "lucide-react";
-import { BackButton } from "../components/ui/BackButton";
+import { PageHeader } from "../components/layout/PageHeader";
 import { useDeck } from "../state/DeckContext";
 import { trackEvent } from "../lib/usage/events";
 
@@ -46,7 +46,11 @@ export const ImportPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
-      <BackButton fallbackTo="/" fallbackLabel="All decks" className="inline-flex" />
+      <PageHeader
+        back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
+        title="Import a deck"
+        titleClassName="sm:hidden"
+      />
 
       <Window title="Import a shared deck">
         <p className="text-sm mb-4">

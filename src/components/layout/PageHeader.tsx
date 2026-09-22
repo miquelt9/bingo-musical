@@ -2,6 +2,7 @@ import React from "react";
 import { twMerge } from "tailwind-merge";
 import { BackButton, type BackNavTarget } from "../ui/BackButton";
 import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
+import { MobileNavTrigger } from "./MobileNav";
 
 export type { OverflowMenuItem };
 
@@ -11,6 +12,7 @@ interface PageHeaderProps {
   primaryAction?: React.ReactNode;
   overflowItems?: OverflowMenuItem[];
   className?: string;
+  titleClassName?: string;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -19,6 +21,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   primaryAction,
   overflowItems,
   className,
+  titleClassName,
 }) => {
   const hasActions = Boolean(primaryAction) || Boolean(overflowItems?.length);
 
@@ -30,7 +33,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           className="pc-page-header-back"
           labelClassName="pc-page-header-back-label"
         />
-        {title && <h1 className="pc-page-header-title">{title}</h1>}
+        {title && <h1 className={twMerge("pc-page-header-title", titleClassName)}>{title}</h1>}
+        <MobileNavTrigger />
       </div>
       {hasActions && (
         <div className="pc-page-header-actions">

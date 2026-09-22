@@ -99,6 +99,104 @@ const DEFAULT_APPEARANCE: PdfAppearanceOptions = {
   ...DEFAULT_PDF_APPEARANCE,
 };
 
+function CardContentFields({
+  cellContent,
+  setCellContent,
+  cellContentSizes,
+  setCellContentSizes,
+  includeMasterList,
+  setIncludeMasterList,
+  includeShareQr,
+  setIncludeShareQr,
+}: {
+  cellContent: BingoCellContentSelection;
+  setCellContent: React.Dispatch<React.SetStateAction<BingoCellContentSelection>>;
+  cellContentSizes: BingoCellContentSizes;
+  setCellContentSizes: React.Dispatch<React.SetStateAction<BingoCellContentSizes>>;
+  includeMasterList: boolean;
+  setIncludeMasterList: (value: boolean) => void;
+  includeShareQr: boolean;
+  setIncludeShareQr: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <div>
+        <p className="text-xs font-bold mb-1.5">Cell content</p>
+        <div className="flex flex-col gap-2">
+          {CELL_CONTENT_KINDS.map((kind) => (
+            <div key={kind} className="flex items-center gap-2 text-xs font-bold">
+              <label className="flex items-center gap-2 cursor-pointer min-w-[76px] min-h-11">
+                <input
+                  type="checkbox"
+                  checked={cellContent[kind]}
+                  onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
+                />
+                <span>{cellContentKindLabel(kind)}</span>
+              </label>
+              <input
+                type="range"
+                min={10}
+                max={200}
+                step={5}
+                value={cellContentSizes[kind]}
+                disabled={!cellContent[kind]}
+                onChange={(e) =>
+                  setCellContentSizes((prev) => ({ ...prev, [kind]: Number(e.target.value) }))
+                }
+                aria-label={`${cellContentKindLabel(kind)} size`}
+                className="flex-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+              />
+              <span className="w-10 text-right text-[10px] font-normal text-muted">
+                {cellContentSizes[kind]}%
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted mt-1.5">
+          {usesAuthorPool(cellContent)
+            ? "Authors are deduplicated across songs. Numbers follow first appearance in the deck."
+            : "Numbers follow deck order (#1 is the first song). Pick any combination of numbers, songs, and authors."}
+        </p>
+      </div>
+
+      <label className="flex items-start gap-2 text-xs font-bold cursor-pointer min-h-11">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={includeMasterList}
+          onChange={(e) => setIncludeMasterList(e.target.checked)}
+        />
+        <span>
+          Include master song list
+          <span className="block font-normal text-muted mt-0.5">
+            Adds a number-to-song key sheet for the host.
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-xs font-bold cursor-pointer min-h-11">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={includeShareQr}
+          onChange={(e) => setIncludeShareQr(e.target.checked)}
+        />
+        <span>
+          Show deck sharing QR code
+          <span className="block font-normal text-muted mt-0.5">
+            Lets players scan to view or add this deck on their phone. This is separate from the card verification QR.
+          </span>
+          {!isShareApiConfigured() && (
+            <span className="block font-normal text-pc-warning mt-0.5">
+              Sharing is not configured, so this QR will not appear.
+            </span>
+          )}
+        </span>
+      </label>
+    </>
+  );
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -697,12 +795,12 @@ export const CardsPage: React.FC = () => {
               </span>
             }
           >
-            <div className="space-y-4">
+            <div className="space-y-4 cards-print-settings">
               {isMobile ? (
-                <details className="border-t-0 pt-0">
-                  <summary className="text-xs font-bold inline-flex items-center gap-2 cursor-pointer list-none min-h-[44px]">
+                <details className="card-settings">
+                  <summary>
                     <Palette className="w-4 h-4" />
-                    Adjust appearance
+                    Card settings
                     <ChevronDown className="w-4 h-4 ml-auto" aria-hidden="true" />
                   </summary>
                   <div className="space-y-3 mt-3">
@@ -902,6 +1000,16 @@ export const CardsPage: React.FC = () => {
                     <Button type="button" className="w-full" onClick={resetAppearance}>
                       Reset appearance
                     </Button>
+                    <CardContentFields
+                      cellContent={cellContent}
+                      setCellContent={setCellContent}
+                      cellContentSizes={cellContentSizes}
+                      setCellContentSizes={setCellContentSizes}
+                      includeMasterList={includeMasterList}
+                      setIncludeMasterList={setIncludeMasterList}
+                      includeShareQr={includeShareQr}
+                      setIncludeShareQr={setIncludeShareQr}
+                    />
                   </div>
                 </details>
               ) : (
@@ -1110,79 +1218,18 @@ export const CardsPage: React.FC = () => {
               </div>
               )}
 
-              <div>
-                <p className="text-xs font-bold mb-1.5">Cell content</p>
-                <div className="flex flex-col gap-2">
-                  {CELL_CONTENT_KINDS.map((kind) => (
-                    <div key={kind} className="flex items-center gap-2 text-xs font-bold">
-                      <label className="flex items-center gap-2 cursor-pointer min-w-[76px]">
-                        <input
-                          type="checkbox"
-                          checked={cellContent[kind]}
-                          onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
-                        />
-                        <span>{cellContentKindLabel(kind)}</span>
-                      </label>
-                      <input
-                        type="range"
-                        min={10}
-                        max={200}
-                        step={5}
-                        value={cellContentSizes[kind]}
-                        disabled={!cellContent[kind]}
-                        onChange={(e) =>
-                          setCellContentSizes((prev) => ({ ...prev, [kind]: Number(e.target.value) }))
-                        }
-                        aria-label={`${cellContentKindLabel(kind)} size`}
-                        className="flex-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                      />
-                      <span className="w-10 text-right text-[10px] font-normal text-muted">
-                        {cellContentSizes[kind]}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-[11px] text-muted mt-1.5">
-                  {usesAuthorPool(cellContent)
-                    ? "Authors are deduplicated across songs. Numbers follow first appearance in the deck."
-                    : "Numbers follow deck order (#1 is the first song). Pick any combination of numbers, songs, and authors."}
-                </p>
-              </div>
-
-              <label className="flex items-start gap-2 text-xs font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={includeMasterList}
-                  onChange={(e) => setIncludeMasterList(e.target.checked)}
+              {!isMobile && (
+                <CardContentFields
+                  cellContent={cellContent}
+                  setCellContent={setCellContent}
+                  cellContentSizes={cellContentSizes}
+                  setCellContentSizes={setCellContentSizes}
+                  includeMasterList={includeMasterList}
+                  setIncludeMasterList={setIncludeMasterList}
+                  includeShareQr={includeShareQr}
+                  setIncludeShareQr={setIncludeShareQr}
                 />
-                <span>
-                  Include master song list
-                  <span className="block font-normal text-muted mt-0.5">
-                    Adds a number-to-song key sheet for the host.
-                  </span>
-                </span>
-              </label>
-
-              <label className="flex items-start gap-2 text-xs font-bold cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={includeShareQr}
-                  onChange={(e) => setIncludeShareQr(e.target.checked)}
-                />
-                <span>
-                  Show deck sharing QR code
-                  <span className="block font-normal text-muted mt-0.5">
-                    Lets players scan to view or add this deck on their phone. This is separate from the card verification QR.
-                  </span>
-                  {!isShareApiConfigured() && (
-                    <span className="block font-normal text-pc-warning mt-0.5">
-                      Sharing is not configured, so this QR will not appear.
-                    </span>
-                  )}
-                </span>
-              </label>
+              )}
 
               {!isMobile && (
                 <Button
@@ -1196,6 +1243,7 @@ export const CardsPage: React.FC = () => {
                 </Button>
               )}
 
+              <div className="cards-print-generate space-y-4">
               <div>
                 <p className="text-xs font-bold mb-1.5">Grid size ({gridSize}×{gridSize})</p>
                 {isMobile ? (
@@ -1304,6 +1352,7 @@ export const CardsPage: React.FC = () => {
 
                   </div>
                 )}
+              </div>
               </div>
             </div>
           </Window>

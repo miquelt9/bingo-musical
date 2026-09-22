@@ -15,6 +15,7 @@ import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
 import { OverflowMenu } from "../components/ui/OverflowMenu";
+import { MobileNavTrigger } from "../components/layout/MobileNav";
 
 import { PcModal } from "../components/ui/PcModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -386,6 +387,14 @@ export const HomePage: React.FC = () => {
 
   return (
     <Window fill title="Your bingo decks" className="home-decks">
+      {isMobile && (
+        <div className="pc-page-header mb-3">
+          <div className="pc-page-header-leading">
+            <h1 className="pc-page-header-title">Your bingo decks</h1>
+            <MobileNavTrigger />
+          </div>
+        </div>
+      )}
       <p className="home-decks-intro text-sm mb-1">
         {isMobile
           ? "Match clips, print cards, and host bingo."
@@ -429,10 +438,7 @@ export const HomePage: React.FC = () => {
       )}
 
       <div className="home-decks-grid">
-        <div
-          className="home-deck-add home-deck-add--providers"
-          onClick={() => handleCreateEmptyDeck("deezer")}
-        >
+        <div className="home-deck-add home-deck-add--providers" role="group" aria-label="Create an empty deck">
           <Plus className="w-5 h-5 shrink-0 opacity-80" aria-hidden />
           <span className="font-semibold text-sm">Empty deck</span>
           <span className="text-xs text-muted">Choose a music provider</span>
@@ -440,10 +446,9 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               className="home-deck-add-option"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleCreateEmptyDeck("youtube");
-              }}
+              aria-pressed={deckNamePrompt?.provider === "youtube"}
+              aria-label="Create a YouTube deck"
+              onClick={() => handleCreateEmptyDeck("youtube")}
             >
               <Music2 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">YouTube</span>
@@ -451,10 +456,9 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               className="home-deck-add-option"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleCreateEmptyDeck("deezer");
-              }}
+              aria-pressed={deckNamePrompt?.provider === "deezer"}
+              aria-label="Create a Deezer deck"
+              onClick={() => handleCreateEmptyDeck("deezer")}
             >
               <Disc3 className="w-5 h-5 opacity-80" aria-hidden />
               <span className="font-semibold text-xs">Deezer</span>
@@ -477,7 +481,7 @@ export const HomePage: React.FC = () => {
           >
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold">Music provider</legend>
-              <label className="flex items-start gap-2 pc-bevel-inset p-2 cursor-pointer">
+              <label className="flex items-start gap-2 pc-bevel-inset p-2 cursor-pointer min-h-11">
                 <input
                   type="radio"
                   name="new-deck-provider"
@@ -491,7 +495,7 @@ export const HomePage: React.FC = () => {
                   <span><strong>YouTube</strong><span className="block text-xs text-muted">Video clips, fully customizable; YouTube ads may appear.</span></span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 pc-bevel-inset p-2 cursor-pointer">
+              <label className="flex items-start gap-2 pc-bevel-inset p-2 cursor-pointer min-h-11">
                 <input
                   type="radio"
                   name="new-deck-provider"

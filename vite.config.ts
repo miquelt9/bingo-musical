@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 const buildId = process.env.VITE_BUILD_ID || "dev";
@@ -40,6 +40,11 @@ export default defineConfig({
   server: {
     host: "localhost",
     port: 5173,
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
   build: {
     rollupOptions: {

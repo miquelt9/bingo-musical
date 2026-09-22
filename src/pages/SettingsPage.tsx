@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Group, Radio, Window, Modal, type DesktopTheme } from "@miquelt9/pc-ui";
-import { BackButton } from "../components/ui/BackButton";
+import { PageHeader } from "../components/layout/PageHeader";
 import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
 import { useToast } from "../state/ToastContext";
@@ -198,7 +198,11 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      <BackButton fallbackTo="/" fallbackLabel="All decks" />
+      <PageHeader
+        back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
+        title="Settings"
+        titleClassName="sm:hidden"
+      />
       <Window title="App Settings">
         <p className="text-sm mb-4">Appearance, local decks, and playback.</p>
 

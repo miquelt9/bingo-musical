@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Window } from "@miquelt9/pc-ui";
 import { AlertCircle, Check, Download, Loader2, RefreshCw, WifiOff } from "lucide-react";
-import { BackButton } from "../components/ui/BackButton";
+import { PageHeader } from "../components/layout/PageHeader";
 import { SongSearch } from "../components/tracks/SongSearch";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { Track } from "../types/deck";
@@ -166,7 +166,11 @@ export const CollaborativePlaylistPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
-      <BackButton fallbackTo="/" fallbackLabel="All decks" className="inline-flex" />
+      <PageHeader
+        back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
+        title="Collaborative playlist"
+        titleClassName="sm:hidden"
+      />
       <Window title={playlist ? `Collaborative playlist — ${playlist.name}` : "Collaborative playlist"}>
         {isLoading ? <p className="text-sm inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading playlist…</p> : error && !playlist ? (
           <div className="space-y-3"><div className="pc-bevel-inset p-3 text-sm flex items-start gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div><Button type="button" variant="primary" onClick={() => void fetchLatest()}><RefreshCw className="w-4 h-4" />Retry</Button><p className="text-xs">Check the link and your connection, then retry.</p></div>

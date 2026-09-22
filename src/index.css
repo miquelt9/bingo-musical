@@ -89,55 +89,18 @@
 @media (max-width: 639px) {
   :root {
     --pc-workspace-padding: 8px;
-    --pc-now-playing-dock-bottom: calc(var(--pc-taskbar-height) + var(--pc-safe-area-bottom) + 8px);
-    --pc-workspace-player-inset: calc(176px + var(--pc-safe-area-bottom) + 8px);
+    --pc-taskbar-height: 0px;
+    --pc-toast-offset-y: calc(8px + var(--pc-safe-area-bottom));
+    --pc-now-playing-dock-bottom: calc(var(--pc-safe-area-bottom) + 8px);
+    --pc-workspace-player-inset: calc(132px + var(--pc-safe-area-bottom) + 8px);
   }
 
   .pc-button:not(.pc-taskbar-item) {
     min-height: 44px;
   }
 
-  .pc-taskbar {
-    gap: 0;
-    padding-left: 0;
-    padding-right: 0;
-    padding-bottom: var(--pc-safe-area-bottom);
-  }
-
-  .pc-taskbar-item {
-    flex: 0 0 auto;
-    width: auto;
-    min-width: 44px;
-    max-width: none;
-    padding: 4px 6px;
-    min-height: 44px;
-    gap: 2px;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .pc-taskbar-deck-select {
-    flex: 1 1 0;
-    min-width: 0;
-    max-width: none;
-    font-size: 11px;
-    padding: 4px 6px;
-    min-height: 44px;
-    margin-left: 4px;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
-  }
-
-  .pc-taskbar-trailing {
-    display: none;
-  }
-
-  .pc-taskbar--host .pc-taskbar-item {
-    width: auto;
-    min-width: 44px;
-    max-width: none;
+  .pc-workspace-scroll {
+    padding-bottom: calc(var(--pc-workspace-padding) + var(--pc-safe-area-bottom));
   }
 
   .pc-modal-mobile-sheet {
@@ -663,6 +626,153 @@
   flex-shrink: 0;
 }
 
+.pc-mobile-nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-inline: 12px;
+}
+
+.pc-mobile-nav-task {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-mobile-nav-panel {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(20rem, calc(100vw - 16px));
+  max-height: min(70dvh, 28rem);
+  overflow: auto;
+  padding: 8px;
+  background: var(--pc-window-bg);
+  color: var(--pc-text-main);
+  border: 2px solid var(--pc-border);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--pc-border) 55%, transparent);
+}
+
+.pc-mobile-nav-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.pc-mobile-nav-deck-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pc-mobile-nav-deck-current {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.pc-mobile-nav-deck-select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.pc-mobile-nav-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pc-mobile-nav-link.active {
+  background: var(--pc-selection-bg);
+  color: var(--pc-selection-fg);
+}
+
+.pc-mobile-nav-link:focus-visible {
+  outline: 2px solid var(--pc-titlebar-bg);
+  outline-offset: 1px;
+}
+
+.pc-mobile-nav-link[aria-disabled="true"] {
+  opacity: 0.72;
+  align-items: flex-start;
+}
+
+.pc-mobile-nav-link-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pc-mobile-nav-reason {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.9;
+}
+
+.pc-mobile-nav-status {
+  margin: 0;
+  font-size: 11px;
+  padding-top: 4px;
+  border-top: 1px solid var(--pc-border);
+}
+
+@media (max-width: 639px) {
+  .cards-print-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .cards-print-settings > .card-settings {
+    order: 2;
+  }
+
+  .cards-print-settings > .cards-print-generate {
+    order: 1;
+  }
+
+  .card-settings > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .card-settings > summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
 /* Keep modal/window titles from covering the close button on narrow screens. */
 .pc-titlebar {
   display: grid;
@@ -718,6 +828,45 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+@media (max-width: 639px) {
+  .pc-page-header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .pc-page-header-leading {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .pc-page-header-back {
+    flex: 0 1 auto;
+    max-width: 46%;
+    min-width: 0;
+  }
+
+  .pc-page-header-back-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pc-page-header-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1rem;
+  }
+
+  .pc-page-header-menu {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
 }
 
 @media (min-width: 640px) {
@@ -1108,13 +1257,10 @@
   }
 
   .host-board--mobile .host-board-log-list {
-    flex: 1 1 auto;
-    min-height: 8rem;
-    max-height: min(50dvh, 320px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-    touch-action: pan-y;
+    flex: none;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
   }
 }
 
@@ -1158,7 +1304,7 @@
 }
 
 .home-deck-add--providers {
-  cursor: pointer;
+  cursor: default;
 }
 
 .home-deck-add-options {
@@ -1181,9 +1327,14 @@
   border: 1px solid var(--pc-bevel-dark);
   background: var(--pc-window-body-bg);
   color: inherit;
-  cursor: inherit;
+  cursor: pointer;
   font: inherit;
   text-align: center;
+}
+
+.home-deck-add-option[aria-pressed="true"] {
+  outline: 2px solid var(--pc-titlebar-bg);
+  outline-offset: -2px;
 }
 
 .home-deck-add-option:hover,
@@ -1520,14 +1671,6 @@
 }
 
 @media (max-width: 639px) {
-  .pc-shell--compact .pc-taskbar-item > span:not(.sr-only) {
-    display: none;
-  }
-
-  .pc-shell--compact .pc-taskbar-deck-select {
-    max-width: 7.5rem;
-  }
-
   .pc-shell--compact .pc-workspace-scroll > .pc-window > .pc-titlebar,
   .pc-shell--compact .pc-workspace-scroll .pc-window > .pc-titlebar {
     display: none;

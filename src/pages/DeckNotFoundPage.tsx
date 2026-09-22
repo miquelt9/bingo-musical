@@ -4,6 +4,7 @@ import { Button, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { getNextDeckName } from "../lib/decks/readiness";
 import { FolderOpen, Plus } from "lucide-react";
+import { PageHeader } from "../components/layout/PageHeader";
 
 export const DeckNotFoundPage: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,12 @@ export const DeckNotFoundPage: React.FC = () => {
   };
 
   return (
+    <div className="space-y-4">
+    <PageHeader
+      back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
+      title="Deck not found"
+      titleClassName="sm:hidden"
+    />
     <Window title="Deck not found">
       <div className="text-center py-8 space-y-4 max-w-md mx-auto">
         <h2 className="text-lg font-bold">Deck not found</h2>
@@ -43,5 +50,6 @@ export const DeckNotFoundPage: React.FC = () => {
         </div>
       </div>
     </Window>
+    </div>
   );
 };

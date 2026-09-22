@@ -13,6 +13,13 @@ import { useDeck } from "../../state/DeckContext";
 import { useTheme } from "../../state/ThemeContext";
 import { useDeckNavGuards } from "../../hooks/useDeckNavGuards";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+import {
+  activeTabFromPath,
+  deckSwitchConfirmMessage,
+  isDesktopTaskbarVisible,
+  routeDeckIdFromPath,
+} from "../../lib/nav/shellNav";
+import { MobileNavProvider, type MobileNavLinkItem } from "./MobileNav";
 import { useToast } from "../../state/ToastContext";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
@@ -67,21 +74,8 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const isPlaying = playerState?.state === "playing";
   const hasActiveClip = Boolean(playerState?.currentClip);
-  const path = location.pathname.replace(/\/+$/, "") || "/";
-  const activeTab =
-    path === "/settings"
-      ? "settings"
-      : /\/cards$/.test(path)
-        ? "cards"
-        : /\/play$/.test(path)
-          ? "host"
-          : /^\/deck\/[^/]+$/.test(path)
-            ? "editor"
-            : path === "/"
-              ? "decks"
-              : null;
-
-  const routeDeckId = path.match(/^\/deck\/([^/]+)/)?.[1];
+  const activeTab = activeTabFromPath(location.pathname);
+  const routeDeckId = routeDeckIdFromPath(location.pathname);
   const currentDeckId = routeDeckId || activeDeck?.id || decks[0]?.id;
   const { canOpenHost, canOpenCards, hostBlockReason, cardsBlockReason } =
     useDeckNavGuards(currentDeckId);
@@ -148,35 +142,31 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
-  const handleDeckChange = (deckId: string) => {
-    if (deckId === currentDeckId) return;
+  const handleDeckChange = (deckId: string): boolean => {
+    if (deckId === currentDeckId) return false;
 
     const targetDeck = decks.find((d) => d.id === deckId);
     const targetName = targetDeck?.name ?? "this deck";
-    const hostDeckId = activeTab === "host"
-      ? location.pathname.match(/^\/deck\/([^/]+)/)?.[1]
-      : undefined;
+    const hostDeckId = activeTab === "host" ? routeDeckIdFromPath(location.pathname) : undefined;
     const hostSession = hostDeckId ? readHostSessionRaw(hostDeckId) : null;
     const hasGameInProgress = Boolean(
       hostSession &&
         (hostSession.calledHistory.length > 0 || hostSession.currentCall !== null)
     );
+    const message = deckSwitchConfirmMessage({
+      activeTab,
+      targetName,
+      hasGameInProgress,
+      hasActiveClip,
+    });
 
-    const needsConfirm =
-      activeTab === "editor" ||
-      activeTab === "cards" ||
-      (activeTab === "host" && (hasGameInProgress || hasActiveClip));
-
-    if (needsConfirm) {
-      const message =
-        activeTab === "host"
-          ? `Switch to "${targetName}"? You'll leave the current host session.`
-          : `Switch to "${targetName}"? You'll leave the current deck.`;
+    if (message) {
       setPendingDeckSwitch({ deckId, deckName: targetName, message });
-      return;
+      return false;
     }
 
     switchDeck(deckId);
+    return true;
   };
 
   const cancelDeckSwitch = () => setPendingDeckSwitch(null);
@@ -229,7 +219,63 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     );
   };
 
+  const showDesktopTaskbar = isDesktopTaskbarVisible(isMobile);
+  const mobileLinks: MobileNavLinkItem[] = [
+    {
+      id: "decks",
+      label: "Decks",
+      to: "/",
+      end: true,
+      enabled: true,
+      icon: <FolderOpen className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: "editor",
+      label: "Deck",
+      to: currentDeckId ? `/deck/${currentDeckId}` : "/",
+      end: true,
+      enabled: true,
+      icon: <Edit3 className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: "cards",
+      label: "Cards",
+      to: `/deck/${currentDeckId}/cards`,
+      enabled: Boolean(currentDeckId) && canOpenCards,
+      blockReason: cardsBlockReason,
+      icon: <Printer className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: "host",
+      label: "Host",
+      to: `/deck/${currentDeckId}/play`,
+      enabled: Boolean(currentDeckId) && canOpenHost,
+      blockReason: hostBlockReason,
+      icon: <Radio className="w-4 h-4 shrink-0" />,
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      to: "/settings",
+      enabled: true,
+      icon: <Settings className="w-4 h-4 shrink-0" />,
+    },
+  ];
+
   return (
+    <MobileNavProvider
+      enabled={isMobile}
+      model={{
+        activeTab,
+        links: mobileLinks,
+        decks: decks.map((deck) => ({ id: deck.id, name: deck.name, trackCount: deck.tracks.length })),
+        currentDeckId: currentDeckId || "",
+        showDeckSelector: decks.length > 0 && !isHostRoute,
+        backgroundTask,
+        onDeckChange: handleDeckChange,
+        onBlockedNav: handleBlockedNav,
+      }}
+    >
     <Desktop tiled theme={theme} className={isMobile ? "pc-shell--compact" : undefined}>
       <Workspace>
         <div className={`pc-workspace-scroll print:p-0 ${scrollPaddingClass}`}>{children}</div>
@@ -268,7 +314,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </>
       )}
 
-      <Taskbar className={`print:hidden${isHostRoute ? " pc-taskbar--host" : ""}`}>
+      {showDesktopTaskbar && <Taskbar className={`print:hidden${isHostRoute ? " pc-taskbar--host" : ""}`}>
         <NavLink
           to="/"
           end
@@ -348,7 +394,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </span>
           </div>
         )}
-      </Taskbar>
+      </Taskbar>}
 
       {pendingDeckSwitch && (
         <PcModal title="Switch deck?" onClose={cancelDeckSwitch}>
@@ -364,6 +410,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </PcModal>
       )}
     </Desktop>
+    </MobileNavProvider>
   );
 };
 
