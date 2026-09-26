@@ -6,6 +6,11 @@
   "observability": {
     "enabled": true
   },
+  // Workers Builds ignores this as its dashboard build step, but `versions upload` still runs it
+  // and rewrites dist/ with the workers.dev root base before the assets are uploaded.
+  "build": {
+    "command": "npm run build:worker"
+  },
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"

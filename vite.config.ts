@@ -30,13 +30,24 @@ function emitVersionJson(): Plugin {
   };
 }
 
+/**
+ * GitHub Pages serves the production SPA at /bingo-musical/.
+ * Workers Builds (WORKERS_CI=1) and `npm run build:worker` serve it at the workers.dev root.
+ * VITE_BASE overrides both.
+ */
+function resolveAssetBase(): string {
+  if (process.env.VITE_BASE) return process.env.VITE_BASE;
+  if (process.env.WORKERS_CI === "1") return "/";
+  return process.env.NODE_ENV === "production" ? "/bingo-musical/" : "/";
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [stripPcUiFontImport(), react(), emitVersionJson()],
   define: {
     "import.meta.env.VITE_BUILD_ID": JSON.stringify(buildId),
   },
-  base: process.env.NODE_ENV === "production" ? "/bingo-musical/" : "/",
+  base: resolveAssetBase(),
   server: {
     host: "localhost",
     port: 5173,

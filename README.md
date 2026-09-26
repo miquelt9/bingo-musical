@@ -96,6 +96,8 @@ Visit [http://localhost:5173](http://localhost:5173) in your desktop browser. Yo
 npm run build
 ```
 
+That command is the GitHub Pages build: production assets use base `/bingo-musical/`. Workers preview and deploy use base `/` (`WORKERS_CI=1` during Workers Builds, or `npm run build:worker`).
+
 ### 5. Deploy to GitHub Pages
 
 Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.yml`). Set repository secrets as needed:
@@ -105,7 +107,7 @@ Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.
 
 ### 6. Deploy the share API (optional)
 
-Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`). That Worker is `bingo-musical-share` (`worker/wrangler.toml`). The `bingo-musical` Workers Builds project publishes the Vite `dist/` through the root `wrangler.jsonc` (`npx wrangler versions upload`, no `--config`).
+Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`). That Worker is `bingo-musical-share` (`worker/wrangler.toml`). The `bingo-musical` Workers Builds project publishes the Vite `dist/` through the root `wrangler.jsonc` (`npx wrangler versions upload`, no `--config`) with asset base `/`, not `/bingo-musical/`.
 
 ### 7. Web Analytics (optional)
 
