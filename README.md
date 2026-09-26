@@ -72,7 +72,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
 npm install
 ```
 
-`@miquelt9/pc-ui` is installed from [GitHub](https://github.com/miquelt9/pc-ui) automatically. To develop against a local checkout of `pc-ui`, clone it elsewhere and run `npm link @miquelt9/pc-ui` from this project after linking in `pc-ui`.
+`@miquelt9/pc-ui` is installed from [GitHub](https://github.com/miquelt9/pc-ui) and pinned to a full commit SHA in `package.json` because pc-ui has no tags or releases. To bump it, update that SHA in `package.json` and `package-lock.json` to the desired pc-ui commit and reinstall. To develop against a local checkout, clone `pc-ui` elsewhere and run `npm link @miquelt9/pc-ui` from this project after linking in `pc-ui`.
 
 ### 2. Create a deck
 
@@ -105,7 +105,7 @@ Pushes to `main` build and deploy via GitHub Actions (`.github/workflows/deploy.
 
 ### 6. Deploy the share API (optional)
 
-Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`).
+Short deck links use a Cloudflare Worker + KV. See **[worker/README.md](worker/README.md)** for setup (`wrangler login`, KV namespace, `npm run worker:deploy`). That Worker is `bingo-musical-share` (`worker/wrangler.toml`). The `bingo-musical` Workers Builds project publishes the Vite `dist/` through the root `wrangler.jsonc` (`npx wrangler versions upload`, no `--config`).
 
 ### 7. Web Analytics (optional)
 
