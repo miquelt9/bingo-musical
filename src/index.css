@@ -16,6 +16,7 @@
   :root,
   .pc-theme-light,
   [data-pc-theme="light"] {
+    /* Intentional: light titlebars stay #2B6CB0 (pc-ui light token is #1E5AA8). */
     --pc-titlebar-bg: #2B6CB0;
     --pc-window-bg: var(--pc-chrome-bg);
     --pc-border: var(--pc-bevel-dark);
@@ -230,7 +231,7 @@
 .display-page {
   min-height: 100dvh;
   background: var(--pc-desktop-bg, #008080);
-  color: var(--pc-text, #000);
+  color: var(--pc-text-main, #000);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1161,7 +1162,7 @@
     user-select: none;
     min-height: 44px;
     background: var(--pc-titlebar-bg);
-    color: var(--pc-titlebar-fg, #fff);
+    color: var(--pc-titlebar-text, #fff);
   }
 
   .host-board-log-details__summary::-webkit-details-marker {
@@ -1334,17 +1335,17 @@
 }
 
 .home-deck-health--ready {
-  color: var(--pc-success);
-  background: color-mix(in srgb, var(--pc-success) 12%, transparent);
+  color: var(--pc-color-success);
+  background: color-mix(in srgb, var(--pc-color-success) 12%, transparent);
 }
 
 .home-deck-health--warn {
-  color: var(--pc-warning);
-  background: color-mix(in srgb, var(--pc-warning) 12%, transparent);
+  color: var(--pc-color-warning);
+  background: color-mix(in srgb, var(--pc-color-warning) 12%, transparent);
 }
 
 .home-deck-health--muted {
-  color: var(--pc-muted);
+  color: var(--pc-text-muted);
 }
 
 .home-deck-recommended {
