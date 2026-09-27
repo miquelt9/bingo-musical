@@ -32,3 +32,9 @@ dist-ssr
 .wrangler
 scripts/.compute-sample-share-id.mjs
 scripts/.test-provider-model.mjs
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/e2e/screenshots/

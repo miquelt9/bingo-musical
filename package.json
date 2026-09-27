@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:provider-model": "esbuild scripts/test-provider-model.ts --bundle --platform=node --format=esm --outfile=scripts/.test-provider-model.mjs && node scripts/.test-provider-model.mjs",
     "compute:sample-share-id": "esbuild scripts/compute-sample-share-id.ts --bundle --platform=node --format=esm --outfile=scripts/.compute-sample-share-id.mjs && node scripts/.compute-sample-share-id.mjs",
     "build": "npx tsc && npx vite build",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260830.1",
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
