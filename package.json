@@ -16,7 +16,7 @@
     "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
   },
   "dependencies": {
-    "@miquelt9/pc-ui": "github:miquelt9/pc-ui#14ebe76f39c06cd18119628b1aadec43abb69189",
+    "@miquelt9/pc-ui": "github:miquelt9/pc-ui#f27edd5581e19e5ccd24a14e8d1c03308e22ea1d",
     "@zxing/browser": "^0.2.1",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
