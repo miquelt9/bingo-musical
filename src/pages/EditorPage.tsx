@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Input, Window } from "@miquelt9/pc-ui";
+import { Button, ContentModal, Input, OverflowMenu, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { Track, Deck } from "../types/deck";
 import { TrackTable } from "../components/tracks/TrackTable";
@@ -22,10 +22,8 @@ import {
   getDeckReadiness,
 } from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
-import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { BackButton } from "../components/ui/BackButton";
-import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { useToast } from "../state/ToastContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
 import { useAutoFixBlocked } from "../hooks/useAutoFixBlocked";
@@ -53,6 +51,7 @@ import {
   Wand2,
   RefreshCw,
   Music2,
+  MoreHorizontal,
 } from "lucide-react";
 
 function collaborativeTrackKey(track: Track): string {
@@ -701,6 +700,7 @@ export const EditorPage: React.FC = () => {
               <OverflowMenu
                 ariaLabel="More deck actions"
                 triggerLabel="More"
+                triggerIcon={<MoreHorizontal className="w-4 h-4" aria-hidden="true" />}
                 items={[
                   {
                     icon: <Share2 className="w-4 h-4" />,
@@ -883,7 +883,7 @@ export const EditorPage: React.FC = () => {
       />
 
       {showAddTrackModal && (
-        <PcModal
+        <ContentModal
           title={`Add a song (${deck.tracks.length} in deck)`}
           onClose={handleCloseAddTrack}
           className="max-w-3xl max-h-[90vh] overflow-y-auto"
@@ -900,7 +900,7 @@ export const EditorPage: React.FC = () => {
             onAddTracks={handleAddTracks}
             onAfterBulkAdd={handleAfterBulkAdd}
           />
-        </PcModal>
+        </ContentModal>
       )}
 
       {suggestSeeds && suggestSeeds.length > 0 && (

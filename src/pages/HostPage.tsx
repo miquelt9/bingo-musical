@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Button, Input, Window, Split } from "@miquelt9/pc-ui";
+import { Button, ContentModal, Input, Window, Split } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { usePlayerUI } from "../state/PlayerUIContext";
 import { Track } from "../types/deck";
@@ -11,7 +11,6 @@ import { CardVerificationModal } from "../components/host/CardVerificationModal"
 import { CallNextControls } from "../components/host/CallNextControls";
 import { ClipPreviewButton } from "../components/tracks/ClipPreviewButton";
 import { PlayabilityGateOverlay } from "../components/ui/PlayabilityGateOverlay";
-import { PcModal } from "../components/ui/PcModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { HostInlineVideoPanel } from "../components/player/DraggableVideoWindow";
 import { attachPlayersToViewport } from "../lib/player/player";
@@ -1050,7 +1049,7 @@ export const HostPage: React.FC = () => {
       ) : null}
 
       {showContinueModal && (
-        <PcModal title="Continue Game?" onClose={handleStartNewGame}>
+        <ContentModal title="Continue Game?" onClose={handleStartNewGame}>
           <p className="text-sm mb-4">
             A game session for this deck was found. Continue where you left off, or start a fresh shuffle?
           </p>
@@ -1062,7 +1061,7 @@ export const HostPage: React.FC = () => {
               Continue Game
             </Button>
           </div>
-        </PcModal>
+        </ContentModal>
       )}
 
       {showCardVerification && (
@@ -1079,7 +1078,7 @@ export const HostPage: React.FC = () => {
       )}
 
       {showBingoModal && (
-        <PcModal title="Bingo!" onClose={() => setShowBingoModal(false)}>
+        <ContentModal title="Bingo!" onClose={() => setShowBingoModal(false)}>
           <p className="text-sm mb-3">
             Playback paused. Verify the winning card against these recent calls:
           </p>
@@ -1109,11 +1108,11 @@ export const HostPage: React.FC = () => {
               Resume Host
             </Button>
           </div>
-        </PcModal>
+        </ContentModal>
       )}
 
       {showResetModal && (
-        <PcModal title="Reset Game?" onClose={() => setShowResetModal(false)}>
+        <ContentModal title="Reset Game?" onClose={() => setShowResetModal(false)}>
           <p className="text-sm mb-4">
             This will reset the current game and reshuffle all songs. Called history will be cleared.
           </p>
@@ -1126,7 +1125,7 @@ export const HostPage: React.FC = () => {
               Reset Bingo
             </Button>
           </div>
-        </PcModal>
+        </ContentModal>
       )}
     </div>
   );

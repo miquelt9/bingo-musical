@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ContentModal } from "@miquelt9/pc-ui";
 import { AlertCircle, Check, Loader2, Plus, Search, Volume2 } from "lucide-react";
 import { MusicProvider, Track } from "../../types/deck";
-import { PcModal } from "../ui/PcModal";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { formatDuration } from "../../lib/youtube/search";
 import {
@@ -246,7 +246,7 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
       : `Suggested songs (${seeds.length} seeds)`);
 
   return (
-    <PcModal title={modalTitle} onClose={onClose} className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <ContentModal title={modalTitle} onClose={onClose} className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <p className="text-xs mb-3">
         Other songs from artists in this deck (not alternate uploads of the same track). Only
         playable {getProviderLabel(provider)} results are shown.
@@ -360,6 +360,6 @@ export const SuggestSongsModal: React.FC<SuggestSongsModalProps> = ({
           </div>
         </div>
       )}
-    </PcModal>
+    </ContentModal>
   );
 };

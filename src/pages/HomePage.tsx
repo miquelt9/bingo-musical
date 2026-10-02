@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Window, Modal } from "@miquelt9/pc-ui";
+import { ContentModal, Modal, OverflowMenu, Window } from "@miquelt9/pc-ui";
 import { useDeck } from "../state/DeckContext";
 import { EMPTY_DECK_ACTION_TITLE, isAbandonedEmptyDeck, isEmptyDeck } from "../lib/decks/discardable";
 import { Deck, MusicProvider } from "../types/deck";
@@ -14,10 +14,7 @@ import {
 import { SAMPLE_DEEZER_DECK } from "../lib/storage/mockDeck";
 import { getCachedEmbedStatus, validateTracksEmbeddability } from "../lib/youtube/validator";
 import { getProviderLabel } from "../lib/music/providers";
-import { OverflowMenu } from "../components/ui/OverflowMenu";
 import { MobileBackgroundTaskStatus, MobileSectionNav } from "../components/layout/MobileNav";
-
-import { PcModal } from "../components/ui/PcModal";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   Music,
@@ -33,6 +30,7 @@ import {
   Music2,
   Disc3,
   Users,
+  MoreHorizontal,
 } from "lucide-react";
 
 const ONBOARDING_KEY = "mb_onboarding_dismissed";
@@ -301,6 +299,7 @@ export const HomePage: React.FC = () => {
               items={mobileOverflowItems}
               ariaLabel={`More actions for ${deck.name}`}
               triggerLabel="More"
+              triggerIcon={<MoreHorizontal className="w-4 h-4" aria-hidden="true" />}
             />
           </div>
         </article>
@@ -471,7 +470,7 @@ export const HomePage: React.FC = () => {
       </div>
 
       {deckNamePrompt && (
-        <PcModal title="Create a deck" onClose={() => setDeckNamePrompt(null)}>
+        <ContentModal title="Create a deck" onClose={() => setDeckNamePrompt(null)}>
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -520,7 +519,7 @@ export const HomePage: React.FC = () => {
               <button type="submit" className="pc-button pc-button--primary">Create deck</button>
             </div>
           </form>
-        </PcModal>
+        </ContentModal>
       )}
 
 

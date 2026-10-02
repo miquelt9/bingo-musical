@@ -1,8 +1,7 @@
 import React from "react";
-import { Button } from "@miquelt9/pc-ui";
+import { Button, ContentModal } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { formatDuration } from "../../lib/youtube/search";
-import { PcModal } from "../ui/PcModal";
 import { Loader2, Pause, Play, Square } from "lucide-react";
 import { ClipTimeline } from "./ClipTimeline";
 import { MIN_CLIP_SECONDS, useClipTimestampEditor } from "../../hooks/useClipTimestampEditor";
@@ -36,7 +35,7 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <PcModal
+    <ContentModal
       title={`Edit clip — ${track.title}`}
       onClose={onClose}
       className="max-w-2xl"
@@ -180,6 +179,6 @@ export const ClipTimestampModal: React.FC<ClipTimestampModalProps> = ({
           Save
         </Button>
       </div>
-    </PcModal>
+    </ContentModal>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Input } from "@miquelt9/pc-ui";
+import { Button, ContentModal, Input } from "@miquelt9/pc-ui";
 import { AlertCircle, Check, Loader2, Search, Volume2 } from "lucide-react";
 import { Track } from "../../types/deck";
 import {
@@ -10,7 +10,6 @@ import {
   resolveDeezerTrack,
   searchDeezerTracks,
 } from "../../lib/deezer/api";
-import { PcModal } from "../ui/PcModal";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 
 interface ManualDeezerModalProps {
@@ -250,7 +249,7 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <PcModal title="Manual Deezer track" onClose={onClose} className="max-w-2xl">
+    <ContentModal title="Manual Deezer track" onClose={onClose} className="max-w-2xl">
       <p className="text-sm font-semibold mb-1">{track.title}</p>
       <p className="text-sm mb-4">{track.artist}</p>
 
@@ -441,6 +440,6 @@ export const ManualDeezerModal: React.FC<ManualDeezerModalProps> = ({
           </div>
         </div>
       )}
-    </PcModal>
+    </ContentModal>
   );
 };
