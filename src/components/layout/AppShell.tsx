@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Button, Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
+import { Button, ContentModal, Desktop, Taskbar, Window, Workspace } from "@miquelt9/pc-ui";
 import {
   FolderOpen,
   Edit3,
@@ -23,7 +23,6 @@ import { MobileNavProvider, type MobileNavLinkItem } from "./MobileNav";
 import { useToast } from "../../state/ToastContext";
 import { PlayerUIProvider, usePlayerUI } from "../../state/PlayerUIContext";
 import { DraggableVideoWindow } from "../player/DraggableVideoWindow";
-import { PcModal } from "../ui/PcModal";
 import { YoutubePlayerEngine } from "../player/YoutubePlayerEngine";
 import { DeezerAudioEngine } from "../player/DeezerAudioEngine";
 import { NowPlayingControls } from "../player/NowPlayingControls";
@@ -385,7 +384,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </Taskbar>}
 
       {pendingDeckSwitch && (
-        <PcModal title="Switch deck?" onClose={cancelDeckSwitch}>
+        <ContentModal title="Switch deck?" onClose={cancelDeckSwitch}>
           <p className="text-sm mb-4">{pendingDeckSwitch.message}</p>
           <div className="flex justify-end gap-2">
             <Button type="button" onClick={cancelDeckSwitch}>
@@ -395,7 +394,7 @@ const AppShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               Switch to {pendingDeckSwitch.deckName}
             </Button>
           </div>
-        </PcModal>
+        </ContentModal>
       )}
     </Desktop>
     </MobileNavProvider>

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button } from "@miquelt9/pc-ui";
-import { PcModal } from "./PcModal";
+import { Button, ContentModal } from "@miquelt9/pc-ui";
 
 interface DialogActionsProps {
   cancelLabel?: string;
@@ -55,7 +54,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({
   }, []);
 
   return (
-    <PcModal title={title} onClose={onCancel}>
+    <ContentModal title={title} onClose={onCancel}>
       <form
         className="space-y-3"
         onSubmit={(event) => {
@@ -79,7 +78,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({
           onConfirm={() => onConfirm(value)}
         />
       </form>
-    </PcModal>
+    </ContentModal>
   );
 };
 
@@ -100,7 +99,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onCancel,
   onConfirm,
 }) => (
-  <PcModal title={title} onClose={onCancel}>
+  <ContentModal title={title} onClose={onCancel}>
     <div className="space-y-3">
       <div className="text-sm">{children}</div>
       <DialogActions
@@ -110,7 +109,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         onConfirm={onConfirm}
       />
     </div>
-  </PcModal>
+  </ContentModal>
 );
 
 interface AlertModalProps {
@@ -126,7 +125,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   closeLabel = "OK",
   onClose,
 }) => (
-  <PcModal title={title} onClose={onClose}>
+  <ContentModal title={title} onClose={onClose}>
     <div className="space-y-3">
       <div className="text-sm">{children}</div>
       <div className="flex justify-end pt-2">
@@ -135,5 +134,5 @@ export const AlertModal: React.FC<AlertModalProps> = ({
         </Button>
       </div>
     </div>
-  </PcModal>
+  </ContentModal>
 );

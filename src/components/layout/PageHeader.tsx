@@ -1,7 +1,8 @@
 import React from "react";
+import { OverflowMenu, type OverflowMenuItem } from "@miquelt9/pc-ui";
+import { MoreHorizontal } from "lucide-react";
 import { twMerge } from "tailwind-merge";
 import { BackButton, type BackNavTarget } from "../ui/BackButton";
-import { OverflowMenu, OverflowMenuItem } from "../ui/OverflowMenu";
 import { MobileBackgroundTaskStatus, MobileSectionNav } from "./MobileNav";
 
 export type { OverflowMenuItem };
@@ -40,7 +41,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         <div className="pc-page-header-actions">
           {primaryAction}
           {overflowItems && overflowItems.length > 0 && (
-            <OverflowMenu items={overflowItems} ariaLabel="More page actions" />
+            <OverflowMenu
+              items={overflowItems}
+              ariaLabel="More page actions"
+              triggerIcon={<MoreHorizontal className="w-4 h-4" aria-hidden="true" />}
+            />
           )}
         </div>
       )}

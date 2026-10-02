@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button } from "@miquelt9/pc-ui";
+import { Button, ContentModal } from "@miquelt9/pc-ui";
 import { AlertCircle, ClipboardList, Loader2 } from "lucide-react";
 import { Track } from "../../types/deck";
 import { parseSongList } from "../../lib/tracks";
-import { PcModal } from "../ui/PcModal";
 
 interface BulkSongListModalProps {
   isOpen: boolean;
@@ -81,7 +80,7 @@ export const BulkSongListModal: React.FC<BulkSongListModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <PcModal
+    <ContentModal
       title="Add multiple songs"
       onClose={onClose}
       className="max-w-2xl max-h-[90vh] overflow-y-auto"
@@ -133,6 +132,6 @@ export const BulkSongListModal: React.FC<BulkSongListModalProps> = ({
           </Button>
         </div>
       </div>
-    </PcModal>
+    </ContentModal>
   );
 };

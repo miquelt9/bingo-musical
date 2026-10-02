@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@miquelt9/pc-ui";
+import { Button, ContentModal } from "@miquelt9/pc-ui";
 import { AlertCircle, Check, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { Deck, MusicProvider, Track } from "../../types/deck";
 import { createTrack } from "../../lib/tracks";
@@ -8,7 +8,6 @@ import { deezerMatchConfidence, normalizeMusicText } from "../../lib/deezer/matc
 import { YoutubeSearchHit, guessTitleArtist, searchYoutubeVideos } from "../../lib/youtube/search";
 import { checkVideoEmbeddable, getCachedEmbedStatus } from "../../lib/youtube/validator";
 import { getProviderLabel } from "../../lib/music/providers";
-import { PcModal } from "../ui/PcModal";
 import { useDeck } from "../../state/DeckContext";
 
 type Candidate =
@@ -253,7 +252,7 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
 
   if (!isOpen) return null;
   return (
-    <PcModal title={`Convert deck to ${getProviderLabel(targetProvider)}`} onClose={handleCancel} className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <ContentModal title={`Convert deck to ${getProviderLabel(targetProvider)}`} onClose={handleCancel} className="max-w-3xl max-h-[90vh] overflow-y-auto">
       <div className="space-y-3 text-xs">
         <p>Conversion creates a new copy. The original deck and its host session are not changed.</p>
         <p className="font-semibold">
@@ -304,6 +303,6 @@ export const ConvertDeckModal: React.FC<ConvertDeckModalProps> = ({ deck, isOpen
         </div>
         <div className="flex items-center justify-end gap-2 pt-2"><Button type="button" onClick={handleCancel}>Cancel</Button><Button type="button" variant="primary" onClick={handleCreate} disabled={rows.length === 0}><RefreshCw className="w-4 h-4" />Create converted copy</Button></div>
       </div>
-    </PcModal>
+    </ContentModal>
   );
 };

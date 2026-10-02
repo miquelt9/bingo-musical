@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button } from "@miquelt9/pc-ui";
+import { Button, ContentModal } from "@miquelt9/pc-ui";
 import { AlertCircle, AlertTriangle, Check, Copy, Download, Loader2, Share2, Users } from "lucide-react";
 import { Deck } from "../../types/deck";
-import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { buildSharedDeckUrl, isNativeShareAvailable, shareDeckNative } from "../../lib/share/deckShare";
@@ -171,7 +170,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   };
 
   return (
-    <PcModal title={`Share "${deck.name}"`} onClose={onClose}>
+    <ContentModal title={`Share "${deck.name}"`} onClose={onClose}>
       <div className="space-y-5">
         <section className="space-y-3">
           <div>
@@ -250,6 +249,6 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
 
         {shareId ? <p className="text-xs opacity-70">Share id: {shareId}</p> : null}
       </div>
-    </PcModal>
+    </ContentModal>
   );
 };

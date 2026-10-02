@@ -2,7 +2,7 @@ import React from "react";
 import { Track } from "../../types/deck";
 import { AlbumArt } from "./AlbumArt";
 import { ClipPreviewButton } from "./ClipPreviewButton";
-import { OverflowMenu } from "../ui/OverflowMenu";
+import { OverflowMenu } from "@miquelt9/pc-ui";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { isDeferredDeezerPreview } from "../../lib/deezer/previewUrl";
 import {
@@ -17,6 +17,7 @@ import {
   Timer,
   Trash2,
   Sparkles,
+  MoreHorizontal,
 } from "lucide-react";
 
 interface TrackListMobileProps {
@@ -240,7 +241,8 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
               <OverflowMenu
                 ariaLabel={`More actions for ${track.title}`}
                 items={overflowItems}
-                triggerClassName={actionBtnSize}
+                triggerIcon={<MoreHorizontal className="w-4 h-4" aria-hidden="true" />}
+                triggerClassName={isMobile ? "min-h-[44px]" : "h-9 min-h-9 text-xs"}
               />
             </div>
           </li>

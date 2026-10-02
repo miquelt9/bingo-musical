@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Button } from "@miquelt9/pc-ui";
+import { Button, ContentModal } from "@miquelt9/pc-ui";
 import { AlertTriangle, Copy, Loader2, Mail } from "lucide-react";
 import { Deck } from "../../types/deck";
-import { PcModal } from "../ui/PcModal";
 import { useToast } from "../../state/ToastContext";
 import { buildCollaborativeUrl, getCollaborativeShareUrls } from "../../lib/share/collaborativeShare";
 import { createCollaborativePlaylist, isCollaborativeApiConfigured } from "../../lib/share/collaborativePlaylistsApi";
@@ -57,7 +56,7 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
   };
 
   return (
-    <PcModal title={`Collaborate on "${deck.name}"`} onClose={onClose}>
+    <ContentModal title={`Collaborate on "${deck.name}"`} onClose={onClose}>
       <div className="space-y-4">
         {creating ? <p className="text-sm inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Creating collaborative playlist…</p> : url ? (
           <>
@@ -77,6 +76,6 @@ export const CollaborateModal: React.FC<CollaborateModalProps> = ({ deck, onClos
         ) : <div className="pc-bevel-inset p-3 text-sm">{error}</div>}
         {error && url ? <p className="text-xs pc-bevel-inset p-3">{error}</p> : null}
       </div>
-    </PcModal>
+    </ContentModal>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Button, Input } from "@miquelt9/pc-ui";
+import { Button, ContentModal, Input } from "@miquelt9/pc-ui";
 import { Track } from "../../types/deck";
 import { parseYoutubeVideoId, getYoutubeThumbnailUrl } from "../../lib/youtube/parseUrl";
 import {
@@ -14,7 +14,6 @@ import {
   searchYoutubeVideos,
   YoutubeSearchHit,
 } from "../../lib/youtube/search";
-import { PcModal } from "../ui/PcModal";
 import { ClipPreviewButton } from "./ClipPreviewButton";
 import { Check, AlertCircle, Loader2, AlertTriangle, Search } from "lucide-react";
 
@@ -270,7 +269,7 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
   };
 
   return (
-    <PcModal
+    <ContentModal
       title="Manual YouTube Link"
       onClose={onClose}
       className="max-w-2xl"
@@ -513,6 +512,6 @@ export const ManualYoutubeModal: React.FC<ManualYoutubeModalProps> = ({
           </Button>
         </div>
       </form>
-    </PcModal>
+    </ContentModal>
   );
 };

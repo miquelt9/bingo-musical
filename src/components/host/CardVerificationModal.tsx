@@ -1,14 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button, Input } from "@miquelt9/pc-ui";
+import { Button, ContentModal, Input } from "@miquelt9/pc-ui";
 import { Check, Camera, CircleAlert, Loader2, ScanLine, Trophy } from "lucide-react";
 import { Deck } from "../../types/deck";
 import {
   CardVerificationResult,
   verifyCardCode,
 } from "../../lib/bingo/verification";
-import { PcModal } from "../ui/PcModal";
-
 interface CardVerificationModalProps {
   deck: Deck;
   calledTrackIds: ReadonlySet<string>;
@@ -122,7 +120,7 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
   const showScanner = cameraError === null;
 
   return (
-    <PcModal title="Verify line or Bingo" onClose={handleClose} className="max-w-xl">
+    <ContentModal title="Verify line or Bingo" onClose={handleClose} className="max-w-xl">
       <div className="space-y-4">
         <p className="text-sm">
           {showScanner
@@ -256,6 +254,6 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
           </div>
         )}
       </div>
-    </PcModal>
+    </ContentModal>
   );
 };
