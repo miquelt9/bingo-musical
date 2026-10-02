@@ -694,9 +694,10 @@ export const EditorPage: React.FC = () => {
     <div className="space-y-4">
       {isMobile ? (
         <PageHeader
+          className="pc-page-header--inline-actions"
           back={{ fallbackTo: "/", fallbackLabel: "All decks" }}
           primaryAction={
-            <div className="flex w-full items-center justify-end gap-2">
+            <div className="flex items-center justify-end gap-2">
               <OverflowMenu
                 ariaLabel="More deck actions"
                 triggerLabel="More"

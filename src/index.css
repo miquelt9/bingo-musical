@@ -658,10 +658,31 @@
     position: sticky;
     top: 0;
     z-index: 30;
+    /* Stretch across the scrollport padding so the bar's background meets the screen edges. */
+    margin-left: calc(-1 * var(--pc-workspace-padding));
+    margin-right: calc(-1 * var(--pc-workspace-padding));
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: 8px;
+    padding-left: var(--pc-workspace-padding);
+    padding-right: var(--pc-workspace-padding);
     margin-bottom: -8px;
     background: var(--pc-desktop-bg);
+  }
+
+  /*
+   * Sticky top: 0 pins the bar under the scrollport's padding, leaving a strip
+   * where the song list paints through. Paint that strip with the bar background
+   * without shifting the buttons.
+   */
+  .pc-page-header::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(-1 * var(--pc-workspace-padding));
+    height: calc(var(--pc-workspace-padding) + 1px);
+    background: inherit;
+    pointer-events: none;
   }
 
   .pc-page-header-leading {
@@ -696,9 +717,40 @@
     margin-left: auto;
   }
 
+  /* Editor: More sits on the section row, immediately after Settings. */
+  .pc-page-header.pc-page-header--inline-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 6px;
+  }
+
+  .pc-page-header.pc-page-header--inline-actions .pc-page-header-leading {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .pc-page-header.pc-page-header--inline-actions .pc-page-header-actions {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .pc-page-header.pc-page-header--inline-actions .pc-mobile-section-status {
+    flex: 1 0 100%;
+  }
+
   /* Home header sits inside a Window surface */
   .home-decks .pc-page-header {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
     background: var(--pc-window-bg);
+  }
+
+  .home-decks .pc-page-header::before {
+    content: none;
   }
 }
 
