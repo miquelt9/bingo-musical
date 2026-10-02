@@ -156,7 +156,7 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
         return (
           <li
             key={track.id}
-            className={`flex p-3 pc-bevel-inset ${
+            className={`flex w-full p-3 pc-bevel-inset ${
               isMobile
                 ? "flex-col items-stretch gap-2"
                 : "items-center gap-3 min-h-[88px]"
@@ -202,8 +202,10 @@ export const TrackListMobile: React.FC<TrackListMobileProps> = ({
             </div>
 
             <div
-              className={`flex items-center shrink-0 ${
-                isMobile ? "w-full gap-1 flex-nowrap overflow-x-auto" : "gap-1.5 flex-wrap"
+              className={`ml-auto flex items-center ${
+                isMobile
+                  ? "w-max min-w-0 max-w-full gap-1 flex-nowrap overflow-x-auto"
+                  : "w-auto shrink-0 justify-end gap-1.5 flex-wrap"
               }`}
             >
               {isReady ? (
