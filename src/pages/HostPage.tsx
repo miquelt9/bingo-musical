@@ -352,7 +352,9 @@ export const HostPage: React.FC = () => {
 
   const readiness = useMemo(
     () => getDeckReadiness(deck?.tracks ?? []),
-    [deck?.tracks]
+    // Embed results are cached off the track list. Read readiness again when
+    // that check finishes, so a verified deck can start.
+    [deck?.tracks, isPlayable]
   );
   const canHost = isPlayable && readiness.canHost;
   const emptyDeck = Boolean(deck && isEmptyDeck(deck));

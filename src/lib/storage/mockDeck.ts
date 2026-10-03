@@ -1,7 +1,7 @@
 import { Deck } from "../../types/deck";
 import { GITHUB_REPO_URL } from "../app/meta";
 
-// Shared song metadata used to build the Deezer starter without shipping a second deck.
+// Shared song metadata for the built-in Deezer and YouTube starter decks.
 const SAMPLE_TRACK_METADATA = {
   tracks: [
     {
@@ -461,5 +461,40 @@ export const SAMPLE_DEEZER_DECK: Deck = {
     startTime: 0,
     endTime: 30,
     matchStatus: "pending",
+  })),
+};
+
+/**
+ * Hostable starter. Same songs as the Deezer sample, with the YouTube clip
+ * already stored on that metadata (video id, title, and clip window).
+ */
+export const SAMPLE_YOUTUBE_DECK: Deck = {
+  schemaVersion: 2,
+  id: "deck-sample-youtube-classics",
+  name: "All-Time Pop & Rock Classics (YouTube)",
+  createdAt: "2025-01-01T00:00:00.000Z",
+  updatedAt: "2025-01-01T00:00:00.000Z",
+  provider: "youtube",
+  source: {
+    type: "sample",
+    name: "Sample 80s, 90s & 2000s Hits",
+    url: GITHUB_REPO_URL,
+    provider: "youtube",
+  },
+  tracks: SAMPLE_TRACK_METADATA.tracks.map((track, index) => ({
+    id: `youtube-sample-${index + 1}`,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    albumArtUrl: track.albumArtUrl,
+    durationMs: track.durationMs,
+    media: {
+      provider: "youtube" as const,
+      id: track.youtubeVideoId,
+      providerTitle: track.youtubeTitle,
+    },
+    startTime: track.startTime,
+    endTime: track.endTime,
+    matchStatus: "matched" as const,
   })),
 };

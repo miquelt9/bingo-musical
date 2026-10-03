@@ -1,5 +1,5 @@
 import { Deck, DeckSource, MatchStatus, MusicProvider, Track, TrackMedia } from "../../types/deck";
-import { SAMPLE_DEEZER_DECK } from "./mockDeck";
+import { SAMPLE_DEEZER_DECK, SAMPLE_YOUTUBE_DECK } from "./mockDeck";
 import { buildCanonicalSharePayload } from "../share/deckCanonical";
 import { parseYoutubeVideoId } from "../youtube/parseUrl";
 import { createTrack, defaultDeezerClipWindow, defaultClipWindow } from "../tracks";
@@ -7,6 +7,8 @@ import { downloadTextFile, slugifyFilename } from "./download";
 
 const DECKS_STORAGE_KEY = "bingo-musical:decks";
 const LEGACY_YOUTUBE_SAMPLE_ID = "deck-sample-pop-classics";
+/** Set once the YouTube starter has been stored, so deleting it does not bring it back. */
+const YOUTUBE_SAMPLE_INTRODUCED_KEY = "bingo-musical:introduced:deck-sample-youtube-classics";
 
 export class StorageQuotaError extends Error {
   constructor(message = "Browser storage is full. Try exporting or deleting old decks.") {
@@ -175,35 +177,89 @@ function ensureDefaultDeezerSample(decks: Deck[]): Deck[] {
   }
 }
 
+function youtubeSampleWasIntroduced(): boolean {
+  try {
+    return localStorage.getItem(YOUTUBE_SAMPLE_INTRODUCED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markYoutubeSampleIntroduced(): void {
+  try {
+    localStorage.setItem(YOUTUBE_SAMPLE_INTRODUCED_KEY, "1");
+  } catch {
+    // The deck is still returned for this visit when the marker cannot be stored.
+  }
+}
+
+/**
+ * A library that only contains the Deezer starter also gets the YouTube starter,
+ * so Host can open it without clearing the browser. The Deezer sample itself is
+ * left as stored. Once the YouTube deck has been stored, deleting it stays deleted
+ * unless this is a fresh visit (`force`).
+ */
+function ensureHostableYoutubeSample(decks: Deck[], force = false): Deck[] {
+  if (decks.some((deck) => deck.id === SAMPLE_YOUTUBE_DECK.id)) return decks;
+  const onlyDeezerStarter = decks.length === 1 && decks[0]?.id === SAMPLE_DEEZER_DECK.id;
+  if (!onlyDeezerStarter) return decks;
+  if (!force && youtubeSampleWasIntroduced()) return decks;
+  const youtube = normalizeDeck(SAMPLE_YOUTUBE_DECK);
+  if (!youtube) return decks;
+  return [...decks, youtube];
+}
+
+function seedStarterDecks(decks: Deck[], forceYoutube = false): Deck[] {
+  return ensureHostableYoutubeSample(ensureDefaultDeezerSample(decks), forceYoutube);
+}
+
+function rememberIntroducedYoutubeSample(decks: Deck[]): void {
+  if (decks.some((deck) => deck.id === SAMPLE_YOUTUBE_DECK.id)) {
+    markYoutubeSampleIntroduced();
+  }
+}
+
 export function getStoredDecks(): Deck[] {
   try {
     const raw = localStorage.getItem(DECKS_STORAGE_KEY);
     if (!raw) {
-      const initial = [SAMPLE_DEEZER_DECK]
-        .map(normalizeDeck)
-        .filter((deck): deck is Deck => deck !== null);
+      const initial = seedStarterDecks(
+        [SAMPLE_DEEZER_DECK]
+          .map(normalizeDeck)
+          .filter((deck): deck is Deck => deck !== null),
+        true
+      );
       saveStoredDecks(initial);
+      rememberIntroducedYoutubeSample(initial);
       return initial;
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       const normalized = parsed.map(normalizeDeck);
       if (normalized.every(Boolean)) {
-        const decks = ensureDefaultDeezerSample(normalized as Deck[]);
+        const decks = seedStarterDecks(normalized as Deck[]);
         if (JSON.stringify(parsed) !== JSON.stringify(decks)) writeLocalStorage(DECKS_STORAGE_KEY, JSON.stringify(decks));
+        rememberIntroducedYoutubeSample(decks);
         return decks;
       }
     }
-    const fallback = ensureDefaultDeezerSample([SAMPLE_DEEZER_DECK]
-      .map(normalizeDeck)
-      .filter((deck): deck is Deck => deck !== null));
+    const fallback = seedStarterDecks(
+      [SAMPLE_DEEZER_DECK]
+        .map(normalizeDeck)
+        .filter((deck): deck is Deck => deck !== null),
+      true
+    );
     saveStoredDecks(fallback);
+    rememberIntroducedYoutubeSample(fallback);
     return fallback;
   } catch (err) {
     console.error("Failed to parse stored decks from localStorage:", err);
-    return ensureDefaultDeezerSample([SAMPLE_DEEZER_DECK]
-      .map(normalizeDeck)
-      .filter((deck): deck is Deck => deck !== null));
+    return seedStarterDecks(
+      [SAMPLE_DEEZER_DECK]
+        .map(normalizeDeck)
+        .filter((deck): deck is Deck => deck !== null),
+      true
+    );
   }
 }
 
