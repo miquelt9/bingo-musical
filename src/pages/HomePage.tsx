@@ -343,8 +343,9 @@ export const HomePage: React.FC = () => {
               onClick={() => shareDeck(deck)}
               disabled={emptyDeck}
               title={emptyDeck ? EMPTY_DECK_ACTION_TITLE : "Share deck"}
+              aria-label={emptyDeck ? `Share deck. ${EMPTY_DECK_ACTION_TITLE}` : "Share deck"}
             >
-              <Share2 className="w-4 h-4" />
+              <Share2 className="w-4 h-4" aria-hidden="true" />
             </button>
 
             <button
@@ -352,11 +353,18 @@ export const HomePage: React.FC = () => {
               className="pc-button"
               onClick={() => duplicateDeck(deck.id)}
               title="Duplicate deck"
+              aria-label="Duplicate deck"
             >
-              <Copy className="w-4 h-4" />
+              <Copy className="w-4 h-4" aria-hidden="true" />
             </button>
-            <button type="button" className="pc-button" onClick={() => setDeckToDelete(deck)} title="Delete deck">
-              <Trash2 className="w-4 h-4" />
+            <button
+              type="button"
+              className="pc-button"
+              onClick={() => setDeckToDelete(deck)}
+              title="Delete deck"
+              aria-label="Delete deck"
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
           <Link to={`/deck/${deck.id}`} className="pc-button home-deck-card-action-edit">
