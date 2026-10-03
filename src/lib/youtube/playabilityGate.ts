@@ -1,4 +1,5 @@
 import { Track } from "../../types/deck";
+import { isDeferredDeezerPreview } from "../deezer/previewUrl";
 import {
   getCachedEmbedStatus,
   isTrackUnplayable,
@@ -27,10 +28,18 @@ export function isTrackNeedsVerification(track: Track): boolean {
   return getCachedEmbedStatus(track.media.id) === null;
 }
 
-/** False if any track is unplayable or still needs verification. */
+/**
+ * False if any track is unplayable or still needs verification.
+ * A Deezer id whose signed preview is still loading does not block the game:
+ * playback refreshes that URL when the song is called.
+ */
 export function canStartGame(tracks: Track[]): boolean {
   if (tracks.length === 0) return false;
-  return tracks.every((t) => !isTrackUnplayable(t) && !isTrackNeedsVerification(t));
+  return tracks.every(
+    (track) =>
+      isDeferredDeezerPreview(track) ||
+      (!isTrackUnplayable(track) && !isTrackNeedsVerification(track))
+  );
 }
 
 /** Collect known playability issues without running network checks. */
@@ -43,6 +52,7 @@ export function getPlayabilityIssues(tracks: Track[]): InvalidTrackEntry[] {
       continue;
     }
     if (track.media.provider === "deezer") {
+      if (isDeferredDeezerPreview(track)) continue;
       if (track.matchStatus === "failed" || !track.media.previewUrl) {
         issues.push({ track, reason: "No Deezer preview is available" });
       }

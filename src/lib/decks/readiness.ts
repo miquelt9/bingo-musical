@@ -74,7 +74,12 @@ export function getDeckReadiness(tracks: Track[], _gridSize = 5): DeckReadiness 
   ).length;
 
   const minHostTracks = MIN_HOST_TRACKS;
-  const tooFewForHost = readyCount < minHostTracks;
+  // Deferred Deezer previews are matched and resolve on playback, so they
+  // count toward the host minimum while their signed URLs are still loading.
+  const hostableCount = tracks.filter(
+    (track) => isDeferredDeezerPreview(track) || (isTrackPlayable(track) && !isTrackUnplayable(track))
+  ).length;
+  const tooFewForHost = hostableCount < minHostTracks;
   const canHost = canStartGame(tracks) && !tooFewForHost;
 
   let health: DeckHealth = "ready";
