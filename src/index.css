@@ -1347,16 +1347,16 @@
 .home-deck-card-toolbar--above-play {
   grid-column: 3;
   grid-row: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  justify-content: flex-end;
+  justify-self: end;
+  width: max-content;
   gap: 4px;
-  min-width: 0;
 }
 
 .home-deck-card-toolbar--above-play .pc-button {
   justify-content: center;
-  min-width: 0;
-  padding-inline: 0;
+  white-space: nowrap;
 }
 
 .home-deck-card-action-edit {
