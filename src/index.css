@@ -565,34 +565,43 @@
   opacity: 0.8;
 }
 
+.card-settings > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.card-settings > summary::-webkit-details-marker,
+.card-settings > summary::marker {
+  display: none;
+  content: none;
+}
+
 @media (max-width: 639px) {
-  .cards-print-settings {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  .pc-page-header-title.cards-page-title {
+    flex: 0 0 auto;
+    overflow: visible;
+    text-overflow: clip;
   }
 
-  .cards-print-settings > .card-settings {
-    order: 2;
+  .pc-page-header:has(.cards-page-title) .pc-page-header-back {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
   }
 
-  .cards-print-settings > .cards-print-generate {
-    order: 1;
-  }
-
-  .card-settings > summary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 44px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .card-settings > summary::-webkit-details-marker {
-    display: none;
+  .pc-page-header:has(.cards-page-title) .pc-page-header-back-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

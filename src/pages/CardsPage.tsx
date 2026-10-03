@@ -99,40 +99,32 @@ const DEFAULT_APPEARANCE: PdfAppearanceOptions = {
   ...DEFAULT_PDF_APPEARANCE,
 };
 
-function CardContentFields({
+function CellContentFields({
   cellContent,
   setCellContent,
   cellContentSizes,
   setCellContentSizes,
-  includeMasterList,
-  setIncludeMasterList,
-  includeShareQr,
-  setIncludeShareQr,
 }: {
   cellContent: BingoCellContentSelection;
   setCellContent: React.Dispatch<React.SetStateAction<BingoCellContentSelection>>;
   cellContentSizes: BingoCellContentSizes;
   setCellContentSizes: React.Dispatch<React.SetStateAction<BingoCellContentSizes>>;
-  includeMasterList: boolean;
-  setIncludeMasterList: (value: boolean) => void;
-  includeShareQr: boolean;
-  setIncludeShareQr: (value: boolean) => void;
 }) {
   return (
-    <>
-      <div>
-        <p className="text-xs font-bold mb-1.5">Cell content</p>
-        <div className="flex flex-col gap-2">
-          {CELL_CONTENT_KINDS.map((kind) => (
-            <div key={kind} className="flex items-center gap-2 text-xs font-bold">
-              <label className="flex items-center gap-2 cursor-pointer min-w-[76px] min-h-11">
-                <input
-                  type="checkbox"
-                  checked={cellContent[kind]}
-                  onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
-                />
-                <span>{cellContentKindLabel(kind)}</span>
-              </label>
+    <div>
+      <p className="text-xs font-bold mb-1.5">Cell content</p>
+      <div className="flex flex-col gap-2">
+        {CELL_CONTENT_KINDS.map((kind) => (
+          <div key={kind} className="text-xs font-bold">
+            <label className="flex items-center gap-2 cursor-pointer min-h-11">
+              <input
+                type="checkbox"
+                checked={cellContent[kind]}
+                onChange={() => setCellContent((prev) => toggleCellContent(prev, kind))}
+              />
+              <span>{cellContentKindLabel(kind)}</span>
+            </label>
+            <div className="flex items-center gap-2 min-h-11 pl-6">
               <input
                 type="range"
                 min={10}
@@ -150,15 +142,31 @@ function CardContentFields({
                 {cellContentSizes[kind]}%
               </span>
             </div>
-          ))}
-        </div>
-        <p className="text-[11px] text-muted mt-1.5">
-          {usesAuthorPool(cellContent)
-            ? "Authors are deduplicated across songs. Numbers follow first appearance in the deck."
-            : "Numbers follow deck order (#1 is the first song). Pick any combination of numbers, songs, and authors."}
-        </p>
+          </div>
+        ))}
       </div>
+      <p className="text-[11px] text-muted mt-1.5">
+        {usesAuthorPool(cellContent)
+          ? "Authors are deduplicated across songs. Numbers follow first appearance in the deck."
+          : "Numbers follow deck order (#1 is the first song). Pick any combination of numbers, songs, and authors."}
+      </p>
+    </div>
+  );
+}
 
+function PrintExtraFields({
+  includeMasterList,
+  setIncludeMasterList,
+  includeShareQr,
+  setIncludeShareQr,
+}: {
+  includeMasterList: boolean;
+  setIncludeMasterList: (value: boolean) => void;
+  includeShareQr: boolean;
+  setIncludeShareQr: (value: boolean) => void;
+}) {
+  return (
+    <>
       <label className="flex items-start gap-2 text-xs font-bold cursor-pointer min-h-11">
         <input
           type="checkbox"
@@ -193,6 +201,219 @@ function CardContentFields({
           )}
         </span>
       </label>
+    </>
+  );
+}
+
+function AppearanceFields({
+  appearance,
+  setAppearance,
+  onBackgroundUpload,
+  onReset,
+}: {
+  appearance: PdfAppearanceOptions;
+  setAppearance: React.Dispatch<React.SetStateAction<PdfAppearanceOptions>>;
+  onBackgroundUpload: (file: File | undefined) => void;
+  onReset: () => void;
+}) {
+  return (
+    <>
+      <label className="block text-xs font-bold">
+        Theme
+        <select
+          className="pc-select w-full mt-1"
+          value={appearance.themePreset ?? "default"}
+          onChange={(e) =>
+            setAppearance((prev) => ({
+              ...prev,
+              themePreset: e.target.value as PdfThemePreset,
+              headerStyle: e.target.value === "christmas" ? "festive" : prev.headerStyle,
+            }))
+          }
+        >
+          <option value="default">Default</option>
+          <option value="christmas">Christmas / Holiday</option>
+          <option value="colorful">Colorful / Dynamic</option>
+        </select>
+      </label>
+
+      <label className="block text-xs font-bold">
+        Header style
+        <select
+          className="pc-select w-full mt-1"
+          value={appearance.headerStyle ?? (appearance.themePreset === "christmas" ? "festive" : "plain")}
+          onChange={(e) =>
+            setAppearance((prev) => ({
+              ...prev,
+              headerStyle: e.target.value as "plain" | "festive",
+            }))
+          }
+        >
+          <option value="plain">Plain</option>
+          <option value="festive">Festive decorations</option>
+        </select>
+      </label>
+
+      <label className="block text-xs font-bold">
+        Tile style
+        <select
+          className="pc-select w-full mt-1"
+          value={appearance.tileStyle ?? "rounded"}
+          onChange={(e) =>
+            setAppearance((prev) => ({
+              ...prev,
+              tileStyle: e.target.value as PdfTileStyle,
+              tileGapMm: e.target.value === "compactSquare" ? 0 : prev.tileGapMm ?? 2,
+            }))
+          }
+        >
+          <option value="square">Square</option>
+          <option value="rounded">Rounded square</option>
+          <option value="circle">Circle</option>
+          <option value="compactSquare">Compact square (no gap)</option>
+        </select>
+      </label>
+
+      <div>
+        <div className="flex items-center justify-between text-xs font-bold">
+          <label htmlFor="tile-opacity">Tile fill opacity</label>
+          <span className="font-normal text-muted">{Math.round((appearance.tileOpacity ?? 1) * 100)}%</span>
+        </div>
+        <input
+          id="tile-opacity"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={appearance.tileOpacity ?? 1}
+          onChange={(e) => setAppearance((prev) => ({ ...prev, tileOpacity: Number(e.target.value) }))}
+          className="w-full cursor-pointer"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between text-xs font-bold">
+          <label htmlFor="tile-gap">Tile gap</label>
+          <span className="font-normal text-muted">
+            {appearance.tileStyle === "compactSquare" ? "0 mm" : `${appearance.tileGapMm ?? 2} mm`}
+          </span>
+        </div>
+        <input
+          id="tile-gap"
+          type="range"
+          min={0}
+          max={6}
+          step={0.5}
+          disabled={appearance.tileStyle === "compactSquare"}
+          value={appearance.tileStyle === "compactSquare" ? 0 : appearance.tileGapMm ?? 2}
+          onChange={(e) => setAppearance((prev) => ({ ...prev, tileGapMm: Number(e.target.value) }))}
+          className="w-full cursor-pointer disabled:opacity-40"
+        />
+      </div>
+
+      <label className="block text-xs font-bold">
+        Title font
+        <select
+          className="pc-select w-full mt-1"
+          value={appearance.titleFontFamily ?? "helvetica"}
+          onChange={(e) => setAppearance((prev) => ({ ...prev, titleFontFamily: e.target.value as PdfFontFamily }))}
+        >
+          <option value="helvetica">Helvetica / clean</option>
+          <option value="times">Times / classic</option>
+          <option value="courier">Courier / retro</option>
+        </select>
+      </label>
+
+      <label className="block text-xs font-bold">
+        Cell font
+        <select
+          className="pc-select w-full mt-1"
+          value={appearance.cellFontFamily ?? "helvetica"}
+          onChange={(e) => setAppearance((prev) => ({ ...prev, cellFontFamily: e.target.value as PdfFontFamily }))}
+        >
+          <option value="helvetica">Helvetica / legible</option>
+          <option value="times">Times / classic</option>
+          <option value="courier">Courier / mono</option>
+        </select>
+      </label>
+
+      <div>
+        <div className="flex items-center justify-between text-xs font-bold">
+          <label htmlFor="title-size">Title size</label>
+          <span className="font-normal text-muted">{appearance.titleSizePt ?? 22} pt</span>
+        </div>
+        <input
+          id="title-size"
+          type="range"
+          min={12}
+          max={36}
+          step={1}
+          value={appearance.titleSizePt ?? 22}
+          onChange={(e) => setAppearance((prev) => ({ ...prev, titleSizePt: Number(e.target.value) }))}
+          className="w-full cursor-pointer"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-bold inline-flex items-center gap-2">
+          <ImagePlus className="w-4 h-4" />
+          Card background
+        </p>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="block w-full text-xs"
+          onChange={(e) => onBackgroundUpload(e.target.files?.[0])}
+        />
+        {appearance.background && (
+          <>
+            <div className="flex items-center gap-2">
+              <select
+                className="pc-select flex-1"
+                value={appearance.background.mode}
+                onChange={(e) =>
+                  setAppearance((prev) => ({
+                    ...prev,
+                    background: prev.background
+                      ? { ...prev.background, mode: e.target.value as "fullPage" | "cardWatermark" }
+                      : prev.background,
+                  }))
+                }
+              >
+                <option value="cardWatermark">Card watermark</option>
+                <option value="fullPage">Full card page</option>
+              </select>
+              <Button type="button" onClick={() => setAppearance((prev) => ({ ...prev, background: undefined }))} title="Remove background">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+            <label className="block text-xs font-bold">
+              Background opacity · {Math.round((appearance.background.opacity ?? 0.14) * 100)}%
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={appearance.background.opacity ?? 0.14}
+                onChange={(e) =>
+                  setAppearance((prev) => ({
+                    ...prev,
+                    background: prev.background
+                      ? { ...prev.background, opacity: Number(e.target.value) }
+                      : prev.background,
+                  }))
+                }
+                className="w-full cursor-pointer"
+              />
+            </label>
+          </>
+        )}
+        <p className="text-[11px] text-muted">Backgrounds apply to card pages only and stay local to this browser.</p>
+      </div>
+
+      <Button type="button" className="w-full" onClick={onReset}>
+        Reset appearance
+      </Button>
     </>
   );
 }
@@ -722,12 +943,13 @@ export const CardsPage: React.FC = () => {
       {isMobile ? (
         <PageHeader
           back={{ fallbackTo: `/deck/${deck.id}`, fallbackLabel: "Deck editor" }}
-          title={`Cards`}
+          title="Cards"
+          titleClassName="cards-page-title"
           primaryAction={
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <Button type="button" onClick={handleBrowserPrint} disabled={exportsDisabled} title="Print">
                 {isPrintingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                <span className="sr-only sm:not-sr-only">Print</span>
+                Print
               </Button>
               <Button
                 type="button"
@@ -735,19 +957,20 @@ export const CardsPage: React.FC = () => {
                 onClick={() => void handleDownloadPdf()}
                 disabled={isExportingPdf || exportsDisabled}
                 title={pdfButtonLabel}
+                aria-label={pdfButtonLabel}
               >
                 {isExportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span className="hidden xs:inline">PDF</span>
-                <span className="sr-only">Download PDF cards</span>
+                PDF
               </Button>
               <Button
                 type="button"
                 onClick={handlePrintMasterOnly}
                 disabled={deck.tracks.length === 0 || isPrintingPdf}
-                title="Master list"
+                title="Print master list"
+                aria-label="Print master list"
               >
                 <ListOrdered className="w-4 h-4" />
-                <span className="sr-only">Master list</span>
+                Master
               </Button>
             </div>
           }
@@ -786,7 +1009,7 @@ export const CardsPage: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 print:hidden">
-        <div className="lg:col-span-5 space-y-4 order-2 lg:order-1">
+        <div className="lg:col-span-5 space-y-4">
           <Window
             title={
               <span className="inline-flex items-center gap-2">
@@ -796,440 +1019,147 @@ export const CardsPage: React.FC = () => {
             }
           >
             <div className="space-y-4 cards-print-settings">
-              {isMobile ? (
-                <details className="card-settings">
-                  <summary>
-                    <Palette className="w-4 h-4" />
-                    Card settings
-                    <ChevronDown className="w-4 h-4 ml-auto" aria-hidden="true" />
-                  </summary>
-                  <div className="space-y-3 mt-3">
-                    <label className="block text-xs font-bold">
-                      Theme
-                      <select
-                        className="pc-select w-full mt-1"
-                        value={appearance.themePreset ?? "default"}
-                        onChange={(e) =>
-                          setAppearance((prev) => ({
-                            ...prev,
-                            themePreset: e.target.value as PdfThemePreset,
-                            headerStyle: e.target.value === "christmas" ? "festive" : prev.headerStyle,
-                          }))
-                        }
-                      >
-                        <option value="default">Default</option>
-                        <option value="christmas">Christmas / Holiday</option>
-                        <option value="colorful">Colorful / Dynamic</option>
-                      </select>
-                    </label>
+              <div className="cards-print-generate space-y-4">
+                <label className="block text-xs font-bold">
+                  Game / Event Title
+                  <textarea
+                    className="w-full mt-1 pc-input min-h-[68px] resize-y"
+                    value={customTitle}
+                    maxLength={EVENT_TITLE_MAX}
+                    rows={2}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    onBlur={() => setCustomTitle((current) => current.trim())}
+                    placeholder={EVENT_TITLE_PLACEHOLDER}
+                  />
+                  <span className="block mt-1 text-[11px] font-normal text-muted text-right">
+                    {customTitle.length}/{EVENT_TITLE_MAX} · shown on printed cards · blank uses “{DEFAULT_EVENT_TITLE}”
+                  </span>
+                </label>
 
-                    <label className="block text-xs font-bold">
-                      Header style
-                      <select
-                        className="pc-select w-full mt-1"
-                        value={appearance.headerStyle ?? (appearance.themePreset === "christmas" ? "festive" : "plain")}
-                        onChange={(e) =>
-                          setAppearance((prev) => ({
-                            ...prev,
-                            headerStyle: e.target.value as "plain" | "festive",
-                          }))
-                        }
-                      >
-                        <option value="plain">Plain</option>
-                        <option value="festive">Festive decorations</option>
-                      </select>
-                    </label>
-
-                    <label className="block text-xs font-bold">
-                      Tile style
-                      <select
-                        className="pc-select w-full mt-1"
-                        value={appearance.tileStyle ?? "rounded"}
-                        onChange={(e) =>
-                          setAppearance((prev) => ({
-                            ...prev,
-                            tileStyle: e.target.value as PdfTileStyle,
-                            tileGapMm: e.target.value === "compactSquare" ? 0 : prev.tileGapMm ?? 2,
-                          }))
-                        }
-                      >
-                        <option value="square">Square</option>
-                        <option value="rounded">Rounded square</option>
-                        <option value="circle">Circle</option>
-                        <option value="compactSquare">Compact square (no gap)</option>
-                      </select>
-                    </label>
-
-                    <div>
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <label htmlFor="tile-opacity-mobile">Tile fill opacity</label>
-                        <span className="font-normal text-muted">{Math.round((appearance.tileOpacity ?? 1) * 100)}%</span>
-                      </div>
-                      <input
-                        id="tile-opacity-mobile"
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={appearance.tileOpacity ?? 1}
-                        onChange={(e) => setAppearance((prev) => ({ ...prev, tileOpacity: Number(e.target.value) }))}
-                        className="w-full cursor-pointer"
-                      />
+                <div>
+                  <p className="text-xs font-bold mb-1.5">Grid size ({gridSize}×{gridSize})</p>
+                  {isMobile ? (
+                    <select
+                      className="pc-select w-full"
+                      value={gridSize}
+                      onChange={(e) => setGridSize(Number(e.target.value))}
+                      aria-label="Grid size"
+                    >
+                      {GRID_SIZES.map((size) => {
+                        const valid = true;
+                        return (
+                        <option key={size} value={size} disabled={!valid}>
+                          {size}×{size}
+                        </option>
+                      );})}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {GRID_SIZES.map((size) => {
+                        const valid = true;
+                        return (
+                        <Button
+                          key={size}
+                          type="button"
+                          active={gridSize === size}
+                          disabled={!valid}
+                          title={undefined}
+                          onClick={() => setGridSize(size)}
+                          className="flex-1"
+                        >
+                          {size}×{size}
+                        </Button>
+                      );})}
                     </div>
+                  )}
+                </div>
 
-                    <div>
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <label htmlFor="tile-gap-mobile">Tile gap</label>
-                        <span className="font-normal text-muted">
-                          {appearance.tileStyle === "compactSquare" ? "0 mm" : `${appearance.tileGapMm ?? 2} mm`}
+                <div>
+                  <p className="text-xs font-bold mb-1.5">Number of Cards ({cardCount})</p>
+                  <div className="space-y-1.5">
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      step={1}
+                      value={cardCount}
+                      onChange={(e) => setCardCount(Number(e.target.value))}
+                      aria-label="Number of cards"
+                      className="w-full cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[10px] text-muted">
+                      <span>1 card</span>
+                      <span>100 cards</span>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handleRegenerate}
+                  disabled={!canGenerate}
+                >
+                  <Shuffle className="w-4 h-4" />
+                  Shuffle again
+                </Button>
+
+                <div className="text-xs pt-1 border-t border-[var(--pc-border)] space-y-1">
+                  <p className="text-muted">
+                    {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck
+                    {usesAuthorPool(cellContent)
+                      ? ` · ${poolCount} unique author${poolCount === 1 ? "" : "s"}`
+                      : ""}{" "}
+                    · {slots} squares per card
+
+                  </p>
+                  {canGenerate && (
+                    <div className="pc-bevel-inset p-2.5 mt-2 space-y-2" aria-live="polite">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold">Estimated game time</span>
+                        <span className="text-[10px] text-muted">
+                          ~{Math.round(averageClipSeconds)}s per song
                         </span>
                       </div>
-                      <input
-                        id="tile-gap-mobile"
-                        type="range"
-                        min={0}
-                        max={6}
-                        step={0.5}
-                        disabled={appearance.tileStyle === "compactSquare"}
-                        value={appearance.tileStyle === "compactSquare" ? 0 : appearance.tileGapMm ?? 2}
-                        onChange={(e) => setAppearance((prev) => ({ ...prev, tileGapMm: Number(e.target.value) }))}
-                        className="w-full cursor-pointer disabled:opacity-40"
-                      />
-                    </div>
-
-                    <label className="block text-xs font-bold">
-                      Title font
-                      <select
-                        className="pc-select w-full mt-1"
-                        value={appearance.titleFontFamily ?? "helvetica"}
-                        onChange={(e) => setAppearance((prev) => ({ ...prev, titleFontFamily: e.target.value as PdfFontFamily }))}
-                      >
-                        <option value="helvetica">Helvetica / clean</option>
-                        <option value="times">Times / classic</option>
-                        <option value="courier">Courier / retro</option>
-                      </select>
-                    </label>
-
-                    <label className="block text-xs font-bold">
-                      Cell font
-                      <select
-                        className="pc-select w-full mt-1"
-                        value={appearance.cellFontFamily ?? "helvetica"}
-                        onChange={(e) => setAppearance((prev) => ({ ...prev, cellFontFamily: e.target.value as PdfFontFamily }))}
-                      >
-                        <option value="helvetica">Helvetica / legible</option>
-                        <option value="times">Times / classic</option>
-                        <option value="courier">Courier / mono</option>
-                      </select>
-                    </label>
-
-                    <div>
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <label htmlFor="title-size-mobile">Title size</label>
-                        <span className="font-normal text-muted">{appearance.titleSizePt ?? 22} pt</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="block text-muted">First line</span>
+                          <span className="block font-bold">
+                            {formatEstimateDuration(bingoEstimate.line.estimatedSeconds)}
+                          </span>
+                          <span className="block text-[10px] text-muted">
+                            {formatEstimateDraws(bingoEstimate.line.expectedDraws)} called
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-muted">Full card</span>
+                          <span className="block font-bold">
+                            {formatEstimateDuration(bingoEstimate.fullCard.estimatedSeconds)}
+                          </span>
+                          <span className="block text-[10px] text-muted">
+                            {formatEstimateDraws(bingoEstimate.fullCard.expectedDraws)} called
+                          </span>
+                        </div>
                       </div>
-                      <input
-                        id="title-size-mobile"
-                        type="range"
-                        min={12}
-                        max={36}
-                        step={1}
-                        value={appearance.titleSizePt ?? 22}
-                        onChange={(e) => setAppearance((prev) => ({ ...prev, titleSizePt: Number(e.target.value) }))}
-                        className="w-full cursor-pointer"
-                      />
+
                     </div>
-
-                    <div className="space-y-2">
-                      <p className="text-xs font-bold inline-flex items-center gap-2">
-                        <ImagePlus className="w-4 h-4" />
-                        Card background
-                      </p>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        className="block w-full text-xs"
-                        onChange={(e) => void handleBackgroundUpload(e.target.files?.[0])}
-                      />
-                      {appearance.background && (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <select
-                              className="pc-select flex-1"
-                              value={appearance.background.mode}
-                              onChange={(e) =>
-                                setAppearance((prev) => ({
-                                  ...prev,
-                                  background: prev.background
-                                    ? { ...prev.background, mode: e.target.value as "fullPage" | "cardWatermark" }
-                                    : prev.background,
-                                }))
-                              }
-                            >
-                              <option value="cardWatermark">Card watermark</option>
-                              <option value="fullPage">Full card page</option>
-                            </select>
-                            <Button type="button" onClick={() => setAppearance((prev) => ({ ...prev, background: undefined }))} title="Remove background">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <label className="block text-xs font-bold">
-                            Background opacity · {Math.round((appearance.background.opacity ?? 0.14) * 100)}%
-                            <input
-                              type="range"
-                              min={0}
-                              max={1}
-                              step={0.05}
-                              value={appearance.background.opacity ?? 0.14}
-                              onChange={(e) =>
-                                setAppearance((prev) => ({
-                                  ...prev,
-                                  background: prev.background
-                                    ? { ...prev.background, opacity: Number(e.target.value) }
-                                    : prev.background,
-                                }))
-                              }
-                              className="w-full cursor-pointer"
-                            />
-                          </label>
-                        </>
-                      )}
-                      <p className="text-[11px] text-muted">Backgrounds apply to card pages only and stay local to this browser.</p>
-                    </div>
-
-                    <Button type="button" className="w-full" onClick={resetAppearance}>
-                      Reset appearance
-                    </Button>
-                    <CardContentFields
-                      cellContent={cellContent}
-                      setCellContent={setCellContent}
-                      cellContentSizes={cellContentSizes}
-                      setCellContentSizes={setCellContentSizes}
-                      includeMasterList={includeMasterList}
-                      setIncludeMasterList={setIncludeMasterList}
-                      includeShareQr={includeShareQr}
-                      setIncludeShareQr={setIncludeShareQr}
-                    />
-                  </div>
-                </details>
-              ) : (
-              <div className="border-t border-[var(--pc-border)] pt-3 space-y-3">
-                <p className="text-xs font-bold inline-flex items-center gap-2">
-                  <Palette className="w-4 h-4" />
-                  Appearance
-                </p>
-
-                <label className="block text-xs font-bold">
-                  Theme
-                  <select
-                    className="pc-select w-full mt-1"
-                    value={appearance.themePreset ?? "default"}
-                    onChange={(e) =>
-                      setAppearance((prev) => ({
-                        ...prev,
-                        themePreset: e.target.value as PdfThemePreset,
-                        headerStyle: e.target.value === "christmas" ? "festive" : prev.headerStyle,
-                      }))
-                    }
-                  >
-                    <option value="default">Default</option>
-                    <option value="christmas">Christmas / Holiday</option>
-                    <option value="colorful">Colorful / Dynamic</option>
-                  </select>
-                </label>
-
-                <label className="block text-xs font-bold">
-                  Header style
-                  <select
-                    className="pc-select w-full mt-1"
-                    value={appearance.headerStyle ?? (appearance.themePreset === "christmas" ? "festive" : "plain")}
-                    onChange={(e) =>
-                      setAppearance((prev) => ({
-                        ...prev,
-                        headerStyle: e.target.value as "plain" | "festive",
-                      }))
-                    }
-                  >
-                    <option value="plain">Plain</option>
-                    <option value="festive">Festive decorations</option>
-                  </select>
-                </label>
-
-                <label className="block text-xs font-bold">
-                  Tile style
-                  <select
-                    className="pc-select w-full mt-1"
-                    value={appearance.tileStyle ?? "rounded"}
-                    onChange={(e) =>
-                      setAppearance((prev) => ({
-                        ...prev,
-                        tileStyle: e.target.value as PdfTileStyle,
-                        tileGapMm: e.target.value === "compactSquare" ? 0 : prev.tileGapMm ?? 2,
-                      }))
-                    }
-                  >
-                    <option value="square">Square</option>
-                    <option value="rounded">Rounded square</option>
-                    <option value="circle">Circle</option>
-                    <option value="compactSquare">Compact square (no gap)</option>
-                  </select>
-                </label>
-
-                <div>
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <label htmlFor="tile-opacity">Tile fill opacity</label>
-                    <span className="font-normal text-muted">{Math.round((appearance.tileOpacity ?? 1) * 100)}%</span>
-                  </div>
-                  <input
-                    id="tile-opacity"
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={appearance.tileOpacity ?? 1}
-                    onChange={(e) => setAppearance((prev) => ({ ...prev, tileOpacity: Number(e.target.value) }))}
-                    className="w-full cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <label htmlFor="tile-gap">Tile gap</label>
-                    <span className="font-normal text-muted">
-                      {appearance.tileStyle === "compactSquare" ? "0 mm" : `${appearance.tileGapMm ?? 2} mm`}
-                    </span>
-                  </div>
-                  <input
-                    id="tile-gap"
-                    type="range"
-                    min={0}
-                    max={6}
-                    step={0.5}
-                    disabled={appearance.tileStyle === "compactSquare"}
-                    value={appearance.tileStyle === "compactSquare" ? 0 : appearance.tileGapMm ?? 2}
-                    onChange={(e) => setAppearance((prev) => ({ ...prev, tileGapMm: Number(e.target.value) }))}
-                    className="w-full cursor-pointer disabled:opacity-40"
-                  />
-                </div>
-
-                <label className="block text-xs font-bold">
-                  Title font
-                  <select
-                    className="pc-select w-full mt-1"
-                    value={appearance.titleFontFamily ?? "helvetica"}
-                    onChange={(e) => setAppearance((prev) => ({ ...prev, titleFontFamily: e.target.value as PdfFontFamily }))}
-                  >
-                    <option value="helvetica">Helvetica / clean</option>
-                    <option value="times">Times / classic</option>
-                    <option value="courier">Courier / retro</option>
-                  </select>
-                </label>
-
-                <label className="block text-xs font-bold">
-                  Cell font
-                  <select
-                    className="pc-select w-full mt-1"
-                    value={appearance.cellFontFamily ?? "helvetica"}
-                    onChange={(e) => setAppearance((prev) => ({ ...prev, cellFontFamily: e.target.value as PdfFontFamily }))}
-                  >
-                    <option value="helvetica">Helvetica / legible</option>
-                    <option value="times">Times / classic</option>
-                    <option value="courier">Courier / mono</option>
-                  </select>
-                </label>
-
-                <div>
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <label htmlFor="title-size">Title size</label>
-                    <span className="font-normal text-muted">{appearance.titleSizePt ?? 22} pt</span>
-                  </div>
-                  <input
-                    id="title-size"
-                    type="range"
-                    min={12}
-                    max={36}
-                    step={1}
-                    value={appearance.titleSizePt ?? 22}
-                    onChange={(e) => setAppearance((prev) => ({ ...prev, titleSizePt: Number(e.target.value) }))}
-                    className="w-full cursor-pointer"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-bold inline-flex items-center gap-2">
-                    <ImagePlus className="w-4 h-4" />
-                    Card background
-                  </p>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="block w-full text-xs"
-                    onChange={(e) => void handleBackgroundUpload(e.target.files?.[0])}
-                  />
-                  {appearance.background && (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <select
-                          className="pc-select flex-1"
-                          value={appearance.background.mode}
-                          onChange={(e) =>
-                            setAppearance((prev) => ({
-                              ...prev,
-                              background: prev.background
-                                ? { ...prev.background, mode: e.target.value as "fullPage" | "cardWatermark" }
-                                : prev.background,
-                            }))
-                          }
-                        >
-                          <option value="cardWatermark">Card watermark</option>
-                          <option value="fullPage">Full card page</option>
-                        </select>
-                        <Button type="button" onClick={() => setAppearance((prev) => ({ ...prev, background: undefined }))} title="Remove background">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <label className="block text-xs font-bold">
-                        Background opacity · {Math.round((appearance.background.opacity ?? 0.14) * 100)}%
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={appearance.background.opacity ?? 0.14}
-                          onChange={(e) =>
-                            setAppearance((prev) => ({
-                              ...prev,
-                              background: prev.background
-                                ? { ...prev.background, opacity: Number(e.target.value) }
-                                : prev.background,
-                            }))
-                          }
-                          className="w-full cursor-pointer"
-                        />
-                      </label>
-                    </>
                   )}
-                  <p className="text-[11px] text-muted">Backgrounds apply to card pages only and stay local to this browser.</p>
                 </div>
-
-                <Button type="button" className="w-full" onClick={resetAppearance}>
-                  Reset appearance
-                </Button>
               </div>
-              )}
 
-              {!isMobile && (
-                <CardContentFields
-                  cellContent={cellContent}
-                  setCellContent={setCellContent}
-                  cellContentSizes={cellContentSizes}
-                  setCellContentSizes={setCellContentSizes}
-                  includeMasterList={includeMasterList}
-                  setIncludeMasterList={setIncludeMasterList}
-                  includeShareQr={includeShareQr}
-                  setIncludeShareQr={setIncludeShareQr}
-                />
-              )}
+              <CellContentFields
+                cellContent={cellContent}
+                setCellContent={setCellContent}
+                cellContentSizes={cellContentSizes}
+                setCellContentSizes={setCellContentSizes}
+              />
+
+              <PrintExtraFields
+                includeMasterList={includeMasterList}
+                setIncludeMasterList={setIncludeMasterList}
+                includeShareQr={includeShareQr}
+                setIncludeShareQr={setIncludeShareQr}
+              />
 
               {!isMobile && (
                 <Button
@@ -1243,138 +1173,26 @@ export const CardsPage: React.FC = () => {
                 </Button>
               )}
 
-              <div className="cards-print-generate space-y-4">
-              <div>
-                <p className="text-xs font-bold mb-1.5">Grid size ({gridSize}×{gridSize})</p>
-                {isMobile ? (
-                  <select
-                    className="pc-select w-full"
-                    value={gridSize}
-                    onChange={(e) => setGridSize(Number(e.target.value))}
-                    aria-label="Grid size"
-                  >
-                    {GRID_SIZES.map((size) => {
-                      const valid = true;
-                      return (
-                      <option key={size} value={size} disabled={!valid}>
-                        {size}×{size}
-                      </option>
-                    );})}
-                  </select>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    {GRID_SIZES.map((size) => {
-                      const valid = true;
-                      return (
-                      <Button
-                        key={size}
-                        type="button"
-                        active={gridSize === size}
-                        disabled={!valid}
-                        title={undefined}
-                        onClick={() => setGridSize(size)}
-                        className="flex-1"
-                      >
-                        {size}×{size}
-                      </Button>
-                    );})}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xs font-bold mb-1.5">Number of Cards ({cardCount})</p>
-                <div className="space-y-1.5">
-                  <input
-                    type="range"
-                    min={1}
-                    max={100}
-                    step={1}
-                    value={cardCount}
-                    onChange={(e) => setCardCount(Number(e.target.value))}
-                    aria-label="Number of cards"
-                    className="w-full cursor-pointer"
+              <details className="card-settings">
+                <summary>
+                  <Palette className="w-4 h-4" />
+                  Appearance
+                  <ChevronDown className="w-4 h-4 ml-auto" aria-hidden="true" />
+                </summary>
+                <div className="space-y-3 mt-3">
+                  <AppearanceFields
+                    appearance={appearance}
+                    setAppearance={setAppearance}
+                    onBackgroundUpload={(file) => void handleBackgroundUpload(file)}
+                    onReset={resetAppearance}
                   />
-                  <div className="flex justify-between text-[10px] text-muted">
-                    <span>1 card</span>
-                    <span>100 cards</span>
-                  </div>
                 </div>
-              </div>
-
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleRegenerate}
-                disabled={!canGenerate}
-              >
-                <Shuffle className="w-4 h-4" />
-                Shuffle again
-              </Button>
-
-              <div className="text-xs pt-1 border-t border-[var(--pc-border)] space-y-1">
-                <p className="text-muted">
-                  {deck.tracks.length} song{deck.tracks.length === 1 ? "" : "s"} in deck
-                  {usesAuthorPool(cellContent)
-                    ? ` · ${poolCount} unique author${poolCount === 1 ? "" : "s"}`
-                    : ""}{" "}
-                  · {slots} squares per card
-
-                </p>
-                {canGenerate && (
-                  <div className="pc-bevel-inset p-2.5 mt-2 space-y-2" aria-live="polite">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold">Estimated game time</span>
-                      <span className="text-[10px] text-muted">
-                        ~{Math.round(averageClipSeconds)}s per song
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="block text-muted">First line</span>
-                        <span className="block font-bold">
-                          {formatEstimateDuration(bingoEstimate.line.estimatedSeconds)}
-                        </span>
-                        <span className="block text-[10px] text-muted">
-                          {formatEstimateDraws(bingoEstimate.line.expectedDraws)} called
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-muted">Full card</span>
-                        <span className="block font-bold">
-                          {formatEstimateDuration(bingoEstimate.fullCard.estimatedSeconds)}
-                        </span>
-                        <span className="block text-[10px] text-muted">
-                          {formatEstimateDraws(bingoEstimate.fullCard.expectedDraws)} called
-                        </span>
-                      </div>
-                    </div>
-
-                  </div>
-                )}
-              </div>
-              </div>
+              </details>
             </div>
           </Window>
         </div>
 
-        <div className="lg:col-span-7 space-y-3 order-1 lg:order-2">
-          <label className="block text-xs font-bold">
-            Game / Event Title
-            <textarea
-              className="w-full mt-1 pc-input min-h-[68px] resize-y"
-              value={customTitle}
-              maxLength={EVENT_TITLE_MAX}
-              rows={2}
-              onChange={(e) => setCustomTitle(e.target.value)}
-              onBlur={() => setCustomTitle((current) => current.trim())}
-              placeholder={EVENT_TITLE_PLACEHOLDER}
-            />
-            <span className="block mt-1 text-[11px] font-normal text-muted text-right">
-              {customTitle.length}/{EVENT_TITLE_MAX} · shown on printed cards · blank uses “{DEFAULT_EVENT_TITLE}”
-            </span>
-          </label>
-
+        <div className="lg:col-span-7 space-y-3">
           {cards.length > 0 && currentCard ? (
             <Window
               title={
