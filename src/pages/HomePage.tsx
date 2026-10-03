@@ -231,10 +231,8 @@ export const HomePage: React.FC = () => {
             ? EMPTY_DECK_ACTION_TITLE
             : readiness.blockedCount > 0
               ? "Fix songs in Edit before hosting"
-              : readiness.deferredPreviewCount > 0
-                ? "Preview the Deezer songs before hosting"
-                : readiness.tooFewForHost
-                  ? `Add at least ${readiness.minHostTracks} playable songs before hosting`
+              : readiness.tooFewForHost
+                ? `Add at least ${readiness.minHostTracks} playable songs before hosting`
                 : "Some songs need attention before hosting"
         }
       >

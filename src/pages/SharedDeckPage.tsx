@@ -151,7 +151,7 @@ export const SharedDeckPage: React.FC = () => {
             </Button>
             {preview.provider === "deezer" ? (
               <p className="text-xs opacity-75">
-                The deck opens immediately. Deezer previews continue loading in the editor, and hosting becomes available when they are ready.
+                The deck opens immediately. Deezer previews keep loading in the background. You can edit, print cards, and host while they load.
               </p>
             ) : null}
           </div>

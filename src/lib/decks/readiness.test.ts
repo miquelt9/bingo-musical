@@ -81,8 +81,17 @@ describe("deck readiness", () => {
     expect(deferred.health).toBe("previews_pending");
     expect(deferred.deferredPreviewCount).toBe(1);
     expect(deferred.blockedCount).toBe(0);
+    expect(deferred.canHost).toBe(false);
     expect(formatReadinessPrimary(deferred)).toBe("1/1 matched");
     expect(formatReadinessSecondary(deferred)).toBe("1 Deezer preview load when you click Preview");
+
+    const pendingHost = getDeckReadiness(
+      Array.from({ length: 12 }, (_, index) => deezerTrack(`pending-${index}`, null)),
+    );
+    expect(pendingHost.health).toBe("previews_pending");
+    expect(pendingHost.deferredPreviewCount).toBe(12);
+    expect(pendingHost.canHost).toBe(true);
+    expect(pendingHost.tooFewForHost).toBe(false);
 
     const expired = deezerTrack("dz-old", "https://cdnt-preview.dzcdn.net/stream/old?exp=1000");
     const verifying = makeTrack({
