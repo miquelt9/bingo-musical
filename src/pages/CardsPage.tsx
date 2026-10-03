@@ -41,6 +41,7 @@ import {
   createCardBatchSeed,
   encodeCardVerificationCode,
 } from "../lib/bingo/verification";
+import { CARD_SETTINGS_KEY, readStoredCardSettings } from "../lib/bingo/cardEstimateInputs";
 import { estimateBingoTimes, formatEstimateDraws, formatEstimateDuration } from "../lib/bingo/estimator";
 import {
   DEFAULT_PDF_APPEARANCE,
@@ -71,8 +72,6 @@ import {
   ImagePlus,
   Trash2,
 } from "lucide-react";
-
-const CARD_SETTINGS_KEY = "bingo.cards.settings";
 
 const BINGO_PERCENT = 100;
 const EVENT_TITLE_MAX = 160;
@@ -229,14 +228,7 @@ async function downsampleBackground(file: File): Promise<string> {
 }
 
 function readCardSettings(deckId: string): Partial<CardSettings> | null {
-  try {
-    const raw = localStorage.getItem(`${CARD_SETTINGS_KEY}.${deckId}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<CardSettings>;
-    return parsed;
-  } catch {
-    return null;
-  }
+  return readStoredCardSettings(deckId) as Partial<CardSettings> | null;
 }
 
 export const CardsPage: React.FC = () => {

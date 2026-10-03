@@ -12,6 +12,7 @@ import {
 import { NowPlayingControls } from "../player/NowPlayingControls";
 import { PlayerPlaybackState } from "../../lib/player/player";
 import { getTrackProvider, getTrackSourceId } from "../../lib/music/providers";
+import { formatEstimateDraws, formatEstimateDuration, type BingoEstimate } from "../../lib/bingo/estimator";
 import { Track } from "../../types/deck";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 
@@ -74,6 +75,12 @@ function buildDisplayPlayerState(
   };
 }
 
+export type HostGameOutlook = {
+  songsLeft: number;
+  line: BingoEstimate;
+  fullCard: BingoEstimate;
+};
+
 interface CallNextControlsProps {
   onCallNext: () => void;
   onReplayCurrent: () => void;
@@ -89,6 +96,8 @@ interface CallNextControlsProps {
   remainingCount: number;
   totalCount: number;
   calledCount: number;
+  /** Songs left and the Cards first-line / full-card estimate. Hidden when omitted. */
+  hostOutlook?: HostGameOutlook | null;
   autoCallNextOnEnd: boolean;
   onToggleAutoCallNext: () => void;
   autoRevealOnEnd: boolean;
@@ -121,6 +130,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   remainingCount,
   totalCount,
   calledCount,
+  hostOutlook = null,
   autoCallNextOnEnd,
   onToggleAutoCallNext,
   autoRevealOnEnd,
@@ -229,12 +239,44 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
     <Window title="Host Controls" className="host-controls-window">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
         <div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-2xl font-black">
-              {calledCount} / {totalCount}
-            </span>
-            <span className="text-xs">songs called</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-black">
+                {calledCount} / {totalCount}
+              </span>
+              <span className="text-xs">songs called</span>
+            </div>
+            {hostOutlook && (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black">{hostOutlook.songsLeft}</span>
+                <span className="text-xs">songs left</span>
+              </div>
+            )}
           </div>
+          {hostOutlook && (
+            <div className="mt-1 text-xs space-y-0.5" aria-live="polite">
+              <p>
+                <span className="text-muted">First line</span>{" "}
+                <span className="font-bold">
+                  {formatEstimateDuration(hostOutlook.line.estimatedSeconds)}
+                </span>
+                <span className="text-muted">
+                  {" "}
+                  · {formatEstimateDraws(hostOutlook.line.expectedDraws)} called
+                </span>
+              </p>
+              <p>
+                <span className="text-muted">Full card</span>{" "}
+                <span className="font-bold">
+                  {formatEstimateDuration(hostOutlook.fullCard.estimatedSeconds)}
+                </span>
+                <span className="text-muted">
+                  {" "}
+                  · {formatEstimateDraws(hostOutlook.fullCard.expectedDraws)} called
+                </span>
+              </p>
+            </div>
+          )}
         </div>
         <div className="w-full sm:w-48">
           <div className="flex items-center justify-between text-xs mb-1.5 font-medium">

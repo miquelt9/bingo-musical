@@ -39,6 +39,12 @@ import { PlayableClip } from "../lib/player/types";
 import { getYoutubeThumbnailUrl } from "../lib/youtube/parseUrl";
 import { getTrackProvider, getTrackSourceId } from "../lib/music/providers";
 import { ensureFreshDeezerPreview, withFreshDeezerMedia } from "../lib/deezer/previewUrl";
+import {
+  readStoredCardSettings,
+  resolveCardEstimateInputs,
+  songsLeftForHost,
+} from "../lib/bingo/cardEstimateInputs";
+import { estimateBingoTimes } from "../lib/bingo/estimator";
 import { getDeckReadiness } from "../lib/decks/readiness";
 import { EMPTY_DECK_ACTION_TITLE, isEmptyDeck } from "../lib/decks/discardable";
 import {
@@ -350,6 +356,32 @@ export const HostPage: React.FC = () => {
   );
   const canHost = isPlayable && readiness.canHost;
   const emptyDeck = Boolean(deck && isEmptyDeck(deck));
+  const estimateInputs = useMemo(() => {
+    if (!deck) return null;
+    return resolveCardEstimateInputs(deck.tracks, readStoredCardSettings(deck.id));
+  }, [deck]);
+  const bingoEstimate = useMemo(() => {
+    if (!estimateInputs) return null;
+    return estimateBingoTimes(
+      estimateInputs.poolCount,
+      estimateInputs.gridSize,
+      estimateInputs.gridSize,
+      estimateInputs.cardCount,
+      estimateInputs.averageClipSeconds
+    );
+  }, [estimateInputs]);
+  const hostOutlook =
+    canHost && estimateInputs && bingoEstimate
+      ? {
+          songsLeft: songsLeftForHost(
+            calledHistory.length,
+            uncalledIds.length,
+            estimateInputs.poolCount
+          ),
+          line: bingoEstimate.line,
+          fullCard: bingoEstimate.fullCard,
+        }
+      : null;
 
   const initGame = useCallback(() => {
     if (!deck) return;
@@ -848,6 +880,7 @@ export const HostPage: React.FC = () => {
       remainingCount={uncalledIds.length}
       totalCount={deck.tracks.length}
       calledCount={calledHistory.length}
+      hostOutlook={hostOutlook}
       autoCallNextOnEnd={autoCallNextOnEnd}
       onToggleAutoCallNext={() => setAutoCallNextOnEnd(!autoCallNextOnEnd)}
       autoRevealOnEnd={autoRevealOnEnd}
