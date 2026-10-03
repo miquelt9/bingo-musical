@@ -346,6 +346,7 @@ export const HomePage: React.FC = () => {
               aria-label={emptyDeck ? `Share deck. ${EMPTY_DECK_ACTION_TITLE}` : "Share deck"}
             >
               <Share2 className="w-4 h-4" aria-hidden="true" />
+              Share
             </button>
 
             <button
@@ -356,6 +357,7 @@ export const HomePage: React.FC = () => {
               aria-label="Duplicate deck"
             >
               <Copy className="w-4 h-4" aria-hidden="true" />
+              Duplicate
             </button>
             <button
               type="button"
@@ -365,6 +367,7 @@ export const HomePage: React.FC = () => {
               aria-label="Delete deck"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
+              Delete
             </button>
           </div>
           <Link to={`/deck/${deck.id}`} className="pc-button home-deck-card-action-edit">

@@ -71,26 +71,24 @@ describe("desktop deck action names", () => {
     deckApi.backgroundTasks = {};
   });
 
-  it("names share, duplicate, and delete without visible label text", () => {
+  it("shows Share, Duplicate, and Delete on desktop", () => {
     renderHome();
 
-    for (const name of ["Share deck", "Duplicate deck", "Delete deck"]) {
-      const button = screen.getByRole("button", { name });
-      expect(button).toHaveAttribute("aria-label", name);
-      expect(button).toHaveTextContent("");
-    }
+    expect(screen.getByRole("button", { name: "Share deck" })).toHaveTextContent("Share");
+    expect(screen.getByRole("button", { name: "Duplicate deck" })).toHaveTextContent("Duplicate");
+    expect(screen.getByRole("button", { name: "Delete deck" })).toHaveTextContent("Delete");
   });
 
-  it("does not add those names on mobile", () => {
+  it("does not show those words on mobile", () => {
     mobile.current = true;
     renderHome();
 
-    expect(screen.queryByRole("button", { name: "Share deck" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Duplicate deck" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Delete deck" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Duplicate" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(screen.queryByText("Share")).toBeNull();
+    expect(screen.queryByText("Duplicate")).toBeNull();
+    expect(screen.queryByText("Delete")).toBeNull();
     expect(screen.getByRole("button", { name: "More actions for Party" })).toHaveTextContent("More");
-    expect(screen.queryByText("Share deck")).toBeNull();
-    expect(screen.queryByText("Duplicate deck")).toBeNull();
-    expect(screen.queryByText("Delete deck")).toBeNull();
   });
 });
