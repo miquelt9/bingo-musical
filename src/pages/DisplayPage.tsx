@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useDeck } from "../state/DeckContext";
 import { useTheme } from "../state/ThemeContext";
 import { Music2 } from "lucide-react";
+import { AppShell } from "../components/layout/AppShell";
 import {
   buildDisplayStateFromSession,
   getDisplayChannelName,
@@ -10,6 +11,7 @@ import {
   HostDisplayState,
   readHostSessionRaw,
 } from "../lib/host/session";
+import { DeckNotFoundPage } from "./DeckNotFoundPage";
 
 const EMPTY_STATE: HostDisplayState = {
   callNumber: 0,
@@ -44,13 +46,8 @@ export const DisplayPage: React.FC = () => {
   useEffect(() => {
     if (!id) {
       navigate("/", { replace: true });
-      return;
     }
-    if (isLoading) return;
-    if (!deck) {
-      navigate("/", { replace: true });
-    }
-  }, [id, deck, isLoading, navigate]);
+  }, [id, navigate]);
 
   useEffect(() => {
     if (!deck) return;
@@ -102,6 +99,14 @@ export const DisplayPage: React.FC = () => {
       window.removeEventListener("storage", onStorage);
     };
   }, [deck]);
+
+  if (id && !isLoading && !deck) {
+    return (
+      <AppShell>
+        <DeckNotFoundPage />
+      </AppShell>
+    );
+  }
 
   if (!deck) {
     return null;
