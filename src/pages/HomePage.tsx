@@ -429,7 +429,7 @@ export const HomePage: React.FC = () => {
             <li>Pick or create a deck</li>
             <li>Match YouTube clips (sample deck is ready)</li>
             <li>Print bingo cards</li>
-            <li>Host and press Space to call songs</li>
+            <li>Host and press Space to play/pause</li>
           </ol>
           <div className="flex flex-wrap gap-2">
             <Link

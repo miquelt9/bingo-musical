@@ -57,7 +57,7 @@ Hosted serverless on GitHub Pages with zero backend dependencies and no Google a
   - **Display mode** (`#/deck/:id/display`) — audience-facing progress view for a projector; syncs with the host via BroadcastChannel. Mirror the display window, not the full host UI.
   - Answer reveal card with countdown/clip-finished trigger or manual toggle.
   - Live searchable history log of called songs, local card verification by camera or card code, and celebratory Bingo confetti.
-  - **Space** toggles play/pause or calls the next song during a live game.
+  - **Space** toggles play/pause during a live game.
   - Host session state persists in `sessionStorage` across page refreshes.
 - 🖥️ **Classic desktop UI:**
   - Win9x-inspired shell via `@miquelt9/pc-ui` with light, dark (Night Win9x), or system theme.

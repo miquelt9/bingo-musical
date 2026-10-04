@@ -63,6 +63,23 @@ function renderHome() {
   );
 }
 
+describe("quick start Space copy", () => {
+  beforeEach(() => {
+    mobile.current = false;
+    localStorage.removeItem("mb_onboarding_dismissed");
+    deckApi.decks = [];
+    deckApi.backgroundTasks = {};
+  });
+
+  it("says Space is play/pause", () => {
+    renderHome();
+
+    expect(screen.getByText("Host and press Space to play/pause")).toBeTruthy();
+    expect(screen.queryByText(/Space to call songs/i)).toBeNull();
+    expect(screen.queryByText(/calls the next song/i)).toBeNull();
+  });
+});
+
 describe("desktop deck action names", () => {
   beforeEach(() => {
     mobile.current = false;
