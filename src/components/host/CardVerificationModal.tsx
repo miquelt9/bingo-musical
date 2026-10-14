@@ -5,26 +5,24 @@ import { Check, Camera, CircleAlert, Loader2, ScanLine, Trophy } from "lucide-re
 import { Deck } from "../../types/deck";
 import {
   CardVerificationResult,
+  describeVerifiedClaim,
+  VerifiedClaimTone,
   verifyCardCode,
 } from "../../lib/bingo/verification";
+
 interface CardVerificationModalProps {
   deck: Deck;
   calledTrackIds: ReadonlySet<string>;
   lineAwarded: boolean;
+  bingoAwarded: boolean;
   onAcceptLine: () => void;
+  onAcceptBingo: () => void;
   onClose: () => void;
 }
 
-function resultTitle(result: Extract<CardVerificationResult, { kind: "verified" }>): string {
-  if (result.bingo) return "Bingo confirmed";
-  if (result.lineRows.length > 0 && result.lineAccepted) return "Line confirmed";
-  if (result.lineRows.length > 0) return "Line found, but already awarded";
-  return "No line or Bingo yet";
-}
-
-function resultClass(result: Extract<CardVerificationResult, { kind: "verified" }>): string {
-  if (result.bingo || result.lineAccepted) return "text-emerald-700";
-  if (result.lineRows.length > 0) return "text-pc-warning";
+function resultClass(tone: VerifiedClaimTone): string {
+  if (tone === "success") return "text-emerald-700";
+  if (tone === "warning") return "text-pc-warning";
   return "text-pc-error";
 }
 
@@ -34,7 +32,9 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
   deck,
   calledTrackIds,
   lineAwarded,
+  bingoAwarded,
   onAcceptLine,
+  onAcceptBingo,
   onClose,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -58,11 +58,11 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
       if (!trimmed) return;
       setManualCode(trimmed);
       setIsVerifying(true);
-      void verifyCardCode(trimmed, deck, calledTrackIds, lineAwarded)
+      void verifyCardCode(trimmed, deck, calledTrackIds, lineAwarded, bingoAwarded)
         .then(setResult)
         .finally(() => setIsVerifying(false));
     },
-    [calledTrackIds, deck, lineAwarded]
+    [bingoAwarded, calledTrackIds, deck, lineAwarded]
   );
 
   useEffect(() => {
@@ -118,6 +118,7 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
   };
 
   const showScanner = cameraError === null;
+  const claim = result?.kind === "verified" ? describeVerifiedClaim(result) : null;
 
   return (
     <ContentModal title="Verify line or Bingo" onClose={handleClose} className="max-w-xl">
@@ -203,19 +204,19 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
           </div>
         )}
 
-        {result?.kind === "verified" && (
+        {result?.kind === "verified" && claim && (
           <div className="pc-bevel-inset p-3 space-y-3" aria-live="polite">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className={`font-black text-lg ${resultClass(result)}`}>
-                  {result.bingo ? <Trophy className="inline w-5 h-5 mr-1 align-[-3px]" /> : null}
-                  {resultTitle(result)}
+                <p className={`font-black text-lg ${resultClass(claim.tone)}`}>
+                  {claim.award === "bingo" ? <Trophy className="inline w-5 h-5 mr-1 align-[-3px]" /> : null}
+                  {claim.title}
                 </p>
                 <p className="text-xs text-muted mt-1">
                   Card {result.payload.cardNumber} · {result.calledCellCount}/{result.filledCellCount} filled cells called
                 </p>
               </div>
-              {result.bingo && <Check className="w-6 h-6 text-emerald-700 shrink-0" />}
+              {claim.award === "bingo" && <Check className="w-6 h-6 text-emerald-700 shrink-0" />}
             </div>
 
             {result.lineRows.length > 0 && (
@@ -244,9 +245,14 @@ export const CardVerificationModal: React.FC<CardVerificationModalProps> = ({
             )}
 
             <div className="flex justify-end gap-2">
-              {result.lineAccepted && (
+              {claim.award === "line" && (
                 <Button type="button" variant="primary" onClick={onAcceptLine}>
                   <Check className="w-4 h-4" /> Award line
+                </Button>
+              )}
+              {claim.award === "bingo" && (
+                <Button type="button" variant="primary" onClick={onAcceptBingo}>
+                  <Check className="w-4 h-4" /> Award Bingo
                 </Button>
               )}
               <Button type="button" onClick={handleClose}>Done</Button>

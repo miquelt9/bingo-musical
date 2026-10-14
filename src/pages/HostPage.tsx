@@ -46,6 +46,7 @@ import {
   getDisplayChannelName,
   HostDisplayState,
   HostSessionData,
+  restoredPrizeFlags,
   SerializedCalledEntry,
 } from "../lib/host/session";
 import { trackEvent } from "../lib/usage/events";
@@ -133,6 +134,7 @@ function readHostSession(
   autoCallNextOnEnd: boolean;
   autoRevealOnEnd: boolean;
   lineAwarded: boolean;
+  bingoAwarded: boolean;
 } | null {
   try {
     const raw = sessionStorage.getItem(`${HOST_SESSION_KEY}.${deckId}`);
@@ -147,6 +149,7 @@ function readHostSession(
     const currentCall = data.currentCall
       ? deserializeCalledEntry(data.currentCall, tracks)
       : null;
+    const prizes = restoredPrizeFlags(data);
     return {
       uncalledIds,
       calledHistory,
@@ -154,7 +157,8 @@ function readHostSession(
       isRevealed: data.isRevealed ?? false,
       autoCallNextOnEnd: data.autoCallNextOnEnd ?? true,
       autoRevealOnEnd: data.autoRevealOnEnd ?? true,
-      lineAwarded: data.lineAwarded ?? false,
+      lineAwarded: prizes.lineAwarded,
+      bingoAwarded: prizes.bingoAwarded,
     };
   } catch {
     return null;
@@ -171,6 +175,7 @@ function writeHostSession(
     autoCallNextOnEnd: boolean;
     autoRevealOnEnd: boolean;
     lineAwarded?: boolean;
+    bingoAwarded?: boolean;
   }
 ): void {
   try {
@@ -182,6 +187,7 @@ function writeHostSession(
       autoCallNextOnEnd: data.autoCallNextOnEnd,
       autoRevealOnEnd: data.autoRevealOnEnd,
       lineAwarded: data.lineAwarded ?? false,
+      bingoAwarded: data.bingoAwarded ?? false,
     };
     sessionStorage.setItem(`${HOST_SESSION_KEY}.${deckId}`, JSON.stringify(payload));
   } catch {
@@ -211,6 +217,7 @@ export const HostPage: React.FC = () => {
   const [autoCallNextOnEnd, setAutoCallNextOnEnd] = useState<boolean>(true);
   const [autoRevealOnEnd, setAutoRevealOnEnd] = useState<boolean>(true);
   const [lineAwarded, setLineAwarded] = useState<boolean>(false);
+  const [bingoAwarded, setBingoAwarded] = useState<boolean>(false);
   const [crossfadeOverlapMs, setCrossfadeOverlapMs] = useState<number>(DEFAULT_CROSSFADE_MS);
   const [playerState, setPlayerState] = useState<PlayerPlaybackState | null>(null);
   const [hostClipError, setHostClipError] = useState<string | null>(null);
@@ -359,6 +366,7 @@ export const HostPage: React.FC = () => {
     setCurrentCall(null);
     setIsRevealed(false);
     setLineAwarded(false);
+    setBingoAwarded(false);
     setHostClipError(null);
     revealArmedRef.current = false;
     stopPlayback();
@@ -501,6 +509,7 @@ export const HostPage: React.FC = () => {
       setCurrentCall(null);
       setIsRevealed(false);
       setLineAwarded(false);
+      setBingoAwarded(false);
       stopPlayback();
       writeHostSession(deck.id, {
         uncalledIds: shuffled,
@@ -522,6 +531,7 @@ export const HostPage: React.FC = () => {
       currentCall,
       isRevealed,
       lineAwarded,
+      bingoAwarded,
       autoCallNextOnEnd,
       autoRevealOnEnd,
     });
@@ -534,6 +544,7 @@ export const HostPage: React.FC = () => {
     autoCallNextOnEnd,
     autoRevealOnEnd,
     lineAwarded,
+    bingoAwarded,
     sessionReady,
   ]);
 
@@ -648,6 +659,7 @@ export const HostPage: React.FC = () => {
     setCurrentCall(restored.currentCall);
     setIsRevealed(restored.isRevealed);
     setLineAwarded(restored.lineAwarded);
+    setBingoAwarded(restored.bingoAwarded);
     setAutoCallNextOnEnd(restored.autoCallNextOnEnd);
     setAutoRevealOnEnd(restored.autoRevealOnEnd);
     pendingRestoreRef.current = null;
@@ -669,6 +681,7 @@ export const HostPage: React.FC = () => {
     setCurrentCall(null);
     setIsRevealed(false);
     setLineAwarded(false);
+    setBingoAwarded(false);
     stopPlayback();
     writeHostSession(deck.id, {
       uncalledIds: shuffled,
@@ -859,6 +872,7 @@ export const HostPage: React.FC = () => {
       isRevealed={isRevealed}
       supportsVideoPreview={deck.provider === "youtube"}
       onVerify={() => setShowCardVerification(true)}
+      bingoAwarded={bingoAwarded}
       onBingo={triggerConfetti}
       onReset={() => setShowResetModal(true)}
     />
@@ -1069,7 +1083,13 @@ export const HostPage: React.FC = () => {
           deck={deck}
           calledTrackIds={new Set(calledHistory.map((entry) => entry.track.id))}
           lineAwarded={lineAwarded}
+          bingoAwarded={bingoAwarded}
           onAcceptLine={() => {
+            setLineAwarded(true);
+            setShowCardVerification(false);
+          }}
+          onAcceptBingo={() => {
+            setBingoAwarded(true);
             setLineAwarded(true);
             setShowCardVerification(false);
           }}

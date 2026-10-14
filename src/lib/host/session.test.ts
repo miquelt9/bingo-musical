@@ -4,6 +4,7 @@ import {
   buildDisplayStateFromSession,
   getDisplayChannelName,
   readHostSessionRaw,
+  restoredPrizeFlags,
   type HostSessionData,
 } from "./session";
 
@@ -36,6 +37,32 @@ describe("host display state", () => {
     expect(readHostSessionRaw("deck-1")?.uncalledIds).toEqual(["a"]);
     sessionStorage.setItem("bingo.host.session.deck-2", "{");
     expect(readHostSessionRaw("deck-2")).toBeNull();
+  });
+
+  it("restore keeps bingoAwarded", () => {
+    sessionStorage.setItem(
+      "bingo.host.session.deck-1",
+      JSON.stringify(
+        session({
+          calledHistory: [{ callNumber: 1, trackId: "b", calledAt: "12:00:00" }],
+          lineAwarded: true,
+          bingoAwarded: true,
+        }),
+      ),
+    );
+    expect(restoredPrizeFlags(readHostSessionRaw("deck-1"))).toEqual({
+      lineAwarded: true,
+      bingoAwarded: true,
+    });
+
+    sessionStorage.setItem(
+      "bingo.host.session.deck-old",
+      JSON.stringify(session({ uncalledIds: ["a"] })),
+    );
+    expect(restoredPrizeFlags(readHostSessionRaw("deck-old"))).toEqual({
+      lineAwarded: false,
+      bingoAwarded: false,
+    });
   });
 
   it("hides the answer until the host reveals the current call", () => {
