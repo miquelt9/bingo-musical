@@ -19,6 +19,8 @@ export interface HostSessionData {
   autoRevealOnEnd: boolean;
   /** Whether the single line prize has already been accepted in this game. */
   lineAwarded?: boolean;
+  /** Whether the single Bingo prize has already been accepted in this game. */
+  bingoAwarded?: boolean;
 }
 
 export interface HostDisplayState {
@@ -39,6 +41,17 @@ export interface HostDisplayState {
 
 export function getDisplayChannelName(deckId: string): string {
   return `${DISPLAY_CHANNEL_PREFIX}.${deckId}`;
+}
+
+/** Prize flags restored with a host session. Missing fields stay open. */
+export function restoredPrizeFlags(session: HostSessionData | null | undefined): {
+  lineAwarded: boolean;
+  bingoAwarded: boolean;
+} {
+  return {
+    lineAwarded: session?.lineAwarded === true,
+    bingoAwarded: session?.bingoAwarded === true,
+  };
 }
 
 export function readHostSessionRaw(deckId: string): HostSessionData | null {

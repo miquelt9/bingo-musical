@@ -102,6 +102,8 @@ interface CallNextControlsProps {
   supportsVideoPreview?: boolean;
   /** Shown beside Call Next once a song has been called. */
   onVerify?: () => void;
+  /** Single Bingo prize for this game has been accepted. */
+  bingoAwarded?: boolean;
   onBingo?: () => void;
   onReset?: () => void;
 }
@@ -132,6 +134,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
   isRevealed = true,
   supportsVideoPreview = true,
   onVerify,
+  bingoAwarded = false,
   onBingo,
   onReset,
 }) => {
@@ -285,6 +288,7 @@ export const CallNextControls: React.FC<CallNextControlsProps> = ({
             </Button>
           </div>
         )}
+        {bingoAwarded ? <p className="text-xs">Bingo awarded</p> : null}
       </div>
 
       <div

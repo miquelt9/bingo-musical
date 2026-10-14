@@ -5,8 +5,10 @@ import { isBlankCell } from "./generateCards";
 import {
   computeDeckFingerprintHex,
   decodeCardVerificationCode,
+  describeVerifiedClaim,
   encodeCardVerificationCode,
   verifyCardCode,
+  type VerifiedClaim,
 } from "./verification";
 
 const songsOnly: BingoCellContentSelection = { numbers: false, songs: true, authors: false };
@@ -130,7 +132,111 @@ describe("card verification codes", () => {
     expect(bingo.missingCells).toEqual([]);
     expect(bingo.lineRows).toEqual([1, 2, 3]);
     expect(bingo.lineAccepted).toBe(false);
+    expect(bingo.bingoAccepted).toBe(true);
     expect(bingo.card.grid.every((cell) => !isBlankCell(cell))).toBe(true);
+  });
+
+  it("does not treat a completed column as a line", async () => {
+    const deck = nineTrackDeck();
+    const code = encodeCardVerificationCode({
+      fingerprintHex: await computeDeckFingerprintHex(deck),
+      batchSeed: "00abcdef",
+      cardNumber: 1,
+      gridSize: 3,
+      bingoPercent: 100,
+      cellContent: songsOnly,
+    });
+    const scored = await verifyCardCode(code, deck, new Set(), false);
+    if (scored.kind !== "verified") throw new Error("expected a verified card");
+    const column = scored.card.grid
+      .filter((_, index) => index % 3 === 0)
+      .flatMap((cell) => (cell.track ? [cell.track.id] : []));
+    const result = await verifyCardCode(code, deck, new Set(column), false, false);
+    expect(result.kind).toBe("verified");
+    if (result.kind !== "verified") return;
+    expect(column).toHaveLength(3);
+    expect(result.lineRows).toEqual([]);
+    expect(result.bingo).toBe(false);
+    expect(describeVerifiedClaim(result)).toEqual({
+      title: "No line or Bingo yet",
+      tone: "error",
+      award: null,
+    } satisfies VerifiedClaim);
+  });
+
+  it("scores every prize state", async () => {
+    const deck = nineTrackDeck();
+    const code = encodeCardVerificationCode({
+      fingerprintHex: await computeDeckFingerprintHex(deck),
+      batchSeed: "00abcdef",
+      cardNumber: 1,
+      gridSize: 3,
+      bingoPercent: 100,
+      cellContent: songsOnly,
+    });
+    const empty = await verifyCardCode(code, deck, new Set(), false, false);
+    if (empty.kind !== "verified") throw new Error("expected a verified card");
+    const firstRow = empty.card.grid.slice(0, 3).flatMap((cell) => (cell.track ? [cell.track.id] : []));
+    const allCalled = new Set(empty.card.grid.flatMap((cell) => (cell.track ? [cell.track.id] : [])));
+    const oneCell = new Set(firstRow.slice(0, 1));
+
+    const cases: Array<{
+      called: ReadonlySet<string>;
+      lineAwarded: boolean;
+      bingoAwarded: boolean;
+      claim: VerifiedClaim;
+      missing: boolean;
+    }> = [
+      {
+        called: oneCell,
+        lineAwarded: false,
+        bingoAwarded: false,
+        claim: { title: "No line or Bingo yet", tone: "error", award: null },
+        missing: true,
+      },
+      {
+        called: new Set(firstRow),
+        lineAwarded: false,
+        bingoAwarded: false,
+        claim: { title: "Line confirmed", tone: "success", award: "line" },
+        missing: true,
+      },
+      {
+        called: new Set(firstRow),
+        lineAwarded: true,
+        bingoAwarded: false,
+        claim: { title: "Line found, but already awarded", tone: "warning", award: null },
+        missing: true,
+      },
+      {
+        called: allCalled,
+        lineAwarded: false,
+        bingoAwarded: false,
+        claim: { title: "Bingo confirmed", tone: "success", award: "bingo" },
+        missing: false,
+      },
+      {
+        called: allCalled,
+        lineAwarded: true,
+        bingoAwarded: true,
+        claim: { title: "Bingo already awarded", tone: "warning", award: null },
+        missing: false,
+      },
+    ];
+
+    for (const entry of cases) {
+      const result = await verifyCardCode(code, deck, entry.called, entry.lineAwarded, entry.bingoAwarded);
+      expect(result.kind).toBe("verified");
+      if (result.kind !== "verified") continue;
+      expect(describeVerifiedClaim(result)).toEqual(entry.claim);
+      expect(result.lineAccepted).toBe(entry.claim.award === "line");
+      expect(result.bingoAccepted).toBe(entry.claim.award === "bingo");
+      expect(result.missingCells.length > 0).toBe(entry.missing);
+      if (entry.claim.award === "bingo") {
+        expect(result.lineRows.length).toBeGreaterThan(0);
+        expect(result.lineAccepted).toBe(false);
+      }
+    }
   });
 
   it("marks an author cell called when any song by that artist was called", async () => {

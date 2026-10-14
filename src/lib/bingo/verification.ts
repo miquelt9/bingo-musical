@@ -53,11 +53,44 @@ export type CardVerificationResult =
       lineRows: number[];
       bingo: boolean;
       lineAwarded: boolean;
+      bingoAwarded: boolean;
       lineAccepted: boolean;
+      bingoAccepted: boolean;
       filledCellCount: number;
       calledCellCount: number;
       missingCells: VerifiedMissingCell[];
     };
+
+export type VerifiedClaimTone = "success" | "warning" | "error";
+
+export interface VerifiedClaim {
+  title: string;
+  tone: VerifiedClaimTone;
+  /** Prize the host can still award from this scan. */
+  award: "line" | "bingo" | null;
+}
+
+/** Copy and award action for a scored card. A Bingo card never offers the line prize. */
+export function describeVerifiedClaim(result: {
+  bingo: boolean;
+  lineRows: readonly number[];
+  lineAwarded: boolean;
+  bingoAwarded: boolean;
+}): VerifiedClaim {
+  if (result.bingo && !result.bingoAwarded) {
+    return { title: "Bingo confirmed", tone: "success", award: "bingo" };
+  }
+  if (result.bingo) {
+    return { title: "Bingo already awarded", tone: "warning", award: null };
+  }
+  if (result.lineRows.length > 0 && !result.lineAwarded) {
+    return { title: "Line confirmed", tone: "success", award: "line" };
+  }
+  if (result.lineRows.length > 0) {
+    return { title: "Line found, but already awarded", tone: "warning", award: null };
+  }
+  return { title: "No line or Bingo yet", tone: "error", award: null };
+}
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -254,7 +287,8 @@ export async function verifyCardCode(
   rawCode: string,
   deck: Deck,
   calledTrackIds: ReadonlySet<string>,
-  lineAwarded: boolean
+  lineAwarded: boolean,
+  bingoAwarded = false
 ): Promise<CardVerificationResult> {
   let payload: CardVerificationPayload;
   try {
@@ -313,6 +347,7 @@ export async function verifyCardCode(
   }
 
   const bingo = missingCells.length === 0 && filledCells.length > 0;
+  const claim = describeVerifiedClaim({ bingo, lineRows, lineAwarded, bingoAwarded });
   return {
     kind: "verified",
     payload,
@@ -320,7 +355,9 @@ export async function verifyCardCode(
     lineRows,
     bingo,
     lineAwarded,
-    lineAccepted: !bingo && lineRows.length > 0 && !lineAwarded,
+    bingoAwarded,
+    lineAccepted: claim.award === "line",
+    bingoAccepted: claim.award === "bingo",
     filledCellCount: filledCells.length,
     calledCellCount: calledIndexes.size,
     missingCells,
